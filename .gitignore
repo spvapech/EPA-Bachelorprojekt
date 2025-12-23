@@ -141,5 +141,3 @@ out/
 .gg
 
 .cursor/plans
-
-backend/uv.lock
