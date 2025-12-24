@@ -1,45 +1,94 @@
 # Gruppe P1-3 — Projekt
 
-## Requirements / Dependencies
+## 📋 Requirements / Dependencies
 
-Um das Projekt lokal laufen zu lassen, ist es notwendig folgendes installiert zu haben
+Um das Projekt lokal laufen zu lassen, benötigst du:
 
-* Node.js v20
-* uv -> https://docs.astral.sh/uv/
-* IDE eurer Wahl, bevorzugt VSCode
+* **Python** >= 3.13
+* **Node.js** v20
+* **uv** → https://docs.astral.sh/uv/
+* IDE deiner Wahl, bevorzugt **VSCode**
 
-## Einrichtung
+## 🚀 Einrichtung
 
-### Backend
+### Backend (FastAPI)
 
-ist uv installiert, öffne das terminal und führe folgendes aus:
+Wenn `uv` installiert ist, öffne das Terminal und führe folgendes aus:
 
-```
+```bash
 cd backend
 uv sync
 ```
 
-Anschließend wählt ihr den .venv-Ordner als Python Interpreter für das Projekt aus.
+Anschließend wählst du den `.venv`-Ordner als Python Interpreter für das Projekt aus.
 
-Der Backend server kann wie folgt gestartet werden:
+**Alternative ohne uv:** Falls du klassisches `pip` verwenden möchtest:
 
+```bash
+cd backend
+python -m venv .venv
+source .venv/bin/activate  # Auf macOS/Linux
+# .venv\Scripts\activate  # Auf Windows
+pip install -r requirements.txt
 ```
+
+Der Backend-Server kann wie folgt gestartet werden:
+
+```bash
 uv run uvicorn main:app --reload
 ```
 
-###
+oder mit klassischem Python:
 
-ist node installiert, öffne das Terminal und führe folgendes aus:
-
+```bash
+python -m uvicorn main:app --reload
 ```
+
+**Backend läuft unter:** `http://localhost:8000`  
+**API-Dokumentation:** `http://localhost:8000/docs` (Swagger UI)
+
+### Frontend (React + Vite)
+
+Wenn `node` installiert ist, öffne das Terminal und führe folgendes aus:
+
+```bash
 cd frontend
 npm install
 ```
 
-Anschließend könnt ihr den Frontend dev server wie folgt starten:
+Anschließend kannst du den Frontend-Dev-Server wie folgt starten:
 
-```
+```bash
 npm run dev
 ```
 
-Am besten habt ihr 2 Terminal sessions offen, um beides zusammen nutzen zu können!
+**Frontend läuft unter:** `http://localhost:5173`
+
+## 💡 Tipps
+
+* Am besten hast du **2 Terminal-Sessions** offen, um Backend und Frontend gleichzeitig zu nutzen!
+* Stelle sicher, dass die `.env`-Datei im Backend-Ordner korrekt konfiguriert ist
+* Für Production-Build des Frontends: `npm run build`
+
+## 📁 Projektstruktur
+
+```
+gruppe-P1-3/
+├── backend/              # FastAPI Backend
+│   ├── main.py          # Haupteinstiegspunkt
+│   ├── config.py        # Konfiguration
+│   ├── database/        # Datenbankverbindungen (Supabase)
+│   ├── migrations/      # SQL-Migrationen
+│   └── requirements.txt # Python Dependencies
+├── frontend/            # React/Vite Frontend
+│   ├── src/            # Quellcode
+│   ├── public/         # Statische Assets
+│   └── package.json    # Node.js Dependencies
+└── requirements.txt     # Python Dependencies (Projekt-Root)
+```
+
+## 🛠️ Technologie-Stack
+
+* **Backend:** FastAPI, Uvicorn, Supabase, Python-dotenv
+* **Frontend:** React 19, Vite, ESLint
+* **Datenbank:** Supabase (PostgreSQL)
