@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from database.supabase_client import get_supabase_client
 from typing import List, Dict, Any
 from contextlib import asynccontextmanager
+from routes.topics import router as topics_router
 
 
 @asynccontextmanager
@@ -21,6 +22,9 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+
+# Include routers
+app.include_router(topics_router)
 
 app.add_middleware(
     CORSMiddleware,
