@@ -267,6 +267,13 @@ async def analyze_record(request: AnalyzeRecordRequest):
         # Analyze topics
         topics = _topic_analyzer.predict_topics(combined_text)
         
+        # Extract company information if available
+        company_info = None
+        if "companies" in record and record["companies"]:
+            company_info = record["companies"]
+        elif "company_id" in record and record["company_id"]:
+            company_info = {"id": record["company_id"]}
+        
         return {
             "status": "success",
             "record_id": request.record_id,
@@ -277,7 +284,8 @@ async def analyze_record(request: AnalyzeRecordRequest):
             "record_data": {
                 "titel": record.get("titel"),
                 "status": record.get("status"),
-                "datum": record.get("datum")
+                "datum": record.get("datum"),
+                "company": company_info
             }
         }
         

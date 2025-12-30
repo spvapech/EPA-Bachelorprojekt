@@ -138,33 +138,43 @@ class TopicModelDatabase:
         
         return result
     
-    def get_candidate_by_id(self, candidate_id: int) -> Optional[Dict[str, Any]]:
+    def get_candidate_by_id(self, candidate_id: int, include_company: bool = True) -> Optional[Dict[str, Any]]:
         """
         Fetch a specific candidate record.
         
         Args:
             candidate_id: ID of the candidate
+            include_company: Whether to include company information via join
             
         Returns:
             Candidate record or None
         """
-        response = self.supabase.table('candidates').select('*').eq('id', candidate_id).execute()
+        if include_company:
+            # Join with companies table to get company name
+            response = self.supabase.table('candidates').select('*, companies(name)').eq('id', candidate_id).execute()
+        else:
+            response = self.supabase.table('candidates').select('*').eq('id', candidate_id).execute()
         
         if response.data:
             return response.data[0]
         return None
     
-    def get_employee_by_id(self, employee_id: int) -> Optional[Dict[str, Any]]:
+    def get_employee_by_id(self, employee_id: int, include_company: bool = True) -> Optional[Dict[str, Any]]:
         """
         Fetch a specific employee record.
         
         Args:
             employee_id: ID of the employee
+            include_company: Whether to include company information via join
             
         Returns:
             Employee record or None
         """
-        response = self.supabase.table('employee').select('*').eq('id', employee_id).execute()
+        if include_company:
+            # Join with companies table to get company name
+            response = self.supabase.table('employee').select('*, companies(name)').eq('id', employee_id).execute()
+        else:
+            response = self.supabase.table('employee').select('*').eq('id', employee_id).execute()
         
         if response.data:
             return response.data[0]
@@ -183,9 +193,77 @@ class TopicModelDatabase:
         # Count employees
         employee_response = self.supabase.table('employee').select('id', count='exact').execute()
         
+        # Count companies
+        companies_response = self.supabase.table('companies').select('id', count='exact').execute()
+        
         return {
             "candidates_total": candidates_response.count,
             "employee_total": employee_response.count,
+            "companies_total": companies_response.count,
             "total_records": candidates_response.count + employee_response.count,
             "timestamp": datetime.now().isoformat()
         }
+    
+    def get_all_companies(self) -> List[Dict[str, Any]]:
+        """
+        Get all companies from the database.
+        
+        Returns:
+            List of company records
+        """
+        response = self.supabase.table('companies').select('*').order('name').execute()
+        return response.data if response.data else []
+    
+    def get_company_by_id(self, company_id: int) -> Optional[Dict[str, Any]]:
+        """
+        Fetch a specific company record.
+        
+        Args:
+            company_id: ID of the company
+            
+        Returns:
+            Company record or None
+        """
+        response = self.supabase.table('companies').select('*').eq('id', company_id).execute()
+        
+        if response.data:
+            return response.data[0]
+        return None
+    
+    def get_candidates_by_company(self, company_id: int, limit: Optional[int] = None) -> List[Dict[str, Any]]:
+        """
+        Fetch candidates for a specific company.
+        
+        Args:
+            company_id: ID of the company
+            limit: Maximum number of records to fetch
+            
+        Returns:
+            List of candidate records
+        """
+        query = self.supabase.table('candidates').select('*').eq('company_id', company_id)
+        
+        if limit:
+            query = query.limit(limit)
+        
+        response = query.execute()
+        return response.data if response.data else []
+    
+    def get_employees_by_company(self, company_id: int, limit: Optional[int] = None) -> List[Dict[str, Any]]:
+        """
+        Fetch employees for a specific company.
+        
+        Args:
+            company_id: ID of the company
+            limit: Maximum number of records to fetch
+            
+        Returns:
+            List of employee records
+        """
+        query = self.supabase.table('employee').select('*').eq('company_id', company_id)
+        
+        if limit:
+            query = query.limit(limit)
+        
+        response = query.execute()
+        return response.data if response.data else []

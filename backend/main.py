@@ -56,6 +56,9 @@ async def test_connection():
         # Test connection by querying the employee table
         employee_test = supabase.table("employee").select("id").limit(1).execute()
         
+        # Test connection by querying the companies table
+        companies_test = supabase.table("companies").select("id").limit(1).execute()
+        
         return {
             "status": "success",
             "message": "Supabase connection successful",
@@ -69,6 +72,11 @@ async def test_connection():
                     "exists": True,
                     "accessible": True,
                     "row_count": len(employee_test.data) if employee_test.data else 0
+                },
+                "companies": {
+                    "exists": True,
+                    "accessible": True,
+                    "row_count": len(companies_test.data) if companies_test.data else 0
                 }
             },
             "connection": {
@@ -96,8 +104,7 @@ async def test_connection():
                 "status": "partial",
                 "message": "Supabase connection works, but tables may not exist yet",
                 "error": error_message,
-                "suggestion": "Run the migration files (001_create_candidates_table.sql and 002_create_employee_table.sql) in Supabase SQL Editor"
-            }
+                }
         return {
             "status": "error",
             "message": "Failed to connect to Supabase",
