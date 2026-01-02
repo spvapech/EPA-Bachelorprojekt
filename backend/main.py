@@ -4,6 +4,7 @@ from database.supabase_client import get_supabase_client
 from typing import List, Dict, Any
 from contextlib import asynccontextmanager
 from routes.topics import router as topics_router
+from routes.upload import router as upload_router
 
 
 @asynccontextmanager
@@ -25,6 +26,7 @@ app = FastAPI(lifespan=lifespan)
 
 # Include routers
 app.include_router(topics_router)
+app.include_router(upload_router)
 
 app.add_middleware(
     CORSMiddleware,
