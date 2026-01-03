@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 from typing import List, Dict, Any, Optional
 from models.lda_topic_model import LDATopicAnalyzer
 from services.topic_model_service import TopicModelDatabase
+from services.topic_rating_service import TopicRatingAnalyzer
 import os
 
 router = APIRouter(prefix="/api/topics", tags=["Topic Modeling"])
@@ -15,6 +16,7 @@ router = APIRouter(prefix="/api/topics", tags=["Topic Modeling"])
 # Global model instance
 _topic_analyzer: Optional[LDATopicAnalyzer] = None
 _topic_db = TopicModelDatabase()
+_topic_rating_analyzer = TopicRatingAnalyzer()
 
 
 class TrainModelRequest(BaseModel):
@@ -352,3 +354,154 @@ async def load_saved_model(model_name: str):
             status_code=500,
             detail=f"Failed to load model: {str(e)}"
         )
+
+
+@router.get("/analyze/employee-reviews-with-ratings")
+async def analyze_employee_reviews_with_ratings(limit: Optional[int] = None):
+    """
+    Analyze employee reviews combining topics, sentiment analysis, and star ratings.
+    
+    This endpoint provides a comprehensive analysis that includes:
+    - Topic modeling (LDA) on text fields
+    - Sentiment analysis (positive/neutral/negative)
+    - Star ratings from database
+    - Correlation between topics and ratings
+    
+    Args:
+        limit: Maximum number of reviews to analyze (optional)
+    
+    Returns:
+        Detailed analysis with topics, sentiment, and ratings per review
+    """
+    if not _topic_analyzer:
+        raise HTTPException(
+            status_code=400,
+            detail="Model not trained. Please train a model first using /api/topics/train"
+        )
+    
+    try:
+        result = _topic_rating_analyzer.analyze_employee_reviews_with_ratings(
+            _topic_analyzer,
+            limit=limit
+        )
+        
+        return {
+            "status": "success",
+            "analysis": result
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Analysis failed: {str(e)}"
+        )
+
+
+@router.get("/analyze/candidate-reviews-with-ratings")
+async def analyze_candidate_reviews_with_ratings(limit: Optional[int] = None):
+    """
+    Analyze candidate reviews combining topics, sentiment analysis, and star ratings.
+    
+    Args:
+        limit: Maximum number of reviews to analyze (optional)
+    
+    Returns:
+        Detailed analysis with topics, sentiment, and ratings per review
+    """
+    if not _topic_analyzer:
+        raise HTTPException(
+            status_code=400,
+            detail="Model not trained. Please train a model first using /api/topics/train"
+        )
+    
+    try:
+        result = _topic_rating_analyzer.analyze_candidate_reviews_with_ratings(
+            _topic_analyzer,
+            limit=limit
+        )
+        
+        return {
+            "status": "success",
+            "analysis": result
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Analysis failed: {str(e)}"
+        )
+
+
+@router.get("/analyze/topic-rating-correlation")
+async def get_topic_rating_correlation(limit: Optional[int] = None):
+    """
+    Get correlation analysis between discovered topics and star ratings.
+    
+    This endpoint aggregates data to show:
+    - Which topics appear most frequently
+    - Average star ratings for each topic
+    - Sentiment distribution per topic
+    - Top words for each topic
+    
+    Args:
+        limit: Maximum number of reviews to analyze (optional)
+    
+    Returns:
+        Aggregated topic-rating correlation data
+    """
+    if not _topic_analyzer:
+        raise HTTPException(
+            status_code=400,
+            detail="Model not trained. Please train a model first using /api/topics/train"
+        )
+    
+    try:
+        result = _topic_rating_analyzer.get_topic_rating_correlation(
+            _topic_analyzer,
+            limit=limit
+        )
+        
+        return {
+            "status": "success",
+            "correlation": result
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Analysis failed: {str(e)}"
+        )
+
+
+@router.post("/predict-with-sentiment")
+async def predict_topics_with_sentiment(request: PredictTopicsRequest):
+    """
+    Predict topics for a text and include sentiment analysis.
+    
+    Args:
+        request: Text to analyze with threshold
+    
+    Returns:
+        Topics with probabilities and sentiment analysis
+    """
+    if not _topic_analyzer:
+        raise HTTPException(
+            status_code=400,
+            detail="Model not trained. Please train a model first."
+        )
+    
+    try:
+        topics = _topic_analyzer.predict_topics(
+            request.text,
+            threshold=request.threshold,
+            include_sentiment=True
+        )
+        
+        return {
+            "status": "success",
+            "text_preview": request.text[:100] + "..." if len(request.text) > 100 else request.text,
+            "topics": topics
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Prediction failed: {str(e)}"
+        )
+

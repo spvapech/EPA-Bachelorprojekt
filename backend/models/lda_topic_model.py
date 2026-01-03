@@ -13,7 +13,7 @@ from gensim.parsing.preprocessing import (
     strip_short,
     stem_text
 )
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any, Tuple, Optional
 import pickle
 import os
 from datetime import datetime
@@ -181,16 +181,17 @@ class LDATopicAnalyzer:
         
         return topics
     
-    def predict_topics(self, text: str, threshold: float = 0.1) -> List[Dict[str, Any]]:
+    def predict_topics(self, text: str, threshold: float = 0.1, include_sentiment: bool = False) -> List[Dict[str, Any]]:
         """
         Predict topics for a given text.
         
         Args:
             text: Input text to analyze
             threshold: Minimum probability threshold for topics
+            include_sentiment: Whether to include sentiment analysis
             
         Returns:
-            List of topics with probabilities
+            List of topics with probabilities and optionally sentiment
         """
         if not self.lda_model or not self.dictionary:
             raise ValueError("Model not trained yet")
@@ -217,8 +218,54 @@ class LDATopicAnalyzer:
             if prob >= threshold
         ]
         
+        # Add sentiment analysis if requested
+        if include_sentiment and text:
+            from models.sentiment_analyzer import SentimentAnalyzer
+            sentiment_analyzer = SentimentAnalyzer()
+            sentiment = sentiment_analyzer.analyze_sentiment(text)
+            for result in results:
+                result["sentiment"] = sentiment
+        
         # Sort by probability
         results.sort(key=lambda x: x["probability"], reverse=True)
+        
+        return results
+    
+    def analyze_topics_with_sentiment(self, texts: List[str]) -> List[Dict[str, Any]]:
+        """
+        Analyze topics and sentiment for multiple texts.
+        
+        Args:
+            texts: List of texts to analyze
+            
+        Returns:
+            List of analyses with topics and sentiment per text
+        """
+        if not self.lda_model or not self.dictionary:
+            raise ValueError("Model not trained yet")
+        
+        from models.sentiment_analyzer import SentimentAnalyzer
+        sentiment_analyzer = SentimentAnalyzer()
+        
+        results = []
+        for idx, text in enumerate(texts):
+            if not text or not text.strip():
+                continue
+                
+            # Get topics
+            topics = self.predict_topics(text, threshold=0.1)
+            
+            # Get sentiment
+            sentiment = sentiment_analyzer.analyze_sentiment(text)
+            
+            results.append({
+                "text_index": idx,
+                "text_preview": text[:100] + "..." if len(text) > 100 else text,
+                "topics": topics,
+                "sentiment": sentiment,
+                "dominant_topic": topics[0]["topic_id"] if topics else None,
+                "dominant_topic_probability": topics[0]["probability"] if topics else 0.0
+            })
         
         return results
     
