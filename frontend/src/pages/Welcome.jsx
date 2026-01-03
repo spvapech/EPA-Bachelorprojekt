@@ -67,7 +67,7 @@ export default function Welcome() {
             <div className="w-full max-w-2xl">
                 {/* Welcome Header */}
                 <div className="text-center mb-8">
-                    <h1 className="text-5xl font-extrabold text-slate-900 mb-4">
+                    <h1 className="text-5xl font-bold text-slate-900 mb-4">
                         Willkommen bei AGB-Analysis!
                     </h1>
                     <p className="text-xl text-slate-600">
@@ -83,6 +83,7 @@ export default function Welcome() {
                         </CardTitle>
                         <CardDescription className="text-base">
                             Wählen Sie eine Excel-Datei mit Bewertungsdaten aus
+                            <p>Unterstützte Formate: .xlsx, .xls</p>
                         </CardDescription>
                     </CardHeader>
 
@@ -111,14 +112,14 @@ export default function Welcome() {
                                         oder per Drag & Drop hier ablegen
                                     </p>
                                 </div>
-                                <Button
+                                {/* <Button
                                     type="button"
                                     variant="outline"
                                     className="rounded-full"
                                 >
                                     <Upload className="h-4 w-4 mr-2" />
                                     Durchsuchen
-                                </Button>
+                                </Button> */}
                             </label>
                         </div>
 
@@ -146,7 +147,7 @@ export default function Welcome() {
                         <Button
                             onClick={handleUpload}
                             disabled={!file || uploading}
-                            className="w-full h-12 rounded-full text-lg font-semibold"
+                            className="w-full h-12 rounded-full text-lg font-semibold cursor-pointer disabled:cursor-not-allowed"
                             size="lg"
                         >
                             {uploading ? (
@@ -175,10 +176,10 @@ export default function Welcome() {
                 </Card>
 
                 {/* Info Section */}
-                <div className="mt-8 text-center text-sm text-slate-500">
+                {/* <div className="mt-8 text-center text-sm text-slate-500">
                     <p>Unterstützte Formate: .xlsx, .xls</p>
                     <p className="mt-1">Die Datei sollte Bewertungsdaten von Kandidaten oder Mitarbeitern enthalten</p>
-                </div>
+                </div> */}
             </div>
         </div>
     )
