@@ -13,11 +13,32 @@ import { TimelineCard } from "@/components/dashboard/TimelineCard"
 import { CategoryRatingCard } from "@/components/dashboard/CategoryRatingCard"
 import { DominantTopicsCard } from "@/components/dashboard/DominantTopicsCard"
 import { IndividualReviewsCard } from "@/components/dashboard/IndividualReviewsCard"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import SorceModal from "../components/dashboard/modals/SorceModal"
 import TrendModal from "../components/dashboard/modals/TrendModal"
 import NegativTopicModal from "../components/dashboard/modals/NegativTopicModal"
 import MostCriticalModal from "../components/dashboard/modals/MostCriticalModal"
+import {
+    Command,
+    CommandEmpty,
+    CommandGroup,
+    CommandInput,
+    CommandItem,
+    CommandList,
+} from "@/components/ui/command"
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from "@/components/ui/popover"
+import { Button } from "@/components/ui/button"
+import { Check, ChevronsUpDown } from "lucide-react"
+import { cn } from "@/lib/utils"
+import { API_URL } from "../config"
+
+
+
+
 
 
 export default function Dashboard() {
@@ -25,7 +46,35 @@ export default function Dashboard() {
     const [openTrend, setOpenTrend] = useState(false)
     const [openNegative, setOpenNegative] = useState(false);
     const [openMostCritical, setOpenMostCritical] = useState(false);
+    const [openCompany, setOpenCompany] = React.useState(false)
+    const [selectedCompany, setSelectedCompany] = React.useState("")
+    const [companies, setCompanies] = useState([])
+    async function getCompanies() {
 
+
+        try {
+            const res = await fetch(`${API_URL}/companies/`)
+            if (!res.ok) return
+            const data = await res.json()
+            setCompanies(Array.isArray(data) ? data : [])
+        } catch {
+            // optional: ignorieren
+
+
+        }
+
+
+    }
+    useEffect(() => {
+        getCompanies()
+
+
+    }, [])
+
+    function getCompanyData (id){
+        console.log(id);
+        
+    }
     return (
         <div className="min-h-screen bg-slate-50">
             <div className="flex">
@@ -53,17 +102,57 @@ export default function Dashboard() {
                     <div className="flex items-start justify-between gap-6">
                         <div>
                             <h1 className="text-4xl font-extrabold tracking-tight text-slate-900">
-                                Company Name
+                                {companies.find((company) => company.id === selectedCompany)?.name}
                             </h1>
                         </div>
 
-                        <div className="w-[520px] max-w-full">
+                        <div className="w-[300px] max-w-full">
                             <div className="relative">
-                                <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
-                                <Input
-                                    className="h-12 rounded-full pl-12 shadow-sm bg-white"
-                                    placeholder="Search company"
-                                />
+                                <Popover open={openCompany} onOpenChange={setOpenCompany}>
+                                    <PopoverTrigger asChild>
+                                        <Button
+                                            variant="outline"
+                                            role="combobox"
+                                            aria-expanded={open}
+                                            className="w-[300px] justify-between"
+                                        >
+                                            {selectedCompany
+                                                ? companies.find((company) => company.id === selectedCompany)?.name
+                                                : "Search company"}
+                                            <ChevronsUpDown className="opacity-50" />
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-[300px] p-0">
+                                        <Command>
+                                            <CommandInput placeholder="Search company..." className="h-9 w-[300px]" />
+                                            <CommandList>
+                                                <CommandEmpty>No company found.</CommandEmpty>
+                                                <CommandGroup>
+                                                    {companies.map((company) => (
+                                                        <CommandItem
+                                                            key={company.id}
+                                                            value={company.id}
+                                                            onSelect={(currentValue) => {
+                                                                setSelectedCompany(currentValue === selectedCompany ? "" : currentValue)
+                                                                getCompanyData(currentValue)
+                                                                setOpen(false)
+                                                            
+                                                            }}
+                                                        >
+                                                            {company.name}
+                                                            <Check
+                                                                className={cn(
+                                                                    "ml-auto",
+                                                                    selectedCompany == company.id ? "opacity-100" : "opacity-0"
+                                                                )}
+                                                            />
+                                                        </CommandItem>
+                                                    ))}
+                                                </CommandGroup>
+                                            </CommandList>
+                                        </Command>
+                                    </PopoverContent>
+                                </Popover>
                             </div>
                         </div>
                     </div>
@@ -98,7 +187,7 @@ export default function Dashboard() {
                                 </CardTitle>
                             </CardHeader>
                             <CardContent className="pt-2 flex flex-col items-center gap-2">
-                                
+
                                 <div className="text-xl font-bold text-red-700"></div>
                             </CardContent>
                         </Card>
@@ -111,7 +200,7 @@ export default function Dashboard() {
                             <div className="text-3xl font-bold">-0.3</div>
                         </TrendModal>
 
-                        <Card className="rounded-3xl shadow-sm"onClick={() => setOpenMostCritical(true)}>
+                        <Card className="rounded-3xl shadow-sm" onClick={() => setOpenMostCritical(true)}>
                             <CardHeader className="pb-2">
                                 <CardTitle className="text-xl font-bold text-slate-800">
                                     Most Critical
@@ -119,7 +208,7 @@ export default function Dashboard() {
                             </CardHeader>
                             <CardContent className="pt-2">
                                 <div className="text-2xl font-extrabold text-red-700">
-                                    
+
                                 </div>
                                 <div className="text-lg font-bold text-red-700"></div>
                             </CardContent>
@@ -137,7 +226,7 @@ export default function Dashboard() {
                             </CardHeader>
                             <CardContent className="pt-2">
                                 <div className="text-2xl font-extrabold text-orange-400">
-                                    
+
                                 </div>
                             </CardContent>
                         </Card>

@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom"
 import { Upload, FileSpreadsheet, ArrowRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { API_URL } from "../config"
+
 
 export default function Welcome() {
     const [companyQuery, setCompanyQuery] = useState("")
@@ -39,7 +41,7 @@ export default function Welcome() {
             return
         }
         try {
-            const res = await fetch(`http://localhost:8000/api/companies/search?q=${encodeURIComponent(query)}`)
+            const res = await fetch(`${API_URL}/companies/search?q=${encodeURIComponent(query)}`)
             if (!res.ok) return
             const data = await res.json()
             setCompanySuggestions(Array.isArray(data) ? data : [])
