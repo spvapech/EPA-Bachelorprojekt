@@ -5,6 +5,10 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 
 export default function Welcome() {
+    const [companyQuery, setCompanyQuery] = useState("")
+    const [companyId, setCompanyId] = useState(null)
+    const [companySuggestions, setCompanySuggestions] = useState([])
+
     const [file, setFile] = useState(null)
     const [uploading, setUploading] = useState(false)
     const [error, setError] = useState("")
@@ -28,10 +32,36 @@ export default function Welcome() {
         }
     }
 
+    const fetchCompanies = async (q) => {
+        const query = q.trim()
+        if (!query) {
+            setCompanySuggestions([])
+            return
+        }
+        try {
+            const res = await fetch(`http://localhost:8000/api/companies/search?q=${encodeURIComponent(query)}`)
+            if (!res.ok) return
+            const data = await res.json()
+            setCompanySuggestions(Array.isArray(data) ? data : [])
+        } catch {
+            // optional: ignorieren
+        }
+    }
+    const resolveSelectedCompany = (name) => {
+        const match = companySuggestions.find(
+            (c) => c.name.toLowerCase() === name.trim().toLowerCase()
+        )
+        setCompanyId(match ? match.id : null)
+    }
+
     const handleUpload = async () => {
         if (!file) {
             setError("Bitte wählen Sie zuerst eine Datei aus")
             return
+        }
+        if (!companyId) {
+        setError("Bitte wählen Sie eine Firma aus der Vorschlagsliste aus.")
+        return
         }
 
         setUploading(true)
@@ -40,6 +70,7 @@ export default function Welcome() {
         try {
             const formData = new FormData()
             formData.append("file", file)
+            formData.append("company_id", String(companyId))
 
             const response = await fetch("http://localhost:8000/api/upload-excel", {
                 method: "POST",
@@ -88,6 +119,37 @@ export default function Welcome() {
                     </CardHeader>
 
                     <CardContent className="space-y-6">
+                            {/* Company Input */}
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium text-slate-700">
+                                Firmenname <span className="text-red-600">*</span>
+                            </label>
+
+                            <input
+                                value={companyQuery}
+                                onChange={(e) => {
+                                const v = e.target.value
+                                setCompanyQuery(v)
+                                setCompanyId(null)          // wenn User weiter tippt, reset
+                                fetchCompanies(v)
+                                }}
+                                onBlur={(e) => resolveSelectedCompany(e.target.value)}
+                                list="company-suggestions"
+                                placeholder="Firmenname eingeben"
+                                className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                            />
+
+                            <datalist id="company-suggestions">
+                                {companySuggestions.map((c) => (
+                                <option key={c.id} value={c.name} />
+                                ))}
+                            </datalist>
+
+                            <p className="text-xs text-slate-500">
+                                Bitte wählen Sie eine Firma aus der Vorschlagsliste aus.
+                            </p>
+                        </div>
+
                         {/* File Input Area */}
                         <div className="border-2 border-dashed border-slate-300 rounded-2xl p-8 text-center hover:border-blue-400 transition-colors">
                             <input
@@ -112,14 +174,7 @@ export default function Welcome() {
                                         oder per Drag & Drop hier ablegen
                                     </p>
                                 </div>
-                                {/* <Button
-                                    type="button"
-                                    variant="outline"
-                                    className="rounded-full"
-                                >
-                                    <Upload className="h-4 w-4 mr-2" />
-                                    Durchsuchen
-                                </Button> */}
+                                
                             </label>
                         </div>
 
@@ -146,7 +201,7 @@ export default function Welcome() {
                         {/* Upload Button */}
                         <Button
                             onClick={handleUpload}
-                            disabled={!file || uploading}
+                            disabled={!file || uploading || !companyId}
                             className="w-full h-12 rounded-full text-lg font-semibold cursor-pointer disabled:cursor-not-allowed"
                             size="lg"
                         >

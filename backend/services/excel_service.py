@@ -182,7 +182,7 @@ class ExcelProcessor:
     def __init__(self):
         self.supabase = get_supabase_client()
 
-    async def process_excel_file(self, file: UploadFile) -> Dict[str, Any]:
+    async def process_excel_file(self, file: UploadFile, company_id: int) -> Dict[str, Any]:
         """
         Process an uploaded Excel file and import into candidates OR employee table.
 
@@ -223,12 +223,12 @@ class ExcelProcessor:
             # Detect type
             if self._is_candidates_data(df):
                 result["detected_type"] = "candidates"
-                imported, errors = await self._import_candidates(df)
+                imported, errors = await self._import_candidates(df, company_id)
                 result["imported"]["candidates"] = imported
                 result["errors"].extend(errors)
             else:
                 result["detected_type"] = "employees"
-                imported, errors = await self._import_employees(df)
+                imported, errors = await self._import_employees(df, company_id)
                 result["imported"]["employees"] = imported
                 result["errors"].extend(errors)
 
@@ -251,7 +251,7 @@ class ExcelProcessor:
     def _is_employee_data(self, df: pd.DataFrame) -> bool:
         return "stellenbeschreibung" not in df.columns
 
-    async def _import_candidates(self, df: pd.DataFrame) -> tuple[int, List[str]]:
+    async def _import_candidates(self, df: pd.DataFrame, company_id: int) -> tuple[int, List[str]]:
         """
         Candidates:
         - store base fields + star ratings that exist in candidates DB
@@ -273,6 +273,7 @@ class ExcelProcessor:
                     "update_datum": to_iso_dt(row.get("update_datum")),
                     "stellenbeschreibung": str(row.get("stellenbeschreibung")) if pd.notna(row.get("stellenbeschreibung")) else None,
                     "verbesserungsvorschlaege": str(row.get("verbesserungsvorschlaege")) if pd.notna(row.get("verbesserungsvorschlaege")) else None,
+                    "company_id": company_id,
                 }
 
                 # Ratings
@@ -318,7 +319,7 @@ class ExcelProcessor:
 
         return len(rows_to_insert), errors
 
-    async def _import_employees(self, df: pd.DataFrame) -> tuple[int, List[str]]:
+    async def _import_employees(self, df: pd.DataFrame, company_id: int) -> tuple[int, List[str]]:
         """
         Employees:
         - store base fields
@@ -357,6 +358,7 @@ class ExcelProcessor:
                     "gut_am_arbeitgeber_finde_ich": str(row.get("gut_am_arbeitgeber_finde_ich")) if pd.notna(row.get("gut_am_arbeitgeber_finde_ich")) else None,
                     "schlecht_am_arbeitgeber_finde_ich": str(row.get("schlecht_am_arbeitgeber_finde_ich")) if pd.notna(row.get("schlecht_am_arbeitgeber_finde_ich")) else None,
                     "verbesserungsvorschlaege": str(row.get("verbesserungsvorschlaege")) if pd.notna(row.get("verbesserungsvorschlaege")) else None,
+                    "company_id": company_id,
                 }
 
                 # Topic comments (text)

@@ -5,6 +5,8 @@ from typing import List, Dict, Any
 from contextlib import asynccontextmanager
 from routes.topics import router as topics_router
 from routes.upload import router as upload_router
+from routes.companies import router as companies_router
+
 
 
 @asynccontextmanager
@@ -27,6 +29,9 @@ app = FastAPI(lifespan=lifespan)
 # Include routers
 app.include_router(topics_router)
 app.include_router(upload_router)
+app.include_router(companies_router)
+
+
 
 app.add_middleware(
     CORSMiddleware,
