@@ -13,6 +13,7 @@ import { TimelineCard } from "@/components/dashboard/TimelineCard"
 import { CategoryRatingCard } from "@/components/dashboard/CategoryRatingCard"
 import { DominantTopicsCard } from "@/components/dashboard/DominantTopicsCard"
 import { IndividualReviewsCard } from "@/components/dashboard/IndividualReviewsCard"
+import { TopicOverviewCard } from "@/components/dashboard/TopicOverviewCard"
 import { useState, useEffect } from "react"
 import SorceModal from "../components/dashboard/modals/SorceModal"
 import TrendModal from "../components/dashboard/modals/TrendModal"
@@ -243,6 +244,11 @@ export default function Dashboard() {
                     <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
                         {/* <TimelineCard /> */}
                         {/* <CategoryRatingCard /> */}
+                    </div>
+
+                    {/* Topic Overview */}
+                    <div className="mt-6">
+                        <TopicOverviewCard />
                     </div>
 
                     {/* Tables row */}
