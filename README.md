@@ -152,6 +152,18 @@ gruppe-P1-3/
 │   ├── src/                    # Quellcode
 │   │   ├── components/         # React Komponenten
 │   │   │   ├── dashboard/     # Dashboard Components
+│   │   │   │   ├── CategoryRatingCard.jsx
+│   │   │   │   ├── DominantTopicsCard.jsx
+│   │   │   │   ├── IndividualReviewsCard.jsx
+│   │   │   │   ├── TimelineCard.jsx
+│   │   │   │   ├── TopicOverviewCard.jsx  # Topic Übersicht (NEU)
+│   │   │   │   └── modals/
+│   │   │   │       ├── MostCriticalModal.jsx
+│   │   │   │       ├── NegativTopicModal.jsx
+│   │   │   │       ├── SorceModal.jsx
+│   │   │   │       ├── TrendModal.jsx
+│   │   │   │       ├── TopicTableModal.jsx    # Topic Tabelle (NEU)
+│   │   │   │       └── TopicDetailModal.jsx   # Topic Details (NEU)
 │   │   │   └── ui/            # UI Components (shadcn)
 │   │   ├── pages/             # Seiten
 │   │   │   ├── Dashboard.jsx
@@ -179,7 +191,18 @@ gruppe-P1-3/
 * **Build Tool:** Vite 5
 * **Routing:** React Router DOM
 * **UI Library:** shadcn/ui (Radix UI + Tailwind CSS)
+* **Charts:** Recharts (Line Charts, Gauge Charts)
+* **Icons:** Lucide React
 * **Linting:** ESLint
+
+### Dashboard Features
+* **Topic Übersicht (NEU):**
+  - Interaktive Topic-Tabelle mit Suchfunktion
+  - Detailansicht mit Line Chart (Rating über Zeit)
+  - Gauge Chart für Sentiment-Visualisierung
+  - Typische Aussagen und Beispiel-Reviews
+  - Zweistufige Modal-Interaktion (Tabelle → Details)
+  - Verwendet aktuell Dummy-Daten zur Demonstration
 
 ### Datenbank Schema
 * **Tables:** `candidates`, `employee`, `companies`
