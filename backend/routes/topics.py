@@ -303,7 +303,7 @@ async def analyze_record(request: AnalyzeRecordRequest):
 @router.get("/models/list")
 async def list_saved_models():
     """List all saved model files."""
-    models_dir = "models"
+    models_dir = "models/saved_models"
     
     if not os.path.exists(models_dir):
         return {
@@ -331,7 +331,7 @@ async def load_saved_model(model_name: str):
     """Load a previously saved model."""
     global _topic_analyzer
     
-    models_dir = "models"
+    models_dir = "models/saved_models"
     model_path = os.path.join(models_dir, model_name)
     
     if not os.path.exists(f"{model_path}.model"):
