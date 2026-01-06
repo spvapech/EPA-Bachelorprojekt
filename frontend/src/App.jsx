@@ -6,9 +6,10 @@ export default function App() {
   return (
     <Router>
       <Routes>
-        <Route path="/" element={<Welcome />} />
+        <Route path="/" element={<Navigate to="/dashboard" replace />} />
+        <Route path="/welcome" element={<Welcome />} />
         <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
+        <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </Router>
   )
