@@ -99,17 +99,25 @@ export default function Dashboard() {
     }
 
     async function getTrend() {
+        if (!selectedCompany) {
+            setTrendData(null);
+            return;
+        }
+
         try {
-            const res = await fetch(`${API_URL}/companies/${selectedCompany}/ratings/trend?days=30`)
-            if (!res.ok) return
-            const trend = await res.json()
-            const deltas = Object.values(trend).map(v => v.delta).filter(d => d !== null && !isNaN(d))
-            const avgDelta = deltas.length ? (deltas.reduce((a, b) => a + b, 0) / deltas.length).toFixed(1) : null
-            setTrendData({ avgDelta })
+            const res = await fetch(`${API_URL}/companies/${selectedCompany}/ratings/trend?days=30`);
+            if (!res.ok) return;
+
+            const json = await res.json();
+            console.log('Trend response:', json);
+            const avgDelta = json.overall?.avgDelta?.toString() ?? "0.0";
+
+            setTrendData({ avgDelta });
         } catch {
-            // optional: ignorieren
+            // optional ignorieren
         }
     }
+
 
     return (
         <div className="min-h-screen bg-slate-50">
