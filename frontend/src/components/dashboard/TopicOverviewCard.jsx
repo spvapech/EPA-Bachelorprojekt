@@ -9,129 +9,50 @@ import {
     TableRow,
 } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import TopicDetailModal from "./modals/TopicDetailModal"
 import TopicTableModal from "./modals/TopicTableModal"
 import { FileText } from "lucide-react"
+import { API_URL } from "@/config"
 
-// Beispieldaten - später von API ersetzen
-const topicsData = [
-    {
-        id: 1,
-        topic: "Work-Life Balance",
-        frequency: 145,
-        avgRating: 2.8,
-        sentiment: "Negativ",
-        example: "Überstunden sind die Regel, Privatleben leidet stark...",
-        color: "red",
-        timelineData: [
-            { month: "Jan", rating: 2.5 },
-            { month: "Feb", rating: 2.6 },
-            { month: "Mär", rating: 2.4 },
-            { month: "Apr", rating: 2.7 },
-            { month: "Mai", rating: 2.9 },
-            { month: "Jun", rating: 3.0 },
-        ],
-        typicalStatements: [
-            "Überstunden sind Standard, niemand fragt nach",
-            "Ständige Erreichbarkeit wird erwartet",
-            "Urlaub wird oft kurzfristig abgelehnt"
-        ]
-    },
-    {
-        id: 2,
-        topic: "Führungsqualität",
-        frequency: 132,
-        avgRating: 3.2,
-        sentiment: "Neutral",
-        example: "Führungskräfte sind teilweise kompetent, aber...",
-        color: "orange",
-        timelineData: [
-            { month: "Jan", rating: 3.0 },
-            { month: "Feb", rating: 3.1 },
-            { month: "Mär", rating: 3.3 },
-            { month: "Apr", rating: 3.2 },
-            { month: "Mai", rating: 3.4 },
-            { month: "Jun", rating: 3.2 },
-        ],
-        typicalStatements: [
-            "Entscheidungen werden nicht transparent kommuniziert",
-            "Feedback wird selten gegeben",
-            "Manche Vorgesetzte sind sehr engagiert"
-        ]
-    },
-    {
-        id: 3,
-        topic: "Gehalt & Benefits",
-        frequency: 189,
-        avgRating: 3.8,
-        sentiment: "Positiv",
-        example: "Gehalt ist branchenüblich, gute Zusatzleistungen...",
-        color: "green",
-        timelineData: [
-            { month: "Jan", rating: 3.6 },
-            { month: "Feb", rating: 3.7 },
-            { month: "Mär", rating: 3.8 },
-            { month: "Apr", rating: 3.9 },
-            { month: "Mai", rating: 3.8 },
-            { month: "Jun", rating: 3.9 },
-        ],
-        typicalStatements: [
-            "Faire Bezahlung für die Branche",
-            "Gute Sozialleistungen und Altersvorsorge",
-            "Regelmäßige Gehaltsanpassungen möglich"
-        ]
-    },
-    {
-        id: 4,
-        topic: "Teamzusammenhalt",
-        frequency: 167,
-        avgRating: 4.1,
-        sentiment: "Positiv",
-        example: "Tolles Team, super Atmosphäre unter Kollegen...",
-        color: "green",
-        timelineData: [
-            { month: "Jan", rating: 4.0 },
-            { month: "Feb", rating: 4.0 },
-            { month: "Mär", rating: 4.2 },
-            { month: "Apr", rating: 4.1 },
-            { month: "Mai", rating: 4.2 },
-            { month: "Jun", rating: 4.1 },
-        ],
-        typicalStatements: [
-            "Kollegen unterstützen sich gegenseitig",
-            "Sehr gute Teamevents",
-            "Offene und freundliche Kommunikation"
-        ]
-    },
-    {
-        id: 5,
-        topic: "Karriereentwicklung",
-        frequency: 98,
-        avgRating: 2.5,
-        sentiment: "Negativ",
-        example: "Wenige Weiterbildungsmöglichkeiten, kaum Aufstiegschancen...",
-        color: "red",
-        timelineData: [
-            { month: "Jan", rating: 2.4 },
-            { month: "Feb", rating: 2.5 },
-            { month: "Mär", rating: 2.6 },
-            { month: "Apr", rating: 2.4 },
-            { month: "Mai", rating: 2.5 },
-            { month: "Jun", rating: 2.6 },
-        ],
-        typicalStatements: [
-            "Keine klaren Karrierepfade erkennbar",
-            "Weiterbildungen müssen selbst finanziert werden",
-            "Beförderungen sind sehr selten"
-        ]
-    },
-]
-
-export function TopicOverviewCard() {
+export function TopicOverviewCard({ companyId = 1 }) {
+    const [topicsData, setTopicsData] = useState([])
+    const [loading, setLoading] = useState(true)
+    const [error, setError] = useState(null)
     const [selectedTopic, setSelectedTopic] = useState(null)
     const [detailModalOpen, setDetailModalOpen] = useState(false)
     const [tableModalOpen, setTableModalOpen] = useState(false)
+
+    // Daten von API laden
+    useEffect(() => {
+        const fetchTopics = async () => {
+            try {
+                setLoading(true)
+                setError(null)
+                
+                const response = await fetch(
+                    `${API_URL}/analytics/company/${companyId}/topic-overview`
+                )
+                
+                if (!response.ok) {
+                    throw new Error(`API Error: ${response.status}`)
+                }
+                
+                const data = await response.json()
+                setTopicsData(data.topics || [])
+            } catch (err) {
+                console.error('Error fetching topics:', err)
+                setError(err.message)
+                setTopicsData([])
+            } finally {
+                setLoading(false)
+            }
+        }
+
+        if (companyId) {
+            fetchTopics()
+        }
+    }, [companyId])
 
     const handleCardClick = () => {
         setTableModalOpen(true)
@@ -158,8 +79,48 @@ export function TopicOverviewCard() {
 
     // Statistiken für die Übersichtskarte
     const totalTopics = topicsData.length
-    const avgRating = (topicsData.reduce((sum, t) => sum + t.avgRating, 0) / totalTopics).toFixed(1)
+    const avgRating = totalTopics > 0 
+        ? (topicsData.reduce((sum, t) => sum + t.avgRating, 0) / totalTopics).toFixed(1)
+        : 0
     const totalMentions = topicsData.reduce((sum, t) => sum + t.frequency, 0)
+
+    // Loading State
+    if (loading) {
+        return (
+            <Card className="rounded-3xl shadow-sm">
+                <CardHeader>
+                    <CardTitle className="text-xl font-bold text-slate-800">
+                        Topic Übersicht
+                    </CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <div className="flex items-center justify-center h-32">
+                        <p className="text-slate-500">Lade Topic-Daten...</p>
+                    </div>
+                </CardContent>
+            </Card>
+        )
+    }
+
+    // Empty State
+    if (topicsData.length === 0) {
+        return (
+            <Card className="rounded-3xl shadow-sm">
+                <CardHeader>
+                    <CardTitle className="text-xl font-bold text-slate-800">
+                        Topic Übersicht
+                    </CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <div className="flex items-center justify-center h-32">
+                        <p className="text-slate-500">
+                            {error ? `Fehler: ${error}` : 'Keine Topics gefunden'}
+                        </p>
+                    </div>
+                </CardContent>
+            </Card>
+        )
+    }
 
     return (
         <>

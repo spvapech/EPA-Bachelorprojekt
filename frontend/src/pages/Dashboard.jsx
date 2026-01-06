@@ -248,7 +248,7 @@ export default function Dashboard() {
 
                     {/* Topic Overview */}
                     <div className="mt-6">
-                        <TopicOverviewCard />
+                        <TopicOverviewCard companyId={selectedCompany || 1} />
                     </div>
 
                     {/* Tables row */}

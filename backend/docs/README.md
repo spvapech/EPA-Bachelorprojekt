@@ -12,19 +12,24 @@ Willkommen zur Dokumentation des LDA Topic Modeling Systems für Kandidaten- und
 
 Neu hier? Starte mit diesen Dokumenten:
 
-1. **[Schnellstart-Anleitung](QUICKSTART_TOPIC_MODELING.md)** - Erste Schritte und Installation
-2. **[Quick Start: Neues Modell](QUICKSTART_NEW_MODEL.md)** - Modell trainieren (Version 2.1)
-3. **[API-Dokumentation](TOPIC_MODELING_API.md)** - Alle API-Endpunkte
+1. **[LDA Schnellstart](QUICKSTART_LDA.md)** - LDA Topic Modeling Setup & Training
+2. **[Topic Overview Guide](TOPIC_OVERVIEW_GUIDE.md)** - Topic-Analyse aus Reviews
+3. **[Topic Analysis](TOPIC_ANALYSIS_EXPLANATION.md)** - Detaillierte Funktionsweise
+4. **[API-Dokumentation](TOPIC_MODELING_API.md)** - Alle API-Endpunkte
 
 ## 📖 Dokumentationsstruktur
 
 ### Für Einsteiger
-- **[QUICKSTART_TOPIC_MODELING.md](QUICKSTART_TOPIC_MODELING.md)** - Erste Schritte, Installation, Grundlagen
-- **[QUICKSTART_NEW_MODEL.md](QUICKSTART_NEW_MODEL.md)** - Neues Modell trainieren (v2.1)
+- **[QUICKSTART_LDA.md](QUICKSTART_LDA.md)** - LDA Topic Modeling: Erste Schritte, Installation, Training
+- **[TOPIC_OVERVIEW_GUIDE.md](TOPIC_OVERVIEW_GUIDE.md)** - Topic Overview: Integration & Verwendung
 - **[TOPIC_MODELING_README.md](TOPIC_MODELING_README.md)** - Feature-Übersicht
 
-### API & Integration
-- **[TOPIC_MODELING_API.md](TOPIC_MODELING_API.md)** - Vollständige API-Referenz
+### Technische Details & Analyse
+- **[TOPIC_ANALYSIS_EXPLANATION.md](TOPIC_ANALYSIS_EXPLANATION.md)** - Wie die Topic-Analyse funktioniert
+- **[TOPIC_OVERVIEW_API.md](TOPIC_OVERVIEW_API.md)** - Topic Overview API-Referenz
+- **[TOPIC_MODELING_API.md](TOPIC_MODELING_API.md)** - LDA Topic Modeling API-Referenz
+
+### Topic-Rating Features
 - **[TOPIC_RATING_ANALYSIS.md](TOPIC_RATING_ANALYSIS.md)** - Topic Rating Integration
 - **[TOPIC_RATING_IMPLEMENTATION.md](TOPIC_RATING_IMPLEMENTATION.md)** - Implementation Details
 
@@ -38,16 +43,21 @@ Neu hier? Starte mit diesen Dokumenten:
 
 ## 🎯 Nach Aufgabe
 
-### Ich möchte ein Modell trainieren
-→ [QUICKSTART_NEW_MODEL.md](QUICKSTART_NEW_MODEL.md)
+### Ich möchte ein LDA-Modell trainieren
+→ [QUICKSTART_LDA.md](QUICKSTART_LDA.md)
+
+### Ich möchte Topic-Analyse aus Reviews nutzen
+→ [TOPIC_OVERVIEW_GUIDE.md](TOPIC_OVERVIEW_GUIDE.md)
 
 ### Ich möchte die API nutzen
-→ [TOPIC_MODELING_API.md](TOPIC_MODELING_API.md)
+→ [TOPIC_MODELING_API.md](TOPIC_MODELING_API.md) (LDA)  
+→ [TOPIC_OVERVIEW_API.md](TOPIC_OVERVIEW_API.md) (Analysis)
 
 ### Ich möchte verstehen, was verbessert wurde
 → [SUMMARY_FINAL_V2.1.md](SUMMARY_FINAL_V2.1.md)
 
-### Ich möchte die Bewertungskriterien verstehen
+### Ich möchte wissen, wie die Analyse funktioniert
+→ [TOPIC_ANALYSIS_EXPLANATION.md](TOPIC_ANALYSIS_EXPLANATION.md)
 → [RATING_CRITERIA_INTEGRATION.md](RATING_CRITERIA_INTEGRATION.md)
 
 ### Ich suche technische Details

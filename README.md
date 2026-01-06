@@ -284,10 +284,13 @@ uv run python examples/topic_rating_examples.py
 
 ### Dokumentation
 
-- 📖 **Schnellstart**: [`backend/QUICKSTART_TOPIC_MODELING.md`](backend/QUICKSTART_TOPIC_MODELING.md)
-- 📚 **API-Referenz**: [`backend/docs/TOPIC_MODELING_API.md`](backend/docs/TOPIC_MODELING_API.md)
-- 🎯 **Feature-Guide**: [`backend/TOPIC_MODELING_README.md`](backend/TOPIC_MODELING_README.md)
-- ⭐ **Topic-Rating-Analyse (NEU)**: [`backend/docs/TOPIC_RATING_ANALYSIS.md`](backend/docs/TOPIC_RATING_ANALYSIS.md)
+- � **LDA Schnellstart**: [`backend/docs/QUICKSTART_LDA.md`](backend/docs/QUICKSTART_LDA.md)
+- 🎯 **Topic-Analyse Guide**: [`backend/docs/TOPIC_OVERVIEW_GUIDE.md`](backend/docs/TOPIC_OVERVIEW_GUIDE.md)
+- 📊 **Analyse-Erklärung**: [`backend/docs/TOPIC_ANALYSIS_EXPLANATION.md`](backend/docs/TOPIC_ANALYSIS_EXPLANATION.md)
+- 📚 **LDA API-Referenz**: [`backend/docs/TOPIC_MODELING_API.md`](backend/docs/TOPIC_MODELING_API.md)
+- 📋 **Topic Overview API**: [`backend/docs/TOPIC_OVERVIEW_API.md`](backend/docs/TOPIC_OVERVIEW_API.md)
+- ⭐ **Topic-Rating-Analyse**: [`backend/docs/TOPIC_RATING_ANALYSIS.md`](backend/docs/TOPIC_RATING_ANALYSIS.md)
+- 📖 **Feature-Übersicht**: [`backend/docs/TOPIC_MODELING_README.md`](backend/docs/TOPIC_MODELING_README.md)
 - 💡 **Beispiele**: [`backend/examples/`](backend/examples/)
   - `topic_modeling_examples.py` - Basic LDA
   - `topic_rating_examples.py` - Topics + Sentiment + Ratings
@@ -308,11 +311,15 @@ backend/
 │   ├── topic_modeling_examples.py  # Basic LDA Beispiele
 │   └── topic_rating_examples.py    # Topic-Rating Beispiele (NEU)
 ├── docs/
-│   ├── TOPIC_MODELING_API.md       # Vollständige API-Doku
-│   └── TOPIC_RATING_ANALYSIS.md    # Topic-Rating Feature-Doku (NEU)
-├── test_topic_modeling.py          # Installationstest
-├── TOPIC_MODELING_README.md        # Feature-Dokumentation
-└── QUICKSTART_TOPIC_MODELING.md    # Schnellstart-Anleitung
+│   ├── QUICKSTART_LDA.md           # LDA Schnellstart-Anleitung
+│   ├── TOPIC_OVERVIEW_GUIDE.md     # Topic-Analyse Guide
+│   ├── TOPIC_ANALYSIS_EXPLANATION.md # Detaillierte Analyse-Logik
+│   ├── TOPIC_MODELING_API.md       # LDA API-Dokumentation
+│   ├── TOPIC_OVERVIEW_API.md       # Topic Overview API
+│   ├── TOPIC_RATING_ANALYSIS.md    # Topic-Rating Feature-Doku
+│   ├── TOPIC_MODELING_README.md    # Feature-Übersicht
+│   └── README.md                   # Dokumentations-Index
+└── test_topic_modeling.py          # Installationstest
 ```
 
 ### Workflow

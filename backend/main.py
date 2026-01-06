@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 from routes.topics import router as topics_router
 from routes.upload import router as upload_router
 from routes.companies import router as companies_router
+from routes.analytics import router as analytics_router
 
 
 
@@ -30,6 +31,7 @@ app = FastAPI(lifespan=lifespan)
 app.include_router(topics_router)
 app.include_router(upload_router)
 app.include_router(companies_router)
+app.include_router(analytics_router)
 
 
 
