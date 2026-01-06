@@ -31,3 +31,46 @@ def search_companies():
         if "id" in row and row["id"] is not None:
             row["id"] = str(row["id"])
     return data
+
+@router.get("/companies/{company_id}/ratings/avg")
+def get_company_ratings_avg(company_id: int):
+    res = supabase.rpc("get_employee_ratings_avg", {"p_company_id": company_id}).execute()
+
+    if res.data is None:
+        raise HTTPException(status_code=500, detail="No data returned from RPC")
+
+    # res.data ist meistens: [ { ... } ]
+    return res.data[0] if len(res.data) > 0 else {}
+
+
+@router.get("/companies/{company_id}/ratings")
+def get_company_ratings_avg(company_id: int):
+    res = supabase.rpc("get_employee_ratings_avg", {"p_company_id": company_id}).execute()
+
+    if res.data is None:
+        raise HTTPException(status_code=500, detail="No data returned from RPC")
+
+    row = res.data[0] if len(res.data) > 0 else {}
+
+    # Durchschnitt der Durchschnitte berechnen (nur numerische Werte)
+    values = []
+    for v in row.values():
+        if v is None:
+            continue
+        # Supabase kann float, int, Decimal oder sogar string liefern -> sauber konvertieren
+        try:
+            values.append(float(v))
+        except (TypeError, ValueError):
+            continue
+
+    avg_overall = round(sum(values) / len(values), 2) if values else None
+
+    # Du gibst jetzt Kategorien + Gesamt-Ø zurück
+    return {
+        
+        "avg_overall": avg_overall,
+        
+    }
+    
+    
+    

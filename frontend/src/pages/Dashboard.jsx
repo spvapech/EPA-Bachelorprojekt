@@ -49,6 +49,8 @@ export default function Dashboard() {
     const [openMostCritical, setOpenMostCritical] = useState(false);
     const [openCompany, setOpenCompany] = React.useState(false)
     const [selectedCompany, setSelectedCompany] = React.useState("")
+    const [data, setData] = useState()
+    const [trendData, setTrendData] = useState(null)
     const [companies, setCompanies] = useState([])
     async function getCompanies() {
 
@@ -72,10 +74,43 @@ export default function Dashboard() {
 
     }, [])
 
-    function getCompanyData (id){
+    function getCompanyData(id) {
         console.log(id);
-        
+
     }
+
+    useEffect(() => {
+        getAvg()
+        getTrend()
+
+    }, [selectedCompany])
+    async function getAvg() {
+        try {
+            const res = await fetch(`${API_URL}/companies/${selectedCompany}/ratings`)
+            if (!res.ok) return
+            setData(await res.json())
+
+        } catch {
+            // optional: ignorieren
+
+
+        }
+
+    }
+
+    async function getTrend() {
+        try {
+            const res = await fetch(`${API_URL}/companies/${selectedCompany}/ratings/trend?days=30`)
+            if (!res.ok) return
+            const trend = await res.json()
+            const deltas = Object.values(trend).map(v => v.delta).filter(d => d !== null && !isNaN(d))
+            const avgDelta = deltas.length ? (deltas.reduce((a, b) => a + b, 0) / deltas.length).toFixed(1) : null
+            setTrendData({ avgDelta })
+        } catch {
+            // optional: ignorieren
+        }
+    }
+
     return (
         <div className="min-h-screen bg-slate-50">
             <div className="flex">
@@ -132,12 +167,14 @@ export default function Dashboard() {
                                                     {companies.map((company) => (
                                                         <CommandItem
                                                             key={company.id}
-                                                            value={company.id}
+                                                            value={company.name}
                                                             onSelect={(currentValue) => {
-                                                                setSelectedCompany(currentValue === selectedCompany ? "" : currentValue)
-                                                                getCompanyData(currentValue)
-                                                                setOpen(false)
-                                                            
+                                                                const company = companies.find(c => c.name === currentValue);
+                                                                const id = company ? company.id : "";
+                                                                setSelectedCompany(id === selectedCompany ? "" : id)
+                                                                getCompanyData(id)
+                                                                setOpenCompany(false)
+
                                                             }}
                                                         >
                                                             {company.name}
@@ -168,7 +205,9 @@ export default function Dashboard() {
                                 </CardTitle>
                             </CardHeader>
                             <CardContent className="pt-2">
-                                <div className="text-5xl font-extrabold text-orange-400"></div>
+                                <div className="text-3xl font-extrabold text-center">
+                                    {data && <span className={data.avg_overall > 3 ? 'text-green-500' : data.avg_overall >= 2 ? 'text-slate-800' : 'text-red-500'}>{data.avg_overall}</span>}
+                                </div>
                             </CardContent>
 
                         </Card>
@@ -177,6 +216,8 @@ export default function Dashboard() {
                             onOpenChange={setOpen}
                             title="Ø Score"
                             description="Average company score"
+                            companyId={selectedCompany}
+
                         >
                             <div className="text-3xl font-bold">3.1</div>
                         </SorceModal>
@@ -189,7 +230,9 @@ export default function Dashboard() {
                             </CardHeader>
                             <CardContent className="pt-2 flex flex-col items-center gap-2">
 
-                                <div className="text-xl font-bold text-red-700"></div>
+                                <div className="text-xl font-bold">
+                                    {trendData?.avgDelta && <span className={parseFloat(trendData.avgDelta) > 0 ? 'text-green-500' : parseFloat(trendData.avgDelta) < 0 ? 'text-red-500' : 'text-orange-500'}>{parseFloat(trendData.avgDelta) > 0 ? '+' : ''}{trendData.avgDelta}</span>}
+                                </div>
                             </CardContent>
                         </Card>
                         <TrendModal
@@ -197,6 +240,7 @@ export default function Dashboard() {
                             onOpenChange={setOpenTrend}
                             title="Trend"
                             description="Company trend"
+                            companyId={selectedCompany}
                         >
                             <div className="text-3xl font-bold">-0.3</div>
                         </TrendModal>
