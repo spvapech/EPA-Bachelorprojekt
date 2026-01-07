@@ -611,8 +611,8 @@ def analyze_topic(
                 "rating": avg_rating
             })
     
-    # Select typical statements (up to 3 most relevant)
-    typical_statements = example_texts[:3] if example_texts else [
+    # Select typical statements (up to 10 most relevant)
+    typical_statements = example_texts[:10] if example_texts else [
         f"Keine spezifischen Aussagen zu {topic_name} gefunden"
     ]
     

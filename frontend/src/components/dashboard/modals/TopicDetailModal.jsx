@@ -6,6 +6,8 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { ChevronLeft, ChevronRight } from "lucide-react"
 import {
     LineChart,
     Line,
@@ -104,7 +106,29 @@ const GaugeChart = ({ sentiment, value }) => {
 }
 
 export default function TopicDetailModal({ open, onOpenChange, topic }) {
+    const [currentExampleIndex, setCurrentExampleIndex] = React.useState(0)
+    
     if (!topic) return null
+
+    // Reset index when topic changes
+    React.useEffect(() => {
+        setCurrentExampleIndex(0)
+    }, [topic])
+
+    const totalExamples = topic.typicalStatements?.length || 0
+    const hasMultipleExamples = totalExamples > 1
+
+    const goToPrevious = () => {
+        setCurrentExampleIndex((prev) => 
+            prev > 0 ? prev - 1 : totalExamples - 1
+        )
+    }
+
+    const goToNext = () => {
+        setCurrentExampleIndex((prev) => 
+            prev < totalExamples - 1 ? prev + 1 : 0
+        )
+    }
 
     const getSentimentBadgeVariant = (sentiment) => {
         switch (sentiment) {
@@ -260,7 +284,7 @@ export default function TopicDetailModal({ open, onOpenChange, topic }) {
                         </CardHeader>
                         <CardContent>
                             <ul className="space-y-3">
-                                {topic.typicalStatements.map((statement, index) => (
+                                {topic.typicalStatements.slice(0, 3).map((statement, index) => (
                                     <li
                                         key={index}
                                         className="flex items-start gap-3 p-3 bg-slate-50 rounded-lg"
@@ -277,16 +301,43 @@ export default function TopicDetailModal({ open, onOpenChange, topic }) {
                         </CardContent>
                     </Card>
 
-                    {/* Beispiel */}
+                    {/* Beispiel-Review mit Navigation */}
                     <Card>
                         <CardHeader>
-                            <CardTitle className="text-lg font-semibold">
-                                Beispiel-Review
-                            </CardTitle>
+                            <div className="flex items-center justify-between">
+                                <CardTitle className="text-lg font-semibold">
+                                    Beispiel-Review
+                                </CardTitle>
+                                {hasMultipleExamples && (
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-sm text-slate-600">
+                                            {currentExampleIndex + 1} / {totalExamples}
+                                        </span>
+                                        <div className="flex gap-1">
+                                            <Button
+                                                variant="outline"
+                                                size="icon"
+                                                className="h-8 w-8"
+                                                onClick={goToPrevious}
+                                            >
+                                                <ChevronLeft className="h-4 w-4" />
+                                            </Button>
+                                            <Button
+                                                variant="outline"
+                                                size="icon"
+                                                className="h-8 w-8"
+                                                onClick={goToNext}
+                                            >
+                                                <ChevronRight className="h-4 w-4" />
+                                            </Button>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
                         </CardHeader>
                         <CardContent>
                             <p className="text-sm text-slate-700 italic leading-relaxed">
-                                "{topic.example}"
+                                "{topic.typicalStatements?.[currentExampleIndex] || topic.example}"
                             </p>
                         </CardContent>
                     </Card>
