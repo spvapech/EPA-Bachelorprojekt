@@ -7,7 +7,7 @@ import {
 } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { ChevronLeft, ChevronRight } from "lucide-react"
+import { ChevronLeft, ChevronRight, Calendar, ArrowLeft, X } from "lucide-react"
 import {
     LineChart,
     Line,
@@ -16,8 +16,16 @@ import {
     CartesianGrid,
     Tooltip,
     ResponsiveContainer,
+    Legend,
 } from "recharts"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select"
 
 // Gauge Chart Component
 const GaugeChart = ({ sentiment, value }) => {
@@ -42,100 +50,133 @@ const GaugeChart = ({ sentiment, value }) => {
     const needleRotation = ((sentimentValue + 1) / 2) * 180 - 90
 
     return (
-        <div className="relative w-full h-48 flex items-center justify-center">
-            <svg width="280" height="160" viewBox="0 0 280 160">
+        <div className="relative w-full flex flex-col items-center justify-center">
+            <svg width="340" height="180" viewBox="0 0 340 180">
                 {/* Background arc */}
                 <path
-                    d="M 40 140 A 100 100 0 0 1 240 140"
+                    d="M 40 170 A 130 130 0 0 1 300 170"
                     fill="none"
                     stroke="#e5e7eb"
-                    strokeWidth="20"
+                    strokeWidth="24"
                     strokeLinecap="round"
                 />
 
                 {/* Colored segments */}
                 <path
-                    d="M 40 140 A 100 100 0 0 1 107 47"
+                    d="M 40 170 A 130 130 0 0 1 127 52"
                     fill="none"
                     stroke="#ef4444"
-                    strokeWidth="20"
+                    strokeWidth="24"
                     strokeLinecap="round"
                 />
                 <path
-                    d="M 107 47 A 100 100 0 0 1 173 47"
+                    d="M 127 52 A 130 130 0 0 1 213 52"
                     fill="none"
                     stroke="#f97316"
-                    strokeWidth="20"
+                    strokeWidth="24"
                     strokeLinecap="round"
                 />
                 <path
-                    d="M 173 47 A 100 100 0 0 1 240 140"
+                    d="M 213 52 A 130 130 0 0 1 300 170"
                     fill="none"
                     stroke="#22c55e"
-                    strokeWidth="20"
+                    strokeWidth="24"
                     strokeLinecap="round"
                 />
 
                 {/* Needle */}
-                <g transform={`rotate(${needleRotation} 140 140)`}>
+                <g transform={`rotate(${needleRotation} 170 170)`}>
                     <line
-                        x1="140"
-                        y1="140"
-                        x2="140"
-                        y2="60"
+                        x1="170"
+                        y1="170"
+                        x2="170"
+                        y2="70"
                         stroke={getColor()}
                         strokeWidth="3"
                         strokeLinecap="round"
                     />
-                    <circle cx="140" cy="140" r="8" fill={getColor()} />
+                    <circle cx="170" cy="170" r="8" fill={getColor()} />
                 </g>
             </svg>
 
-            {/* Labels */}
-            <div className="absolute bottom-0 left-0 text-xs text-slate-600 font-semibold">
-                Negativ
-            </div>
-            <div className="absolute bottom-0 left-1/2 -translate-x-1/2 text-xs text-slate-600 font-semibold">
-                Neutral
-            </div>
-            <div className="absolute bottom-0 right-0 text-xs text-slate-600 font-semibold">
-                Positiv
+            {/* Labels - below the chart, centered under each segment */}
+            <div className="relative w-[340px] mt-1">
+                <span className="absolute left-[30px] text-xs text-slate-600 font-semibold">Negativ</span>
+                <span className="absolute left-1/2 -translate-x-1/2 text-xs text-slate-600 font-semibold">Neutral</span>
+                <span className="absolute right-[30px] text-xs text-slate-600 font-semibold">Positiv</span>
             </div>
         </div>
     )
 }
 
-export default function TopicDetailModal({ open, onOpenChange, topic }) {
-    const [currentExampleIndex, setCurrentExampleIndex] = React.useState(0)
+export default function TopicDetailModal({ open, onOpenChange, topic, onBackToTable }) {
+    const [currentExampleIndex, setCurrentExampleIndex] = React.useState(3) // Start at index 3 (4th element)
+    const [timeFilter, setTimeFilter] = React.useState("all") // "all", "1y", "6m", "3m", "1m"
     
     if (!topic) return null
 
     // Reset index when topic changes
     React.useEffect(() => {
-        setCurrentExampleIndex(0)
+        setCurrentExampleIndex(3)
     }, [topic])
 
+    // Filter timeline data based on selected time period
+    const getFilteredTimelineData = () => {
+        if (!topic.timelineData || timeFilter === "all") {
+            return topic.timelineData || []
+        }
+
+        const now = new Date()
+        let monthsToShow = 12
+
+        switch (timeFilter) {
+            case "1y":
+                monthsToShow = 12
+                break
+            case "6m":
+                monthsToShow = 6
+                break
+            case "3m":
+                monthsToShow = 3
+                break
+            case "1m":
+                monthsToShow = 1
+                break
+            default:
+                return topic.timelineData
+        }
+
+        // Get the last N months of data
+        return topic.timelineData.slice(-monthsToShow)
+    }
+
+    const filteredTimelineData = getFilteredTimelineData()
+
     const totalExamples = topic.typicalStatements?.length || 0
-    const hasMultipleExamples = totalExamples > 1
+    // Beispiel-Review shows indices 3-12 (10 examples total)
+    const beispielReviewStartIndex = 3
+    const beispielReviewEndIndex = 12 // Index 3-12 = 10 examples
+    const remainingExamples = 10 // Always show 10 examples in Beispiel-Review
+    const hasMultipleExamples = totalExamples > beispielReviewStartIndex + 1
 
     const goToPrevious = () => {
         setCurrentExampleIndex((prev) => 
-            prev > 0 ? prev - 1 : totalExamples - 1
+            prev > beispielReviewStartIndex ? prev - 1 : beispielReviewEndIndex
         )
     }
 
     const goToNext = () => {
         setCurrentExampleIndex((prev) => 
-            prev < totalExamples - 1 ? prev + 1 : 0
+            prev < beispielReviewEndIndex ? prev + 1 : beispielReviewStartIndex
         )
     }
 
     const getSentimentBadgeVariant = (sentiment) => {
         switch (sentiment) {
             case "Positiv":
-                return "default"
+                return "success"
             case "Neutral":
-                return "secondary"
+                return "warning"
             case "Negativ":
                 return "destructive"
             default:
@@ -143,19 +184,57 @@ export default function TopicDetailModal({ open, onOpenChange, topic }) {
         }
     }
 
+    // Calculate sentiment percentage based on average rating
+    // Rating: 1-5, convert to percentage where 5 = 100%, 3 = 50%, 1 = 0%
+    const getSentimentPercentage = () => {
+        const rating = topic.avgRating
+        // Normalize rating from 1-5 scale to 0-100% scale
+        const percentage = ((rating - 1) / 4) * 100
+        return Math.round(percentage)
+    }
+
+    const sentimentPercentage = getSentimentPercentage()
+
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="!max-w-[92vw] !w-[92vw] !h-[85vh] !max-h-[85vh] flex flex-col p-8 !translate-x-[-50%] !translate-y-[-50%] !top-[50%] !left-[50%] rounded-2xl shadow-2xl overflow-y-auto">
-                <DialogHeader>
-                    <DialogTitle className="text-2xl font-bold flex items-center gap-3">
-                        {topic.topic}
-                        <Badge variant={getSentimentBadgeVariant(topic.sentiment)}>
-                            {topic.sentiment}
-                        </Badge>
-                    </DialogTitle>
+            <DialogContent className="!max-w-[85vw] !w-[85vw] !h-[85vh] !max-h-[85vh] flex flex-col p-0 !translate-x-[-50%] !translate-y-[-50%] !top-[50%] !left-[50%] rounded-2xl !shadow-none overflow-hidden border border-slate-200">
+                {/* Sticky Header */}
+                <DialogHeader className="sticky top-0 z-10 bg-white border-b border-slate-200 p-8 pb-4">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            {onBackToTable && (
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={onBackToTable}
+                                    className="h-8 w-8 rounded-full hover:bg-slate-100"
+                                    title="Zurück zur Tabelle"
+                                >
+                                    <ArrowLeft className="h-5 w-5" />
+                                </Button>
+                            )}
+                            <DialogTitle className="text-2xl font-bold flex items-center gap-3">
+                                {topic.topic}
+                                <Badge variant={getSentimentBadgeVariant(topic.sentiment)}>
+                                    {topic.sentiment}
+                                </Badge>
+                            </DialogTitle>
+                        </div>
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => onOpenChange(false)}
+                            className="h-8 w-8 rounded-full hover:bg-slate-100"
+                            title="Schließen"
+                        >
+                            <X className="h-5 w-5" />
+                        </Button>
+                    </div>
                 </DialogHeader>
 
-                <div className="space-y-6 mt-4">
+                {/* Scrollable Content */}
+                <div className="overflow-y-auto px-8 pb-8">
+                    <div className="space-y-6 mt-4">
                     {/* Statistik-Übersicht */}
                     <div className="grid grid-cols-3 gap-4">
                         <Card>
@@ -208,35 +287,74 @@ export default function TopicDetailModal({ open, onOpenChange, topic }) {
                         {/* Line Chart - Rating über Zeit */}
                         <Card>
                             <CardHeader>
-                                <CardTitle className="text-lg font-semibold">
-                                    Bewertung über Zeit
-                                </CardTitle>
+                                <div className="flex items-center justify-between">
+                                    <CardTitle className="text-lg font-semibold">
+                                        Bewertung über Zeit
+                                    </CardTitle>
+                                    <Select value={timeFilter} onValueChange={setTimeFilter}>
+                                        <SelectTrigger className="w-[140px]">
+                                            <Calendar className="mr-2 h-4 w-4" />
+                                            <SelectValue placeholder="Zeitraum" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">Gesamt</SelectItem>
+                                            <SelectItem value="1y">Letztes Jahr</SelectItem>
+                                            <SelectItem value="6m">Letzte 6 Monate</SelectItem>
+                                            <SelectItem value="3m">Letzte 3 Monate</SelectItem>
+                                            <SelectItem value="1m">Letzter Monat</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
                             </CardHeader>
                             <CardContent>
                                 <div className="h-64">
                                     <ResponsiveContainer width="100%" height="100%">
-                                        <LineChart data={topic.timelineData}>
+                                        <LineChart 
+                                            data={filteredTimelineData}
+                                            margin={{ top: 5, right: 20, left: 20, bottom: 5 }}
+                                        >
                                             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                                             <XAxis
                                                 dataKey="month"
                                                 stroke="#64748b"
                                                 fontSize={12}
+                                                label={{ 
+                                                    value: 'Monat', 
+                                                    position: 'insideBottom', 
+                                                    offset: -5,
+                                                    style: { fontSize: 14, fontWeight: 600, fill: '#475569' }
+                                                }}
                                             />
                                             <YAxis
                                                 domain={[0, 5]}
                                                 stroke="#64748b"
                                                 fontSize={12}
+                                                label={{ 
+                                                    value: 'Ø Bewertung', 
+                                                    angle: -90, 
+                                                    position: 'center',
+                                                    style: { fontSize: 14, fontWeight: 600, fill: '#475569', textAnchor: 'middle' }
+                                                }}
+                                                ticks={[0, 1, 2, 3, 4, 5]}
                                             />
                                             <Tooltip
                                                 contentStyle={{
                                                     backgroundColor: "white",
                                                     border: "1px solid #e5e7eb",
                                                     borderRadius: "8px",
+                                                    padding: "8px 12px",
                                                 }}
+                                                labelStyle={{ fontWeight: 600, marginBottom: 4 }}
+                                                formatter={(value) => [`${value.toFixed(2)} ⭐`, 'Bewertung']}
+                                            />
+                                            <Legend 
+                                                wrapperStyle={{ paddingTop: '10px' }}
+                                                formatter={() => 'Durchschnittsbewertung'}
                                             />
                                             <Line
                                                 type="monotone"
                                                 dataKey="rating"
+                                                name="Bewertung"
                                                 stroke={
                                                     topic.sentiment === "Positiv"
                                                         ? "#22c55e"
@@ -263,7 +381,12 @@ export default function TopicDetailModal({ open, onOpenChange, topic }) {
                             </CardHeader>
                             <CardContent>
                                 <GaugeChart sentiment={topic.sentiment} />
-                                <div className="text-center mt-4">
+                                <div className="text-center mt-4 space-y-2">
+                                    <div className="flex items-center justify-center gap-2">
+                                        <span className="text-4xl font-bold text-slate-900">
+                                            {sentimentPercentage}%
+                                        </span>
+                                    </div>
                                     <p className="text-sm text-slate-600">
                                         Gesamtstimmung:{" "}
                                         <span className="font-bold text-slate-900">
@@ -311,7 +434,7 @@ export default function TopicDetailModal({ open, onOpenChange, topic }) {
                                 {hasMultipleExamples && (
                                     <div className="flex items-center gap-2">
                                         <span className="text-sm text-slate-600">
-                                            {currentExampleIndex + 1} / {totalExamples}
+                                            {currentExampleIndex - 2} / {remainingExamples}
                                         </span>
                                         <div className="flex gap-1">
                                             <Button
@@ -341,6 +464,7 @@ export default function TopicDetailModal({ open, onOpenChange, topic }) {
                             </p>
                         </CardContent>
                     </Card>
+                </div>
                 </div>
             </DialogContent>
         </Dialog>

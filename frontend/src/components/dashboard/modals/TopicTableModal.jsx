@@ -24,9 +24,9 @@ export default function TopicTableModal({ open, onOpenChange, topics, onTopicSel
     const getSentimentBadgeVariant = (sentiment) => {
         switch (sentiment) {
             case "Positiv":
-                return "default"
+                return "success"
             case "Neutral":
-                return "secondary"
+                return "warning"
             case "Negativ":
                 return "destructive"
             default:
