@@ -26,6 +26,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select"
+import ReviewDetailModal from "./ReviewDetailModal"
 
 // Gauge Chart Component
 const GaugeChart = ({ sentiment, value }) => {
@@ -112,6 +113,9 @@ const GaugeChart = ({ sentiment, value }) => {
 export default function TopicDetailModal({ open, onOpenChange, topic, onBackToTable }) {
     const [currentExampleIndex, setCurrentExampleIndex] = React.useState(3) // Start at index 3 (4th element)
     const [timeFilter, setTimeFilter] = React.useState("all") // "all", "1y", "6m", "3m", "1m"
+    const [reviewDetailModalOpen, setReviewDetailModalOpen] = React.useState(false)
+    const [selectedReviewDetail, setSelectedReviewDetail] = React.useState(null)
+    const [selectedReviewIndex, setSelectedReviewIndex] = React.useState(0)
     
     if (!topic) return null
 
@@ -119,6 +123,23 @@ export default function TopicDetailModal({ open, onOpenChange, topic, onBackToTa
     React.useEffect(() => {
         setCurrentExampleIndex(3)
     }, [topic])
+
+    // Handle clicking on an example review
+    const handleExampleClick = () => {
+        if (topic.reviewDetails && topic.reviewDetails[currentExampleIndex]) {
+            setSelectedReviewDetail(topic.reviewDetails[currentExampleIndex])
+            setSelectedReviewIndex(currentExampleIndex)
+            setReviewDetailModalOpen(true)
+        }
+    }
+
+    // Handle navigation in ReviewDetailModal
+    const handleReviewNavigation = (newIndex) => {
+        if (topic.reviewDetails && topic.reviewDetails[newIndex]) {
+            setSelectedReviewDetail(topic.reviewDetails[newIndex])
+            setSelectedReviewIndex(newIndex)
+        }
+    }
 
     // Filter timeline data based on selected time period
     const getFilteredTimelineData = () => {
@@ -410,14 +431,27 @@ export default function TopicDetailModal({ open, onOpenChange, topic, onBackToTa
                                 {topic.typicalStatements.slice(0, 3).map((statement, index) => (
                                     <li
                                         key={index}
-                                        className="flex items-start gap-3 p-3 bg-slate-50 rounded-lg"
+                                        className="flex items-start gap-3 p-3 bg-slate-50 rounded-lg cursor-pointer hover:bg-slate-100 transition-colors"
+                                        onClick={() => {
+                                            if (topic.reviewDetails && topic.reviewDetails[index]) {
+                                                setSelectedReviewDetail(topic.reviewDetails[index])
+                                                setSelectedReviewIndex(index)
+                                                setReviewDetailModalOpen(true)
+                                            }
+                                        }}
+                                        title="Klicken Sie, um die vollständige Review zu lesen"
                                     >
                                         <span className="flex-shrink-0 w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center text-xs font-semibold text-slate-700">
                                             {index + 1}
                                         </span>
-                                        <p className="text-sm text-slate-700 leading-relaxed">
-                                            "{statement}"
-                                        </p>
+                                        <div className="flex-1">
+                                            <p className="text-sm text-slate-700 leading-relaxed">
+                                                "{statement}"
+                                            </p>
+                                            <p className="text-xs text-blue-600 mt-1 font-medium">
+                                                → Klicken für vollständige Review
+                                            </p>
+                                        </div>
                                     </li>
                                 ))}
                             </ul>
@@ -459,13 +493,32 @@ export default function TopicDetailModal({ open, onOpenChange, topic, onBackToTa
                             </div>
                         </CardHeader>
                         <CardContent>
-                            <p className="text-sm text-slate-700 italic leading-relaxed">
-                                "{topic.typicalStatements?.[currentExampleIndex] || topic.example}"
-                            </p>
+                            <div 
+                                className="cursor-pointer hover:bg-slate-50 -m-4 p-4 rounded-lg transition-colors"
+                                onClick={handleExampleClick}
+                                title="Klicken Sie, um die vollständige Review zu lesen"
+                            >
+                                <p className="text-sm text-slate-700 italic leading-relaxed">
+                                    "{topic.typicalStatements?.[currentExampleIndex] || topic.example}"
+                                </p>
+                                <p className="text-xs text-blue-600 mt-2 font-medium">
+                                    → Klicken für vollständige Review
+                                </p>
+                            </div>
                         </CardContent>
                     </Card>
                 </div>
                 </div>
+
+                {/* Review Detail Modal */}
+                <ReviewDetailModal 
+                    open={reviewDetailModalOpen}
+                    onOpenChange={setReviewDetailModalOpen}
+                    reviewDetail={selectedReviewDetail}
+                    allReviewDetails={topic.reviewDetails || []}
+                    currentIndex={selectedReviewIndex}
+                    onNavigate={handleReviewNavigation}
+                />
             </DialogContent>
         </Dialog>
     )

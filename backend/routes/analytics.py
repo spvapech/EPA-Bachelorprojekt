@@ -8,9 +8,46 @@ from typing import Optional, List, Dict, Any
 from datetime import datetime, timedelta
 from collections import defaultdict, Counter
 import re
+import html
 
 router = APIRouter(prefix="/api/analytics", tags=["Analytics"])
 supabase = get_supabase_client()
+
+
+def clean_html_text(text: str) -> str:
+    """
+    Clean HTML entities and tags from text.
+    Removes <br/>, <br>, and other HTML tags, and decodes HTML entities.
+    """
+    if not text or not isinstance(text, str):
+        return text
+    
+    # Decode HTML entities (&lt; &gt; &amp; etc.)
+    text = html.unescape(text)
+    
+    # Replace <br/>- or <br>- patterns (bullet points with br tags)
+    text = re.sub(r'<br\s*/?\s*>\s*-\s*', '\n• ', text, flags=re.IGNORECASE)
+    
+    # Replace remaining <br/>, <br>, <br /> with newlines
+    text = re.sub(r'<br\s*/?\s*>', '\n', text, flags=re.IGNORECASE)
+    
+    # Remove any other HTML tags
+    text = re.sub(r'<[^>]+>', '', text)
+    
+    # Clean up patterns like "- text -" at line boundaries (incomplete bullet points)
+    text = re.sub(r'^-\s*$', '', text, flags=re.MULTILINE)
+    text = re.sub(r'^-\s+', '• ', text, flags=re.MULTILINE)
+    
+    # Clean up multiple newlines (max 2 consecutive newlines)
+    text = re.sub(r'\n\s*\n\s*\n+', '\n\n', text)
+    
+    # Remove trailing dashes and whitespace from lines
+    text = re.sub(r'\s+-\s*$', '', text, flags=re.MULTILINE)
+    
+    # Trim whitespace
+    text = text.strip()
+    
+    return text
 
 
 @router.get("/company/{company_id}/overview")
@@ -524,11 +561,13 @@ def analyze_topic(
     monthly_ratings = defaultdict(list)
     example_texts = []
     typical_statements = []
+    review_details = []
     
     for review in all_reviews:
         # Check if topic is mentioned in text fields
         mentioned = False
         mention_texts = []
+        full_review_text = []
         
         for field in text_fields:
             text = review.get(field, "")
@@ -543,14 +582,56 @@ def analyze_topic(
                             if re.search(keyword_pattern, sentence, re.IGNORECASE) and len(sentence.strip()) > 20:
                                 mention_texts.append(sentence.strip())
                                 break
+                        
+                        # Collect full text from all relevant fields
+                        full_review_text.append(f"{field}: {text}")
                         break
         
         if mentioned:
             mentions.append(review)
             
-            # Collect example texts
+            # Determine source type (employee or candidate)
+            source_type = "Mitarbeiter" if 'gut_am_arbeitgeber_finde_ich' in review else "Bewerber"
+            
+            # Get employee status if available
+            employer_status = review.get("status", "Unbekannt")
+            
+            # Collect example texts with full review details
             if mention_texts:
-                example_texts.extend(mention_texts[:3])
+                for text in mention_texts[:3]:
+                    example_texts.append(clean_html_text(text))
+                    review_details.append({
+                        "id": review.get("id"),
+                        "preview": clean_html_text(text),
+                        "fullReview": {
+                            "titel": clean_html_text(review.get("titel", "Keine Titel")),
+                            "datum": review.get("datum"),
+                            "durchschnittsbewertung": review.get("durchschnittsbewertung"),
+                            "status": employer_status,
+                            "sourceType": source_type,
+                            "gut_am_arbeitgeber": clean_html_text(review.get("gut_am_arbeitgeber_finde_ich", "")),
+                            "schlecht_am_arbeitgeber": clean_html_text(review.get("schlecht_am_arbeitgeber_finde_ich", "")),
+                            "verbesserungsvorschlaege": clean_html_text(review.get("verbesserungsvorschlaege", "")),
+                            "stellenbeschreibung": clean_html_text(review.get("stellenbeschreibung", "")),
+                            "jobbeschreibung": clean_html_text(review.get("jobbeschreibung", "")),
+                            # Include all star ratings
+                            "ratings": {
+                                "arbeitsatmosphaere": review.get("sternebewertung_arbeitsatmosphaere"),
+                                "image": review.get("sternebewertung_image"),
+                                "work_life_balance": review.get("sternebewertung_work_life_balance"),
+                                "karriere_weiterbildung": review.get("sternebewertung_karriere_weiterbildung"),
+                                "gehalt_sozialleistungen": review.get("sternebewertung_gehalt_sozialleistungen"),
+                                "kollegenzusammenhalt": review.get("sternebewertung_kollegenzusammenhalt"),
+                                "umwelt_sozialbewusstsein": review.get("sternebewertung_umwelt_sozialbewusstsein"),
+                                "vorgesetztenverhalten": review.get("sternebewertung_vorgesetztenverhalten"),
+                                "kommunikation": review.get("sternebewertung_kommunikation"),
+                                "interessante_aufgaben": review.get("sternebewertung_interessante_aufgaben"),
+                                "umgang_mit_aelteren_kollegen": review.get("sternebewertung_umgang_mit_aelteren_kollegen"),
+                                "arbeitsbedingungen": review.get("sternebewertung_arbeitsbedingungen"),
+                                "gleichberechtigung": review.get("sternebewertung_gleichberechtigung")
+                            }
+                        }
+                    })
             
             # Collect ratings
             avg_rating = review.get("durchschnittsbewertung")
@@ -611,10 +692,20 @@ def analyze_topic(
                 "rating": avg_rating
             })
     
-    # Select typical statements (up to 10 most relevant)
-    typical_statements = example_texts[:10] if example_texts else [
+    # Select typical statements (up to 13 most relevant - 3 for "Typische Aussagen" + 10 for "Beispiel-Review")
+    typical_statements = example_texts[:13] if example_texts else [
         f"Keine spezifischen Aussagen zu {topic_name} gefunden"
     ]
+    
+    # Ensure we have review details for each typical statement
+    if len(review_details) < len(typical_statements):
+        # Pad with placeholder data if needed
+        for i in range(len(review_details), len(typical_statements)):
+            review_details.append({
+                "id": None,
+                "preview": typical_statements[i] if i < len(typical_statements) else "",
+                "fullReview": None
+            })
     
     # Select one example
     example = typical_statements[0] if typical_statements else f"Thema: {topic_name}"
@@ -629,7 +720,8 @@ def analyze_topic(
         "example": example,
         "color": color,
         "timelineData": timeline_data,
-        "typicalStatements": typical_statements
+        "typicalStatements": typical_statements,
+        "reviewDetails": review_details[:13]  # Limit to 13 (3 + 10)
     }
 
 
