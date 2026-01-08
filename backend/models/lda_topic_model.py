@@ -117,6 +117,19 @@ class LDATopicAnalyzer:
         self.bigram_model = None
         self.trigram_model = None
         
+        # Gewichtungen für verschiedene Mitarbeitertypen
+        # Höhere Werte bedeuten mehr Einfluss auf die Topic-Analyse
+        self.employee_type_weights = {
+            'Employee': 1.5,      # Vollzeitangestellte haben höhere Gewichtung
+            'Manager': 2.0,       # Manager haben die höchste Gewichtung
+            'Student': 0.8,       # Studenten haben niedrigere Gewichtung
+            'Nicht-Employee': 0.5, # Nicht-Mitarbeiter haben die niedrigste Gewichtung
+            'default': 1.0        # Standard-Gewichtung für unbekannte Typen
+        }
+        
+        # Metadata für jedes Dokument (z.B. Employee-Typ, Quelle)
+        self.document_metadata = []
+        
         # Erweiterte deutsche Stopwords für besseren Fokus auf Arbeitsthemen
         self.german_stopwords = set([
             # Artikel und Pronomen
@@ -346,12 +359,67 @@ class LDATopicAnalyzer:
         
         return tokens
     
-    def prepare_documents(self, texts: List[str]) -> Tuple[corpora.Dictionary, List[List[Tuple[int, int]]]]:
+    def get_employee_type_weight(self, status: Optional[str]) -> float:
+        """
+        Get the weight for a specific employee type.
+        
+        Args:
+            status: Employee status/type (e.g., 'Employee', 'Manager', 'Student', 'Nicht-Employee')
+                   Can also be numeric (converted to string)
+            
+        Returns:
+            Weight factor for this employee type
+        """
+        if not status:
+            return self.employee_type_weights['default']
+        
+        # Konvertiere zu String falls numerisch
+        status_str = str(status).strip().lower()
+        
+        # Mapping für numerische Werte (falls status ein numerisches Feld ist)
+        # Diese Werte müssen an die tatsächliche Bedeutung in der Datenbank angepasst werden
+        numeric_mappings = {
+            '0': 'Student',           # Beispiel: 0 = Student/Praktikant
+            '0.0': 'Student',
+            '1': 'Employee',          # Beispiel: 1 = Regulärer Employee
+            '1.0': 'Employee',
+            '2': 'Manager',           # Beispiel: 2 = Manager/Führungskraft
+            '2.0': 'Manager',
+            '3': 'Nicht-Employee',    # Beispiel: 3 = Ex-Employee
+            '3.0': 'Nicht-Employee',
+        }
+        
+        # Prüfe ob es ein numerischer Wert ist
+        if status_str in numeric_mappings:
+            mapped_type = numeric_mappings[status_str]
+            return self.employee_type_weights[mapped_type]
+        
+        # Prüfe auf Text-basierte Status-Werte
+        # Prüfe zuerst auf spezifischere Muster (z.B. "ex-employee" vor "employee")
+        # um falsche Matches zu vermeiden
+        if any(keyword in status_str for keyword in ['nicht-employee', 'nicht employee', 'nichtemployee', 'ex-employee', 'ex employee', 'ehemaliger', 'ehemalige']):
+            return self.employee_type_weights['Nicht-Employee']
+        
+        if any(keyword in status_str for keyword in ['manager', 'führungskraft', 'fuehrungskraft', 'leitung']):
+            return self.employee_type_weights['Manager']
+        
+        if any(keyword in status_str for keyword in ['student', 'studentin', 'praktikant', 'praktikantin']):
+            return self.employee_type_weights['Student']
+        
+        if any(keyword in status_str for keyword in ['employee', 'angestellter', 'angestellte', 'mitarbeiter', 'mitarbeiterin']):
+            return self.employee_type_weights['Employee']
+        
+        # Fallback auf Standard-Gewichtung
+        return self.employee_type_weights['default']
+    
+    def prepare_documents(self, texts: List[str], metadata: Optional[List[Dict[str, Any]]] = None) -> Tuple[corpora.Dictionary, List[List[Tuple[int, int]]]]:
         """
         Prepare documents for LDA training with bigram/trigram support.
+        Supports weighted documents based on employee type.
         
         Args:
             texts: List of text documents
+            metadata: Optional list of metadata dicts with 'status' field for weighting
             
         Returns:
             Tuple of (dictionary, corpus)
@@ -359,8 +427,25 @@ class LDATopicAnalyzer:
         # Preprocess all texts
         self.documents = [self.preprocess_text(text) for text in texts]
         
-        # Filter out empty documents
-        self.documents = [doc for doc in self.documents if doc]
+        # Store metadata if provided
+        if metadata:
+            self.document_metadata = metadata
+        else:
+            self.document_metadata = [{'status': None} for _ in texts]
+        
+        # Filter out empty documents (und entsprechende Metadaten)
+        filtered_docs = []
+        filtered_metadata = []
+        for i, doc in enumerate(self.documents):
+            if doc:
+                filtered_docs.append(doc)
+                if i < len(self.document_metadata):
+                    filtered_metadata.append(self.document_metadata[i])
+                else:
+                    filtered_metadata.append({'status': None})
+        
+        self.documents = filtered_docs
+        self.document_metadata = filtered_metadata
         
         if not self.documents:
             raise ValueError("No valid documents found after preprocessing")
@@ -388,18 +473,30 @@ class LDATopicAnalyzer:
         # - keep_n: keep only the most frequent 2000 terms
         self.dictionary.filter_extremes(no_below=2, no_above=0.6, keep_n=2000)
         
-        # Create corpus (bag of words)
-        self.corpus = [self.dictionary.doc2bow(doc) for doc in self.documents]
+        # Create corpus (bag of words) with weights based on employee type
+        self.corpus = []
+        for i, doc in enumerate(self.documents):
+            bow = self.dictionary.doc2bow(doc)
+            
+            # Wende Gewichtung basierend auf Mitarbeitertyp an
+            if i < len(self.document_metadata):
+                weight = self.get_employee_type_weight(self.document_metadata[i].get('status'))
+                # Multipliziere die Häufigkeiten mit dem Gewicht
+                weighted_bow = [(word_id, int(freq * weight)) for word_id, freq in bow]
+                self.corpus.append(weighted_bow)
+            else:
+                self.corpus.append(bow)
         
         return self.dictionary, self.corpus
     
-    def train_model(self, texts: List[str]) -> Dict[str, Any]:
+    def train_model(self, texts: List[str], metadata: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
         """
         Train the LDA model on the provided texts.
-        Optimized for discovering work-related topics.
+        Optimized for discovering work-related topics with weighted employee types.
         
         Args:
             texts: List of text documents to train on
+            metadata: Optional list of metadata dicts with 'status' field for weighting
             
         Returns:
             Dictionary with training results and topics
@@ -407,8 +504,18 @@ class LDATopicAnalyzer:
         if not texts:
             raise ValueError("No texts provided for training")
         
-        # Prepare documents
-        self.prepare_documents(texts)
+        # Prepare documents with metadata for weighting
+        self.prepare_documents(texts, metadata)
+        
+        # Calculate weighting statistics
+        weight_stats = {}
+        if self.document_metadata:
+            for meta in self.document_metadata:
+                status = meta.get('status', 'unknown')
+                weight = self.get_employee_type_weight(status)
+                if status not in weight_stats:
+                    weight_stats[status] = {'count': 0, 'weight': weight}
+                weight_stats[status]['count'] += 1
         
         # Train LDA model with optimized parameters for work topics
         self.lda_model = LdaModel(
@@ -436,6 +543,8 @@ class LDATopicAnalyzer:
             "num_documents": len(texts),
             "vocabulary_size": len(self.dictionary),
             "topics": topics,
+            "employee_type_weights": self.employee_type_weights,
+            "weight_statistics": weight_stats,
             "trained_at": datetime.now().isoformat()
         }
     
