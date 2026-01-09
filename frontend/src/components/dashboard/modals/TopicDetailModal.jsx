@@ -143,11 +143,16 @@ export default function TopicDetailModal({ open, onOpenChange, topic, onBackToTa
 
     // Filter timeline data based on selected time period
     const getFilteredTimelineData = () => {
-        if (!topic.timelineData || timeFilter === "all") {
-            return topic.timelineData || []
+        if (!topic.timelineData || topic.timelineData.length === 0) {
+            return []
+        }
+
+        if (timeFilter === "all") {
+            return topic.timelineData
         }
 
         const now = new Date()
+        
         let monthsToShow = 12
 
         switch (timeFilter) {
@@ -167,8 +172,23 @@ export default function TopicDetailModal({ open, onOpenChange, topic, onBackToTa
                 return topic.timelineData
         }
 
-        // Get the last N months of data
-        return topic.timelineData.slice(-monthsToShow)
+        // Calculate cutoff date (N months ago)
+        const cutoffDate = new Date(now.getFullYear(), now.getMonth() - monthsToShow, 1)
+        
+        // Filter data based on year and month
+        const filteredData = topic.timelineData.filter(item => {
+            if (!item.year || !item.monthNum) {
+                return false
+            }
+            
+            // Create a date object for this item (first day of the month)
+            const itemDate = new Date(item.year, item.monthNum - 1, 1)
+            
+            // Include if itemDate is on or after cutoffDate
+            return itemDate >= cutoffDate
+        })
+
+        return filteredData
     }
 
     const filteredTimelineData = getFilteredTimelineData()
@@ -329,66 +349,79 @@ export default function TopicDetailModal({ open, onOpenChange, topic, onBackToTa
                             </CardHeader>
                             <CardContent>
                                 <div className="h-64">
-                                    <ResponsiveContainer width="100%" height="100%">
-                                        <LineChart 
-                                            data={filteredTimelineData}
-                                            margin={{ top: 5, right: 20, left: 20, bottom: 5 }}
-                                        >
-                                            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                                            <XAxis
-                                                dataKey="month"
-                                                stroke="#64748b"
-                                                fontSize={12}
-                                                label={{ 
-                                                    value: 'Monat', 
-                                                    position: 'insideBottom', 
-                                                    offset: -5,
-                                                    style: { fontSize: 14, fontWeight: 600, fill: '#475569' }
-                                                }}
-                                            />
-                                            <YAxis
-                                                domain={[0, 5]}
-                                                stroke="#64748b"
-                                                fontSize={12}
-                                                label={{ 
-                                                    value: 'Ø Bewertung', 
-                                                    angle: -90, 
-                                                    position: 'center',
-                                                    style: { fontSize: 14, fontWeight: 600, fill: '#475569', textAnchor: 'middle' }
-                                                }}
-                                                ticks={[0, 1, 2, 3, 4, 5]}
-                                            />
-                                            <Tooltip
-                                                contentStyle={{
-                                                    backgroundColor: "white",
-                                                    border: "1px solid #e5e7eb",
-                                                    borderRadius: "8px",
-                                                    padding: "8px 12px",
-                                                }}
-                                                labelStyle={{ fontWeight: 600, marginBottom: 4 }}
-                                                formatter={(value) => [`${value.toFixed(2)} ⭐`, 'Bewertung']}
-                                            />
-                                            <Legend 
-                                                wrapperStyle={{ paddingTop: '10px' }}
-                                                formatter={() => 'Durchschnittsbewertung'}
-                                            />
-                                            <Line
-                                                type="monotone"
-                                                dataKey="rating"
-                                                name="Bewertung"
-                                                stroke={
-                                                    topic.sentiment === "Positiv"
-                                                        ? "#22c55e"
-                                                        : topic.sentiment === "Neutral"
-                                                        ? "#f97316"
-                                                        : "#ef4444"
-                                                }
-                                                strokeWidth={3}
-                                                dot={{ fill: "white", strokeWidth: 2, r: 4 }}
-                                                activeDot={{ r: 6 }}
-                                            />
-                                        </LineChart>
-                                    </ResponsiveContainer>
+                                    {filteredTimelineData.length === 0 ? (
+                                        <div className="flex items-center justify-center h-full">
+                                            <div className="text-center">
+                                                <p className="text-slate-500 text-sm">
+                                                    Keine Daten für den ausgewählten Zeitraum verfügbar
+                                                </p>
+                                                <p className="text-slate-400 text-xs mt-1">
+                                                    Bitte wählen Sie einen anderen Filter
+                                                </p>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <LineChart 
+                                                data={filteredTimelineData}
+                                                margin={{ top: 5, right: 20, left: 20, bottom: 5 }}
+                                            >
+                                                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                                                <XAxis
+                                                    dataKey="month"
+                                                    stroke="#64748b"
+                                                    fontSize={12}
+                                                    label={{ 
+                                                        value: 'Monat', 
+                                                        position: 'insideBottom', 
+                                                        offset: -5,
+                                                        style: { fontSize: 14, fontWeight: 600, fill: '#475569' }
+                                                    }}
+                                                />
+                                                <YAxis
+                                                    domain={[0, 5]}
+                                                    stroke="#64748b"
+                                                    fontSize={12}
+                                                    label={{ 
+                                                        value: 'Ø Bewertung', 
+                                                        angle: -90, 
+                                                        position: 'center',
+                                                        style: { fontSize: 14, fontWeight: 600, fill: '#475569', textAnchor: 'middle' }
+                                                    }}
+                                                    ticks={[0, 1, 2, 3, 4, 5]}
+                                                />
+                                                <Tooltip
+                                                    contentStyle={{
+                                                        backgroundColor: "white",
+                                                        border: "1px solid #e5e7eb",
+                                                        borderRadius: "8px",
+                                                        padding: "8px 12px",
+                                                    }}
+                                                    labelStyle={{ fontWeight: 600, marginBottom: 4 }}
+                                                    formatter={(value) => [`${value.toFixed(2)} ⭐`, 'Bewertung']}
+                                                />
+                                                <Legend 
+                                                    wrapperStyle={{ paddingTop: '10px' }}
+                                                    formatter={() => 'Durchschnittsbewertung'}
+                                                />
+                                                <Line
+                                                    type="monotone"
+                                                    dataKey="rating"
+                                                    name="Bewertung"
+                                                    stroke={
+                                                        topic.sentiment === "Positiv"
+                                                            ? "#22c55e"
+                                                            : topic.sentiment === "Neutral"
+                                                            ? "#f97316"
+                                                            : "#ef4444"
+                                                    }
+                                                    strokeWidth={3}
+                                                    dot={{ fill: "white", strokeWidth: 2, r: 4 }}
+                                                    activeDot={{ r: 6 }}
+                                                />
+                                            </LineChart>
+                                        </ResponsiveContainer>
+                                    )}
                                 </div>
                             </CardContent>
                         </Card>

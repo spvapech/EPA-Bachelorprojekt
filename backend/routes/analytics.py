@@ -669,28 +669,62 @@ def analyze_topic(
         sentiment = "Negativ"
         color = "red"
     
-    # Create timeline data (last 6 months)
+    # Create timeline data (all available months, sorted chronologically)
     timeline_data = []
     months_order = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"]
     
-    # Get current month and previous 5 months
-    current_date = datetime.now()
-    for i in range(5, -1, -1):
-        date = current_date - timedelta(days=30 * i)
-        month_name = months_order[date.month - 1]
+    # Collect all dates from reviews to determine the full time range
+    all_dates = []
+    for review in mentions:
+        date_str = review.get("datum")
+        if date_str:
+            try:
+                date = datetime.fromisoformat(date_str.replace("Z", "+00:00"))
+                all_dates.append(date)
+            except:
+                pass
+    
+    if all_dates:
+        # Find the earliest and latest dates
+        min_date = min(all_dates)
+        max_date = max(all_dates)
         
-        if month_name in monthly_ratings and monthly_ratings[month_name]:
-            month_avg = sum(monthly_ratings[month_name]) / len(monthly_ratings[month_name])
-            timeline_data.append({
-                "month": month_name,
-                "rating": round(month_avg, 1)
-            })
-        else:
-            # Use overall average if no data for this month
-            timeline_data.append({
-                "month": month_name,
-                "rating": avg_rating
-            })
+        # Generate all months between min and max date
+        current_date = min_date.replace(day=1)
+        end_date = max_date.replace(day=1)
+        
+        # Create a dictionary to store month-year combinations with their ratings
+        monthly_data = defaultdict(list)
+        for review in mentions:
+            date_str = review.get("datum")
+            avg_rating_review = review.get("durchschnittsbewertung")
+            if date_str and avg_rating_review:
+                try:
+                    date = datetime.fromisoformat(date_str.replace("Z", "+00:00"))
+                    month_year_key = f"{months_order[date.month - 1]} {date.year}"
+                    monthly_data[month_year_key].append(float(avg_rating_review))
+                except:
+                    pass
+        
+        # Generate timeline for all months in range
+        while current_date <= end_date:
+            month_name = months_order[current_date.month - 1]
+            month_year_key = f"{month_name} {current_date.year}"
+            
+            if month_year_key in monthly_data and monthly_data[month_year_key]:
+                month_avg = sum(monthly_data[month_year_key]) / len(monthly_data[month_year_key])
+                timeline_data.append({
+                    "month": month_year_key,
+                    "rating": round(month_avg, 1),
+                    "year": current_date.year,
+                    "monthNum": current_date.month
+                })
+            
+            # Move to next month
+            if current_date.month == 12:
+                current_date = current_date.replace(year=current_date.year + 1, month=1)
+            else:
+                current_date = current_date.replace(month=current_date.month + 1)
     
     # Select typical statements (up to 13 most relevant - 3 for "Typische Aussagen" + 10 for "Beispiel-Review")
     typical_statements = example_texts[:13] if example_texts else [
