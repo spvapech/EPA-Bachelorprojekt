@@ -31,10 +31,20 @@ npm run dev
 Um das Projekt lokal laufen zu lassen, benötigst du:
 
 * **Python** >= 3.13
-* **Node.js** v20
-* **uv** → https://docs.astral.sh/uv/
+* **Node.js** v20+
+* **npm** (kommt mit Node.js)
+* **uv** → https://docs.astral.sh/uv/ (empfohlen für Python)
 * **Supabase Account** (für Datenbank)
 * IDE deiner Wahl, bevorzugt **VSCode**
+
+### Zusätzliche npm-Pakete (werden automatisch installiert):
+* `@radix-ui/react-checkbox` - Checkbox-Komponente
+* `@radix-ui/react-label` - Label-Komponente
+* `@radix-ui/react-dialog` - Dialog/Modal-Komponente
+* `@radix-ui/react-select` - Select/Dropdown-Komponente
+* `recharts` - Chart-Bibliothek
+* `lucide-react` - Icon-Bibliothek
+* `tailwindcss` - CSS-Framework
 
 ## 🚀 Einrichtung
 
@@ -107,13 +117,25 @@ API_PORT=8000
 
 **Wichtig:** Die `.env`-Datei ist in `.gitignore` und wird nicht ins Repository committed!
 
-## �💡 Tipps
+## 💡 Tipps
 
 * Am besten hast du **2 Terminal-Sessions** offen, um Backend und Frontend gleichzeitig zu nutzen!
 * Stelle sicher, dass die `.env`-Datei im Backend-Ordner korrekt konfiguriert ist
 * Für Production-Build des Frontends: `npm run build`
 * Cache löschen: `find . -type d -name "__pycache__" -exec rm -rf {} +`
 * Alte Modelle löschen: `cd backend/models && rm -f lda_model_*.* 2>/dev/null`
+
+### Topic Detail Modal Features:
+* **Einklappbare Ansicht-Steuerung:** Klicke auf "Ansicht anpassen", um Elemente ein-/auszublenden
+* **Intelligentes Layout:** Charts werden automatisch größer, wenn andere ausgeblendet werden
+* **5 anpassbare Bereiche:**
+  - ✅ Statistiken (Frequency, Rating, Sentiment)
+  - ✅ Zeitverlauf-Chart (Rating über Zeit)
+  - ✅ Sentiment-Chart (Gauge mit Prozentanzeige)
+  - ✅ Typische Aussagen (Top 3 Statements)
+  - ✅ Beispiel-Review (mit Navigation)
+* **Zeit-Filter:** Wähle zwischen Gesamt, 1 Jahr, 6 Monate, 3 Monate oder 1 Monat
+* **Review-Navigation:** Klicke auf Aussagen, um die vollständige Review zu sehen
 
 ## 📁 Projektstruktur
 
@@ -162,9 +184,19 @@ gruppe-P1-3/
 │   │   │   │       ├── NegativTopicModal.jsx
 │   │   │   │       ├── SorceModal.jsx
 │   │   │   │       ├── TrendModal.jsx
-│   │   │   │       ├── TopicTableModal.jsx    # Topic Tabelle (NEU)
-│   │   │   │       └── TopicDetailModal.jsx   # Topic Details (NEU)
+│   │   │   │       ├── TopicTableModal.jsx    # Topic Tabelle
+│   │   │   │       ├── TopicDetailModal.jsx   # Topic Details mit Ansicht-Anpassen
+│   │   │   │       └── ReviewDetailModal.jsx  # Vollständige Review-Ansicht
 │   │   │   └── ui/            # UI Components (shadcn)
+│   │   │       ├── badge.jsx
+│   │   │       ├── button.jsx
+│   │   │       ├── card.jsx
+│   │   │       ├── checkbox.jsx      # Für Ansicht-Anpassen (NEU)
+│   │   │       ├── dialog.jsx
+│   │   │       ├── input.jsx
+│   │   │       ├── label.jsx         # Für Ansicht-Anpassen (NEU)
+│   │   │       ├── select.jsx
+│   │   │       └── ...andere UI Komponenten
 │   │   ├── pages/             # Seiten
 │   │   │   ├── Dashboard.jsx
 │   │   │   └── Welcome.jsx
@@ -191,17 +223,23 @@ gruppe-P1-3/
 * **Build Tool:** Vite 5
 * **Routing:** React Router DOM
 * **UI Library:** shadcn/ui (Radix UI + Tailwind CSS)
+  - Dialog, Select, Dropdown Menu, Popover, Separator
+  - Checkbox, Label (für Ansicht-Anpassung)
+  - Badge, Button, Card, Input
 * **Charts:** Recharts (Line Charts, Gauge Charts)
-* **Icons:** Lucide React
+* **Icons:** Lucide React (Eye, ChevronDown, ChevronUp, Calendar, etc.)
+* **Styling:** Tailwind CSS v4 mit Custom Animations
 * **Linting:** ESLint
 
 ### Dashboard Features
-* **Topic Übersicht (NEU):**
+* **Topic Übersicht:**
   - Interaktive Topic-Tabelle mit Suchfunktion
   - Detailansicht mit Line Chart (Rating über Zeit)
   - Gauge Chart für Sentiment-Visualisierung
   - Typische Aussagen und Beispiel-Reviews
   - Zweistufige Modal-Interaktion (Tabelle → Details)
+  - **Ansicht anpassen (NEU):** Ein-/ausblendbare Elemente mit intelligenter Layout-Anpassung
+  - **Responsive Charts:** Charts passen sich automatisch an und werden größer, wenn andere ausgeblendet werden
   - Verwendet aktuell Dummy-Daten zur Demonstration
 
 ### Datenbank Schema
@@ -298,28 +336,59 @@ uv run python examples/topic_rating_examples.py
 ### Projektstruktur (Topic Modeling)
 
 ```
-backend/
-├── models/
-│   ├── lda_topic_model.py          # LDA-Modell-Implementierung (mit Sentiment)
-│   └── sentiment_analyzer.py       # Sentiment-Analyse für deutsche Texte (NEU)
-├── services/
-│   ├── topic_model_service.py      # Datenbankservice
-│   └── topic_rating_service.py     # Topic-Rating-Analyse (NEU)
-├── routes/
-│   └── topics.py                   # API-Endpunkte (erweitert)
-├── examples/
-│   ├── topic_modeling_examples.py  # Basic LDA Beispiele
-│   └── topic_rating_examples.py    # Topic-Rating Beispiele (NEU)
-├── docs/
-│   ├── QUICKSTART_LDA.md           # LDA Schnellstart-Anleitung
-│   ├── TOPIC_OVERVIEW_GUIDE.md     # Topic-Analyse Guide
-│   ├── TOPIC_ANALYSIS_EXPLANATION.md # Detaillierte Analyse-Logik
-│   ├── TOPIC_MODELING_API.md       # LDA API-Dokumentation
-│   ├── TOPIC_OVERVIEW_API.md       # Topic Overview API
-│   ├── TOPIC_RATING_ANALYSIS.md    # Topic-Rating Feature-Doku
-│   ├── TOPIC_MODELING_README.md    # Feature-Übersicht
-│   └── README.md                   # Dokumentations-Index
-└── test_topic_modeling.py          # Installationstest
+gruppe-P1-3/
+├── backend/
+│   ├── models/
+│   │   ├── lda_topic_model.py          # LDA-Modell-Implementierung (mit Sentiment)
+│   │   ├── sentiment_analyzer.py       # Sentiment-Analyse für deutsche Texte
+│   │   └── saved_models/               # Gespeicherte LDA-Modelle
+│   │       ├── lda_model_*.model
+│   │       ├── lda_model_*.dict
+│   │       ├── lda_model_*.bigram
+│   │       ├── lda_model_*.trigram
+│   │       └── lda_model_*.meta
+│   ├── services/
+│   │   ├── topic_model_service.py      # Datenbankservice für Topic Modeling
+│   │   └── topic_rating_service.py     # Topic-Rating-Analyse
+│   ├── routes/
+│   │   └── topics.py                   # API-Endpunkte (12 Endpoints)
+│   ├── examples/
+│   │   ├── topic_modeling_examples.py  # Basic LDA Beispiele
+│   │   └── topic_rating_examples.py    # Topic-Rating Beispiele
+│   ├── docs/
+│   │   ├── QUICKSTART_LDA.md           # LDA Schnellstart-Anleitung
+│   │   ├── TOPIC_OVERVIEW_GUIDE.md     # Topic-Analyse Guide
+│   │   ├── TOPIC_ANALYSIS_EXPLANATION.md # Detaillierte Analyse-Logik
+│   │   ├── TOPIC_MODELING_API.md       # LDA API-Dokumentation
+│   │   ├── TOPIC_OVERVIEW_API.md       # Topic Overview API
+│   │   ├── TOPIC_RATING_ANALYSIS.md    # Topic-Rating Feature-Doku
+│   │   ├── TOPIC_MODELING_README.md    # Feature-Übersicht
+│   │   └── README.md                   # Dokumentations-Index
+│   └── test_topic_modeling.py          # Installationstest
+│
+├── frontend/
+│   └── src/
+│       └── components/
+│           ├── dashboard/
+│           │   ├── TopicOverviewCard.jsx       # Topic-Übersicht Hauptkarte
+│           │   └── modals/
+│           │       ├── TopicTableModal.jsx     # Alle Topics Tabelle mit Suche
+│           │       ├── TopicDetailModal.jsx    # Topic-Details mit Charts
+│           │       │   # Features:
+│           │       │   # - Einklappbare Ansicht-Steuerung
+│           │       │   # - Line Chart (Rating über Zeit mit Zeitfilter)
+│           │       │   # - Gauge Chart (Sentiment-Visualisierung)
+│           │       │   # - Typische Aussagen (Top 3)
+│           │       │   # - Beispiel-Review mit Navigation
+│           │       │   # - Responsive Layout (Charts passen sich an)
+│           │       └── ReviewDetailModal.jsx   # Vollständige Review-Ansicht
+│           └── ui/
+│               ├── checkbox.jsx                # Für Ansicht-Anpassen
+│               ├── label.jsx                   # Für Ansicht-Anpassen
+│               ├── dialog.jsx                  # Für Modals
+│               ├── select.jsx                  # Für Zeitfilter
+│               ├── badge.jsx                   # Für Sentiment-Tags
+│               └── card.jsx                    # Für Layout-Struktur
 ```
 
 ### Workflow
@@ -417,6 +486,9 @@ uv run uvicorn main:app --reload
 cd frontend
 npm install
 npm run dev
+
+# Spezifische Pakete nachinstallieren (falls notwendig)
+npm install @radix-ui/react-checkbox @radix-ui/react-label
 ```
 
 ### "Model not trained" Error

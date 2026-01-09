@@ -7,7 +7,9 @@ import {
 } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { ChevronLeft, ChevronRight, Calendar, ArrowLeft, X } from "lucide-react"
+import { ChevronLeft, ChevronRight, Calendar, ArrowLeft, X, Eye, EyeOff, ChevronDown, ChevronUp } from "lucide-react"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Label } from "@/components/ui/label"
 import {
     LineChart,
     Line,
@@ -117,12 +119,35 @@ export default function TopicDetailModal({ open, onOpenChange, topic, onBackToTa
     const [selectedReviewDetail, setSelectedReviewDetail] = React.useState(null)
     const [selectedReviewIndex, setSelectedReviewIndex] = React.useState(0)
     
+    // Visibility toggles for different sections
+    const [visibility, setVisibility] = React.useState({
+        statistics: true,
+        timelineChart: true,
+        sentimentChart: true,
+        typicalStatements: true,
+        exampleReview: true
+    })
+    
+    // Toggle for collapsing the visibility control panel
+    const [isControlPanelOpen, setIsControlPanelOpen] = React.useState(false)
+    
     if (!topic) return null
 
     // Reset index when topic changes
     React.useEffect(() => {
         setCurrentExampleIndex(3)
     }, [topic])
+    
+    // Toggle visibility function
+    const toggleVisibility = (section) => {
+        setVisibility(prev => ({
+            ...prev,
+            [section]: !prev[section]
+        }))
+    }
+    
+    // Count visible charts to adjust grid layout
+    const visibleChartsCount = [visibility.timelineChart, visibility.sentimentChart].filter(Boolean).length
 
     // Handle clicking on an example review
     const handleExampleClick = () => {
@@ -271,12 +296,104 @@ export default function TopicDetailModal({ open, onOpenChange, topic, onBackToTa
                             <X className="h-5 w-5" />
                         </Button>
                     </div>
+                    
+                    {/* Visibility Controls - Collapsible */}
+                    <div className="mt-4">
+                        <Button
+                            variant="ghost"
+                            onClick={() => setIsControlPanelOpen(!isControlPanelOpen)}
+                            className="w-full justify-between p-4 h-auto hover:bg-slate-100 rounded-lg border border-slate-200"
+                        >
+                            <div className="flex items-center gap-2">
+                                <Eye className="h-4 w-4 text-slate-600" />
+                                <span className="text-sm font-semibold text-slate-700">Ansicht anpassen</span>
+                            </div>
+                            {isControlPanelOpen ? (
+                                <ChevronUp className="h-4 w-4 text-slate-600" />
+                            ) : (
+                                <ChevronDown className="h-4 w-4 text-slate-600" />
+                            )}
+                        </Button>
+                        
+                        {isControlPanelOpen && (
+                        <div className="mt-2 p-4 bg-slate-50 rounded-lg border border-slate-200">
+                            <div className="grid grid-cols-5 gap-4">
+                                <div className="flex items-center space-x-2">
+                                    <Checkbox 
+                                        id="statistics" 
+                                        checked={visibility.statistics}
+                                        onCheckedChange={() => toggleVisibility('statistics')}
+                                    />
+                                    <Label 
+                                        htmlFor="statistics" 
+                                        className="text-sm font-medium cursor-pointer"
+                                    >
+                                        Statistiken
+                                    </Label>
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                    <Checkbox 
+                                        id="timelineChart" 
+                                        checked={visibility.timelineChart}
+                                        onCheckedChange={() => toggleVisibility('timelineChart')}
+                                    />
+                                    <Label 
+                                        htmlFor="timelineChart" 
+                                        className="text-sm font-medium cursor-pointer"
+                                    >
+                                        Zeitverlauf
+                                    </Label>
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                    <Checkbox 
+                                        id="sentimentChart" 
+                                        checked={visibility.sentimentChart}
+                                        onCheckedChange={() => toggleVisibility('sentimentChart')}
+                                    />
+                                    <Label 
+                                        htmlFor="sentimentChart" 
+                                        className="text-sm font-medium cursor-pointer"
+                                    >
+                                        Sentiment
+                                    </Label>
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                    <Checkbox 
+                                        id="typicalStatements" 
+                                        checked={visibility.typicalStatements}
+                                        onCheckedChange={() => toggleVisibility('typicalStatements')}
+                                    />
+                                    <Label 
+                                        htmlFor="typicalStatements" 
+                                        className="text-sm font-medium cursor-pointer"
+                                    >
+                                        Aussagen
+                                    </Label>
+                                </div>
+                                <div className="flex items-center space-x-2">
+                                    <Checkbox 
+                                        id="exampleReview" 
+                                        checked={visibility.exampleReview}
+                                        onCheckedChange={() => toggleVisibility('exampleReview')}
+                                    />
+                                    <Label 
+                                        htmlFor="exampleReview" 
+                                        className="text-sm font-medium cursor-pointer"
+                                    >
+                                        Beispiel-Review
+                                    </Label>
+                                </div>
+                            </div>
+                        </div>
+                        )}
+                    </div>
                 </DialogHeader>
 
                 {/* Scrollable Content */}
                 <div className="overflow-y-auto px-8 pb-8">
                     <div className="space-y-6 mt-4">
                     {/* Statistik-Übersicht */}
+                    {visibility.statistics && (
                     <div className="grid grid-cols-3 gap-4">
                         <Card>
                             <CardHeader className="pb-2">
@@ -322,10 +439,17 @@ export default function TopicDetailModal({ open, onOpenChange, topic, onBackToTa
                             </CardContent>
                         </Card>
                     </div>
+                    )}
 
-                    {/* Charts Row */}
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* Charts Row - Dynamic layout based on visible charts */}
+                    {(visibility.timelineChart || visibility.sentimentChart) && (
+                    <div className={`grid gap-6 ${
+                        visibleChartsCount === 2 
+                            ? 'grid-cols-1 lg:grid-cols-2' 
+                            : 'grid-cols-1'
+                    }`}>
                         {/* Line Chart - Rating über Zeit */}
+                        {visibility.timelineChart && (
                         <Card>
                             <CardHeader>
                                 <div className="flex items-center justify-between">
@@ -348,7 +472,7 @@ export default function TopicDetailModal({ open, onOpenChange, topic, onBackToTa
                                 </div>
                             </CardHeader>
                             <CardContent>
-                                <div className="h-64">
+                                <div className={visibleChartsCount === 1 ? 'h-96' : 'h-64'}>
                                     {filteredTimelineData.length === 0 ? (
                                         <div className="flex items-center justify-center h-full">
                                             <div className="text-center">
@@ -425,8 +549,10 @@ export default function TopicDetailModal({ open, onOpenChange, topic, onBackToTa
                                 </div>
                             </CardContent>
                         </Card>
+                        )}
 
                         {/* Gauge Chart - Sentiment */}
+                        {visibility.sentimentChart && (
                         <Card>
                             <CardHeader>
                                 <CardTitle className="text-lg font-semibold">
@@ -450,9 +576,12 @@ export default function TopicDetailModal({ open, onOpenChange, topic, onBackToTa
                                 </div>
                             </CardContent>
                         </Card>
+                        )}
                     </div>
+                    )}
 
                     {/* Typische Aussagen */}
+                    {visibility.typicalStatements && (
                     <Card>
                         <CardHeader>
                             <CardTitle className="text-lg font-semibold">
@@ -490,8 +619,10 @@ export default function TopicDetailModal({ open, onOpenChange, topic, onBackToTa
                             </ul>
                         </CardContent>
                     </Card>
+                    )}
 
                     {/* Beispiel-Review mit Navigation */}
+                    {visibility.exampleReview && (
                     <Card>
                         <CardHeader>
                             <div className="flex items-center justify-between">
@@ -540,6 +671,7 @@ export default function TopicDetailModal({ open, onOpenChange, topic, onBackToTa
                             </div>
                         </CardContent>
                     </Card>
+                    )}
                 </div>
                 </div>
 
