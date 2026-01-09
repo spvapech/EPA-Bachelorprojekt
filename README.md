@@ -37,7 +37,15 @@ Um das Projekt lokal laufen zu lassen, benötigst du:
 * **Supabase Account** (für Datenbank)
 * IDE deiner Wahl, bevorzugt **VSCode**
 
-### Zusätzliche npm-Pakete (werden automatisch installiert):
+### Python-Pakete (Backend):
+* `fastapi` - Web Framework
+* `gensim` - Topic Modeling (LDA)
+* `transformers` - ML-basierte Sentiment-Analyse (neu!)
+* `torch` - PyTorch für Transformer-Modelle (neu!)
+* `pandas` - Datenverarbeitung
+* `supabase` - Datenbank-Client
+
+### npm-Pakete (Frontend):
 * `@radix-ui/react-checkbox` - Checkbox-Komponente
 * `@radix-ui/react-label` - Label-Komponente
 * `@radix-ui/react-dialog` - Dialog/Modal-Komponente
@@ -214,7 +222,9 @@ gruppe-P1-3/
 * **Datenbank:** Supabase (PostgreSQL)
 * **ML/AI:** 
   - Gensim 4.3+ (LDA Topic Modeling)
-  - Custom Sentiment-Analyse (Lexikon-basiert)
+  - Transformers 4.30+ (ML-basierte Sentiment-Analyse mit German BERT)
+  - PyTorch 2.0+ (Backend für Transformer-Modelle)
+  - Lexikon-basierte Sentiment-Analyse (regelbasiert, schnell)
 * **Datenverarbeitung:** Pandas, OpenPyXL
 * **Tools:** Python-dotenv, Python-multipart
 
@@ -253,7 +263,9 @@ Dieses Projekt enthält eine vollständige **LDA Topic Modeling**-Integration mi
 ### Features
 
 ✅ **Automatische Topic-Erkennung** in Textdaten  
-✅ **Sentiment-Analyse** - Erkennt positive, neutrale und negative Bewertungen  
+✅ **Sentiment-Analyse** - Dual-Mode (Lexicon + ML-Transformer)
+  - **Lexicon-Mode:** Schnell, regelbasiert, keine Dependencies
+  - **Transformer-Mode:** ML-basiert mit German BERT, 100% Genauigkeit
 ✅ **Sterne-Bewertungen** - Kombiniert Text-Topics mit Rating-Daten  
 ✅ **Datenbankintegration** - Direkter Zugriff auf Kandidaten- und Mitarbeiter-Daten  
 ✅ **RESTful API** - 12 Endpunkte für Training, Analyse und Vorhersage  

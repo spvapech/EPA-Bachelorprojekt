@@ -40,7 +40,9 @@ backend/
 - ✅ 186 arbeitsrelevante Keywords
 - ✅ 73 Bewertungskriterien aus DB
 - ✅ Bigram/Trigram Support
-- ✅ Sentiment-Analyse
+- ✅ Sentiment-Analyse (Dual-Mode)
+  - Lexicon-basiert (schnell, regelbasiert)
+  - Transformer-basiert (ML, German BERT, hochpräzise)
 - ✅ RESTful API
 
 ## 📖 Weitere Infos
