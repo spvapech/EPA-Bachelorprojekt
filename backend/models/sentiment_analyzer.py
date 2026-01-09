@@ -1,19 +1,43 @@
 """
 Sentiment Analysis for German Text
 Analyzes sentiment (positive, neutral, negative) of text data.
-Uses a simple rule-based approach with German sentiment words.
+Supports both lexicon-based and transformer-based approaches.
 """
 
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 class SentimentAnalyzer:
     """
-    Sentiment analyzer for German text using a lexicon-based approach.
+    Sentiment analyzer for German text supporting multiple approaches:
+    - lexicon: Rule-based approach with predefined word lists (fast, no dependencies)
+    - transformer: ML-based approach using German BERT models (accurate, requires transformers)
     """
     
-    def __init__(self):
-        """Initialize the sentiment analyzer with German sentiment words."""
+    def __init__(self, mode: str = "lexicon"):
+        """
+        Initialize the sentiment analyzer.
+        
+        Args:
+            mode: Analysis mode - either "lexicon" (default) or "transformer"
+        """
+        self.mode = mode
+        self._transformer_pipeline = None
+        
+        # Initialize lexicon-based components
+        self._init_lexicon()
+        
+        # Initialize transformer if requested
+        if mode == "transformer":
+            self._init_transformer()
+    
+    def _init_lexicon(self):
+        """Initialize lexicon-based sentiment analysis components."""
         # Positive German words
         self.positive_words = {
             'gut', 'super', 'toll', 'ausgezeichnet', 'hervorragend', 'wunderbar',
@@ -60,19 +84,111 @@ class SentimentAnalyzer:
             'nimmer', 'nirgends', 'nichts', 'kaum', 'wenig'
         }
     
-    def analyze_sentiment(self, text: str) -> Dict[str, Any]:
+    def _init_transformer(self):
+        """Initialize transformer-based sentiment analysis."""
+        try:
+            from transformers import pipeline
+            logger.info("Loading German sentiment analysis model...")
+            
+            # Use a German BERT model fine-tuned for sentiment analysis
+            # Options:
+            # 1. oliverguhr/german-sentiment-bert - specialized for German sentiment
+            # 2. cardiffnlp/twitter-xlm-roberta-base-sentiment - multilingual
+            self._transformer_pipeline = pipeline(
+                "sentiment-analysis",
+                model="oliverguhr/german-sentiment-bert",
+                top_k=None  # Return all label scores
+            )
+            logger.info("Transformer model loaded successfully")
+            
+        except ImportError:
+            logger.error(
+                "transformers library not found. "
+                "Install with: pip install transformers torch"
+            )
+            raise ImportError(
+                "Please install transformers: pip install transformers torch"
+            )
+        except Exception as e:
+            logger.error(f"Error loading transformer model: {e}")
+            raise
+    
+    def _analyze_with_transformer(self, text: str) -> Dict[str, Any]:
         """
-        Analyze sentiment of a single text.
+        Analyze sentiment using transformer model.
         
         Args:
             text: Input text to analyze
             
         Returns:
-            Dictionary with sentiment analysis results:
-            - polarity: float between -1 (negative) and 1 (positive)
-            - sentiment: 'positive', 'neutral', or 'negative'
-            - subjectivity: float between 0 (objective) and 1 (subjective)
-            - confidence: float representing confidence in the classification
+            Sentiment analysis results
+        """
+        if not self._transformer_pipeline:
+            raise RuntimeError("Transformer model not initialized")
+        
+        if not text or not isinstance(text, str) or not text.strip():
+            return {
+                "polarity": 0.0,
+                "sentiment": "neutral",
+                "subjectivity": 0.0,
+                "confidence": 0.0
+            }
+        
+        try:
+            # Get predictions from model
+            results = self._transformer_pipeline(text[:512])[0]  # Limit to 512 chars
+            
+            # Model returns: [{'label': 'positive', 'score': 0.99}, {...}]
+            # Find the label with highest score
+            best_result = max(results, key=lambda x: x['score'])
+            label = best_result['label'].lower()
+            confidence = best_result['score']
+            
+            # Map to our format
+            sentiment_map = {
+                'positive': ('positive', 1.0),
+                'neutral': ('neutral', 0.0),
+                'negative': ('negative', -1.0)
+            }
+            
+            sentiment, polarity_base = sentiment_map.get(
+                label, 
+                ('neutral', 0.0)
+            )
+            
+            # Polarity is scaled by confidence
+            polarity = polarity_base * confidence
+            
+            # Subjectivity: higher confidence = more subjective
+            subjectivity = confidence
+            
+            return {
+                "polarity": float(polarity),
+                "sentiment": sentiment,
+                "subjectivity": float(subjectivity),
+                "confidence": float(confidence),
+                "raw_results": results
+            }
+            
+        except Exception as e:
+            logger.error(f"Error in transformer analysis: {e}")
+            return {
+                "polarity": 0.0,
+                "sentiment": "neutral",
+                "subjectivity": 0.0,
+                "confidence": 0.0,
+                "error": str(e)
+            }
+    
+    def _analyze_with_lexicon(self, text: str) -> Dict[str, Any]:
+        """
+        Analyze sentiment using lexicon-based approach.
+        
+        Args:
+            text: Input text to analyze
+            
+        Returns:
+            Sentiment analysis results
         """
         if not text or not isinstance(text, str) or not text.strip():
             return {
@@ -165,6 +281,41 @@ class SentimentAnalyzer:
                 "confidence": 0.0,
                 "error": str(e)
             }
+    
+    def analyze_sentiment(self, text: str) -> Dict[str, Any]:
+        """
+        Analyze sentiment of a single text.
+        
+        Args:
+            text: Input text to analyze
+            
+        Returns:
+            Dictionary with sentiment analysis results:
+            - polarity: float between -1 (negative) and 1 (positive)
+            - sentiment: 'positive', 'neutral', or 'negative'
+            - subjectivity: float between 0 (objective) and 1 (subjective)
+            - confidence: float representing confidence in the classification
+        """
+        if self.mode == "transformer":
+            return self._analyze_with_transformer(text)
+        else:
+            return self._analyze_with_lexicon(text)
+    
+    def set_mode(self, mode: str):
+        """
+        Switch between analysis modes.
+        
+        Args:
+            mode: Either "lexicon" or "transformer"
+        """
+        if mode not in ["lexicon", "transformer"]:
+            raise ValueError("Mode must be 'lexicon' or 'transformer'")
+        
+        if mode == "transformer" and not self._transformer_pipeline:
+            self._init_transformer()
+        
+        self.mode = mode
+        logger.info(f"Switched to {mode} mode")
     
     def analyze_batch(self, texts: List[str]) -> List[Dict[str, Any]]:
         """
