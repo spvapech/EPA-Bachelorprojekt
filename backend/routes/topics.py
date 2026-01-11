@@ -35,6 +35,10 @@ class TrainModelRequest(BaseModel):
         default=None,
         description="Maximum number of records to use per source"
     )
+    use_employee_weighting: bool = Field(
+        default=True,
+        description="Whether to apply weighting based on employee type (Student, Employee, Manager, Nicht-Employee)"
+    )
 
 
 class PredictTopicsRequest(BaseModel):
@@ -97,10 +101,11 @@ async def train_model(request: TrainModelRequest):
     global _topic_analyzer
     
     try:
-        # Fetch text data from database
+        # Fetch text data from database with metadata if weighting is enabled
         data = _topic_db.get_all_texts(
             source=request.source,
-            limit=request.limit
+            limit=request.limit,
+            include_metadata=request.use_employee_weighting
         )
         
         if not data["texts"]:
@@ -112,11 +117,18 @@ async def train_model(request: TrainModelRequest):
         # Initialize new analyzer
         _topic_analyzer = LDATopicAnalyzer(num_topics=request.num_topics)
         
-        # Train model
-        result = _topic_analyzer.train_model(data["texts"])
+        # Train model with or without metadata for weighting
+        if request.use_employee_weighting and "detailed_metadata" in data:
+            result = _topic_analyzer.train_model(
+                data["texts"], 
+                metadata=data["detailed_metadata"]
+            )
+        else:
+            result = _topic_analyzer.train_model(data["texts"])
         
         # Add metadata
         result["data_sources"] = data["metadata"]
+        result["employee_weighting_enabled"] = request.use_employee_weighting
         
         # Save model
         try:

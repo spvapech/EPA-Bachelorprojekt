@@ -64,6 +64,11 @@ export function TopicOverviewCard({ companyId = 1 }) {
         setDetailModalOpen(true)
     }
 
+    const handleBackToTable = () => {
+        setDetailModalOpen(false)
+        setTableModalOpen(true)
+    }
+
     const getSentimentBadgeVariant = (sentiment) => {
         switch (sentiment) {
             case "Positiv":
@@ -168,6 +173,7 @@ export function TopicOverviewCard({ companyId = 1 }) {
                     open={detailModalOpen}
                     onOpenChange={setDetailModalOpen}
                     topic={selectedTopic}
+                    onBackToTable={handleBackToTable}
                 />
             )}
         </>

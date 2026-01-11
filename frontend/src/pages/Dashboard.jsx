@@ -4,7 +4,12 @@ import {
     ArrowDown,
     Search,
     Home,
-    SquarePlus,
+    Download,
+    X,
+    Upload,
+    FileSpreadsheet,
+    Loader2,
+    Menu,
 } from "lucide-react"
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -15,6 +20,7 @@ import { DominantTopicsCard } from "@/components/dashboard/DominantTopicsCard"
 import { IndividualReviewsCard } from "@/components/dashboard/IndividualReviewsCard"
 import { TopicOverviewCard } from "@/components/dashboard/TopicOverviewCard"
 import { useState, useEffect } from "react"
+import { useLocation } from "react-router-dom"
 import SorceModal from "../components/dashboard/modals/SorceModal"
 import TrendModal from "../components/dashboard/modals/TrendModal"
 import NegativTopicModal from "../components/dashboard/modals/NegativTopicModal"
@@ -43,6 +49,10 @@ import { API_URL } from "../config"
 
 
 export default function Dashboard() {
+    const location = useLocation()
+    const companyFromWelcome = location.state?.companyId
+    const companyNameFromWelcome = location.state?.companyName
+    
     const [open, setOpen] = useState(false)
     const [openTrend, setOpenTrend] = useState(false)
     const [openNegative, setOpenNegative] = useState(false);
@@ -52,9 +62,21 @@ export default function Dashboard() {
     const [data, setData] = useState()
     const [trendData, setTrendData] = useState(null)
     const [companies, setCompanies] = useState([])
+    
+    // Sidebar states - Starts closed if company comes from welcome
+    const [sidebarOpen, setSidebarOpen] = useState(!companyFromWelcome)
+    const [companyQuery, setCompanyQuery] = useState("")
+    const [companySuggestions, setCompanySuggestions] = useState([])
+    const [selectedCompanyId, setSelectedCompanyId] = useState(companyFromWelcome || null)
+    const [selectedCompanyName, setSelectedCompanyName] = useState(companyNameFromWelcome || "")
+    const [checking, setChecking] = useState(false)
+    const [needsUpload, setNeedsUpload] = useState(false)
+    const [file, setFile] = useState(null)
+    const [uploading, setUploading] = useState(false)
+    const [error, setError] = useState("")
+    const [highlightedIndex, setHighlightedIndex] = useState(-1)
+    
     async function getCompanies() {
-
-
         try {
             const res = await fetch(`${API_URL}/companies/`)
             if (!res.ok) return
@@ -62,20 +84,223 @@ export default function Dashboard() {
             setCompanies(Array.isArray(data) ? data : [])
         } catch {
             // optional: ignorieren
-
-
         }
-
-
     }
+    
+    const fetchCompanySuggestions = async (q) => {
+        const query = q.trim()
+        if (!query) {
+            setCompanySuggestions([])
+            setHighlightedIndex(-1)
+            return
+        }
+        try {
+            const res = await fetch(`${API_URL}/companies/search?q=${encodeURIComponent(query)}`)
+            if (!res.ok) return
+            const data = await res.json()
+            setCompanySuggestions(Array.isArray(data) ? data : [])
+            setHighlightedIndex(-1)
+        } catch {
+            // optional: ignorieren
+        }
+    }
+    
+    const selectCompanyFromList = (company) => {
+        setCompanyQuery(company.name)
+        setSelectedCompanyId(company.id)
+        setSelectedCompanyName(company.name)
+        setCompanySuggestions([])
+        setHighlightedIndex(-1)
+    }
+    
+    const handleKeyDown = (e) => {
+        if (companySuggestions.length === 0) return
+        
+        if (e.key === 'ArrowDown') {
+            e.preventDefault()
+            setHighlightedIndex(prev => 
+                prev < companySuggestions.length - 1 ? prev + 1 : prev
+            )
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault()
+            setHighlightedIndex(prev => prev > 0 ? prev - 1 : -1)
+        } else if (e.key === 'Enter') {
+            e.preventDefault()
+            if (highlightedIndex >= 0 && highlightedIndex < companySuggestions.length) {
+                selectCompanyFromList(companySuggestions[highlightedIndex])
+            } else {
+                handleCompanyCheck()
+            }
+        } else if (e.key === 'Escape') {
+            setCompanySuggestions([])
+            setHighlightedIndex(-1)
+        }
+    }
+    
+    const handleCompanyCheck = async () => {
+        if (!companyQuery.trim()) {
+            setError("Bitte geben Sie einen Firmennamen ein")
+            return
+        }
+        
+        setChecking(true)
+        setError("")
+        
+        try {
+            // If company was already selected from list, use it directly
+            if (selectedCompanyId) {
+                setSelectedCompany(selectedCompanyId)
+                setSidebarOpen(false)
+                setNeedsUpload(false)
+                getCompanyData(selectedCompanyId)
+                return
+            }
+            
+            // Otherwise search in all companies or suggestions
+            let match = companySuggestions.find(
+                (c) => c.name.toLowerCase() === companyQuery.trim().toLowerCase()
+            )
+            
+            // If not in suggestions, check in all companies
+            if (!match) {
+                match = companies.find(
+                    (c) => c.name.toLowerCase() === companyQuery.trim().toLowerCase()
+                )
+            }
+            
+            if (match) {
+                // Company exists in database
+                setSelectedCompanyId(match.id)
+                setSelectedCompanyName(match.name)
+                setSelectedCompany(match.id)
+                setSidebarOpen(false)
+                setNeedsUpload(false)
+                getCompanyData(match.id)
+            } else {
+                // Company does not exist, needs upload
+                setNeedsUpload(true)
+                setError("Firma nicht gefunden. Bitte laden Sie eine Excel-Datei hoch.")
+            }
+        } catch (err) {
+            setError("Fehler bei der Überprüfung der Firma")
+        } finally {
+            setChecking(false)
+        }
+    }
+    
+    const handleFileChange = (e) => {
+        const selectedFile = e.target.files?.[0]
+        if (selectedFile) {
+            const validTypes = [
+                'application/vnd.ms-excel',
+                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            ]
+            if (validTypes.includes(selectedFile.type) || selectedFile.name.endsWith('.xlsx') || selectedFile.name.endsWith('.xls')) {
+                setFile(selectedFile)
+                setError("")
+            } else {
+                setError("Bitte wählen Sie eine Excel-Datei (.xlsx oder .xls)")
+                setFile(null)
+            }
+        }
+    }
+    
+    const handleUpload = async () => {
+        if (!file) {
+            setError("Bitte wählen Sie zuerst eine Datei aus")
+            return
+        }
+        
+        setUploading(true)
+        setError("")
+        
+        try {
+            // First create the company if it doesn't exist
+            let companyId = selectedCompanyId
+            
+            if (!companyId) {
+                // Create new company
+                const createRes = await fetch(`${API_URL}/companies/`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ name: companyQuery.trim() })
+                })
+                
+                if (!createRes.ok) {
+                    throw new Error("Fehler beim Erstellen der Firma")
+                }
+                
+                const newCompany = await createRes.json()
+                companyId = newCompany.id
+                setSelectedCompanyId(companyId)
+                setSelectedCompanyName(newCompany.name)
+            }
+            
+            // Upload the file
+            const formData = new FormData()
+            formData.append("file", file)
+            formData.append("company_id", String(companyId))
+            
+            const response = await fetch(`${API_URL}/upload-excel`, {
+                method: "POST",
+                body: formData,
+            })
+            
+            if (!response.ok) {
+                throw new Error("Upload fehlgeschlagen")
+            }
+            
+            const result = await response.json()
+            console.log("Upload erfolgreich:", result)
+            
+            // Close sidebar and show company
+            setSelectedCompany(companyId)
+            setSidebarOpen(false)
+            setNeedsUpload(false)
+            await getCompanies()
+            getCompanyData(companyId)
+        } catch (err) {
+            setError(err.message || "Fehler beim Hochladen der Datei")
+        } finally {
+            setUploading(false)
+        }
+    }
+    
     useEffect(() => {
         getCompanies()
-
-
+        
+        // If company comes from welcome page, load its data
+        if (companyFromWelcome) {
+            setSelectedCompany(companyFromWelcome)
+            getCompanyData(companyFromWelcome)
+        }
     }, [])
 
     function getCompanyData(id) {
         console.log(id);
+
+
+
+    }
+    
+    const handleSidebarToggle = () => {
+        if (sidebarOpen && !selectedCompanyName) {
+            // Versucht zu schließen, aber keine Firma ausgewählt
+            setError("Bitte wählen Sie zuerst eine Firma aus, um die Analyse zu starten.")
+            return
+        }
+        
+        // Beim Schließen: Reset alle Upload-States zum Neutral-Zustand
+        if (sidebarOpen) {
+            setNeedsUpload(false)
+            setCompanyQuery("")
+            setFile(null)
+            setError("")
+            setCompanySuggestions([])
+            setHighlightedIndex(-1)
+        }
+        
+        setSidebarOpen(!sidebarOpen)
 
     }
 
@@ -122,32 +347,192 @@ export default function Dashboard() {
     return (
         <div className="min-h-screen bg-slate-50">
             <div className="flex">
-                {/* Sidebar */}
-                <aside className="w-[92px] shrink-0 bg-gradient-to-b from-slate-900 to-slate-800 text-white relative">
+                {/* Sidebar - Fixed Overlay */}
+                <aside className={`fixed left-0 top-0 bg-gradient-to-b from-slate-900 to-slate-800 text-white transition-all duration-300 min-h-screen z-50 ${sidebarOpen ? 'w-[400px]' : 'w-[92px]'}`}>
                     <div className="h-16 flex items-center justify-center">
-                        <div className="h-10 w-10 rounded-xl bg-white/10 flex items-center justify-center">
-                            <Plus className="h-6 w-6" />
-                        </div>
+                        <button 
+                            onClick={handleSidebarToggle}
+                            className="h-10 w-10 rounded-xl bg-white/10 flex items-center justify-center hover:bg-white/20 transition-colors"
+                        >
+                            {sidebarOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+                        </button>
                     </div>
+
+                    {sidebarOpen && (
+                        <div className="px-6 py-4">
+                            {/* Greeting Section */}
+                            <div className="mb-6 pb-4 border-b border-slate-700">
+                                <h1 className="text-2xl font-bold mb-2">Willkommen!</h1>
+                                <p className="text-sm text-slate-300">
+                                    Wählen Sie eine Firma aus, um die Analyse zu starten.
+                                </p>
+                            </div>
+                            
+                            <h2 className="text-xl font-bold mb-4">Firma auswählen</h2>
+                            
+                            {!needsUpload ? (
+                                <>
+                                    {/* Company Input with Autocomplete */}
+                                    <div className="space-y-3">
+                                        <label className="text-sm font-medium">
+                                            Firmenname
+                                        </label>
+                                        <input
+                                            value={companyQuery}
+                                            onChange={(e) => {
+                                                const v = e.target.value
+                                                setCompanyQuery(v)
+                                                setSelectedCompanyId(null)
+                                                fetchCompanySuggestions(v)
+                                            }}
+                                            onKeyDown={handleKeyDown}
+                                            placeholder="Firmenname eingeben..."
+                                            className="w-full rounded-lg border border-slate-600 bg-slate-800 px-4 py-2 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                        />
+                                        
+                                        {companySuggestions.length > 0 && (
+                                            <div className="bg-slate-800 rounded-lg border border-slate-600 max-h-40 overflow-y-auto">
+                                                {companySuggestions.map((c, index) => (
+                                                    <div
+                                                        key={c.id}
+                                                        onClick={() => selectCompanyFromList(c)}
+                                                        className={`px-4 py-2 cursor-pointer text-sm ${
+                                                            index === highlightedIndex 
+                                                                ? 'bg-blue-700 text-white' 
+                                                                : 'hover:bg-slate-700'
+                                                        }`}
+                                                    >
+                                                        {c.name}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                        
+                                        <Button
+                                            onClick={handleCompanyCheck}
+                                            disabled={checking || !companyQuery.trim()}
+                                            className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                                        >
+                                            {checking ? (
+                                                <>
+                                                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                                    Prüfe...
+                                                </>
+                                            ) : (
+                                                "Firma auswählen"
+                                            )}
+                                        </Button>
+                                    </div>
+                                </>
+                            ) : (
+                                <>
+                                    {/* Upload Section */}
+                                    <div className="space-y-4">
+                                        <p className="text-sm text-slate-300">
+                                            Firma "<strong>{companyQuery}</strong>" wurde nicht gefunden.
+                                        </p>
+                                        
+                                        {/* File Input */}
+                                        <div className="border-2 border-dashed border-slate-600 rounded-lg p-4 text-center hover:border-blue-400 transition-colors">
+                                            <input
+                                                type="file"
+                                                id="file-upload-dashboard"
+                                                accept=".xlsx,.xls"
+                                                onChange={handleFileChange}
+                                                className="hidden"
+                                            />
+                                            <label
+                                                htmlFor="file-upload-dashboard"
+                                                className="cursor-pointer flex flex-col items-center gap-3"
+                                            >
+                                                <div className="h-12 w-12 rounded-full bg-blue-900 flex items-center justify-center">
+                                                    <FileSpreadsheet className="h-6 w-6 text-blue-400" />
+                                                </div>
+                                                <div>
+                                                    <p className="text-sm font-semibold text-white">
+                                                        {file ? file.name : "Excel-Datei auswählen"}
+                                                    </p>
+                                                    <p className="text-xs text-slate-400 mt-1">
+                                                        .xlsx oder .xls
+                                                    </p>
+                                                </div>
+                                            </label>
+                                        </div>
+                                        
+                                        {file && !error && (
+                                            <div className="bg-green-900/30 border border-green-700 rounded-lg p-3 flex items-center gap-2">
+                                                <FileSpreadsheet className="h-4 w-4 text-green-400" />
+                                                <div className="flex-1">
+                                                    <p className="text-sm font-semibold text-green-300">{file.name}</p>
+                                                    <p className="text-xs text-green-400">
+                                                        {(file.size / 1024).toFixed(2)} KB
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        )}
+                                        
+                                        <Button
+                                            onClick={handleUpload}
+                                            disabled={!file || uploading}
+                                            className="w-full bg-green-600 hover:bg-green-700 text-white"
+                                        >
+                                            {uploading ? (
+                                                <>
+                                                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                                    Wird hochgeladen...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Upload className="h-4 w-4 mr-2" />
+                                                    Hochladen
+                                                </>
+                                            )}
+                                        </Button>
+                                        
+                                        <Button
+                                            onClick={() => {
+                                                setNeedsUpload(false)
+                                                setFile(null)
+                                                setError("")
+                                            }}
+                                            variant="outline"
+                                            className="w-full border-slate-600 text-slate-300 hover:bg-slate-700"
+                                        >
+                                            Zurück
+                                        </Button>
+                                    </div>
+                                </>
+                            )}
+                            
+                            {/* Error Message */}
+                            {error && (
+                                <div className="mt-4 bg-red-900/30 border border-red-700 rounded-lg p-3 text-red-300 text-sm">
+                                    {error}
+                                </div>
+                            )}
+                        </div>
+                    )}
 
                     <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex flex-col gap-4">
                         <div className="h-14 w-14 rounded-2xl bg-white/10 flex items-center justify-center border border-white/10">
                             <Home className="h-7 w-7" />
                         </div>
                         <div className="h-14 w-14 rounded-2xl bg-white/10 flex items-center justify-center border border-white/10">
-                            <SquarePlus className="h-7 w-7" />
+                            <Download className="h-7 w-7" />
                         </div>
                     </div>
                 </aside>
 
-                {/* Main */}
-                <main className="flex-1 px-8 py-6">
+                {/* Main - mit left padding wenn sidebar geschlossen */}
+                <main className={`flex-1 px-8 py-6 transition-all duration-300 ${sidebarOpen ? '' : 'ml-[92px]'}`}>
                     {/* Top header */}
                     <div className="flex items-start justify-between gap-6">
                         <div>
-                            <h1 className="text-4xl font-extrabold tracking-tight text-slate-900">
-                                {companies.find((company) => company.id === selectedCompany)?.name}
-                            </h1>
+                            {selectedCompanyName && (
+                                <h1 className="text-4xl font-extrabold tracking-tight text-slate-900">
+                                    {selectedCompanyName}
+                                </h1>
+                            )}
                         </div>
 
                         <div className="w-[300px] max-w-full">

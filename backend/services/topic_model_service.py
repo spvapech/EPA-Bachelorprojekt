@@ -97,10 +97,61 @@ class TopicModelDatabase:
         
         return texts
     
+    def get_employee_texts_with_metadata(
+        self, 
+        fields: Optional[List[str]] = None,
+        limit: Optional[int] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Fetch text data from employee table with metadata (including status/employee type).
+        
+        Args:
+            fields: List of text fields to fetch
+            limit: Maximum number of records to fetch
+            
+        Returns:
+            List of dictionaries with 'text', 'status', and other metadata
+        """
+        if fields is None:
+            fields = [
+                'jobbeschreibung', 
+                'gut_am_arbeitgeber_finde_ich',
+                'schlecht_am_arbeitgeber_finde_ich',
+                'verbesserungsvorschlaege'
+            ]
+        
+        # Build query - include status field for employee type
+        select_fields = fields + ['status', 'id']
+        query = self.supabase.table('employee').select(','.join(select_fields))
+        
+        if limit:
+            query = query.limit(limit)
+        
+        response = query.execute()
+        
+        # Combine text fields and include metadata
+        result = []
+        for record in response.data:
+            combined_text = ' '.join([
+                str(record.get(field, '')) 
+                for field in fields 
+                if record.get(field)
+            ])
+            if combined_text.strip():
+                result.append({
+                    'text': combined_text,
+                    'status': record.get('status', ''),
+                    'id': record.get('id'),
+                    'source': 'employee'
+                })
+        
+        return result
+    
     def get_all_texts(
         self,
         source: str = "both",
-        limit: Optional[int] = None
+        limit: Optional[int] = None,
+        include_metadata: bool = False
     ) -> Dict[str, Any]:
         """
         Fetch all text data for topic analysis.
@@ -108,6 +159,7 @@ class TopicModelDatabase:
         Args:
             source: Data source - "candidates", "employee", or "both"
             limit: Maximum number of records to fetch per source
+            include_metadata: If True, include metadata like employee status for weighting
             
         Returns:
             Dictionary with texts and metadata
@@ -122,17 +174,35 @@ class TopicModelDatabase:
             }
         }
         
+        if include_metadata:
+            result["detailed_metadata"] = []
+        
         if source in ["candidates", "both"]:
             candidate_texts = self.get_candidate_texts(limit=limit)
             result["texts"].extend(candidate_texts)
             result["sources"].extend(["candidates"] * len(candidate_texts))
             result["metadata"]["candidates_count"] = len(candidate_texts)
+            
+            if include_metadata:
+                for text in candidate_texts:
+                    result["detailed_metadata"].append({
+                        'text': text,
+                        'source': 'candidates',
+                        'status': None
+                    })
         
         if source in ["employee", "both"]:
-            employee_texts = self.get_employee_texts(limit=limit)
-            result["texts"].extend(employee_texts)
-            result["sources"].extend(["employee"] * len(employee_texts))
-            result["metadata"]["employee_count"] = len(employee_texts)
+            if include_metadata:
+                employee_data = self.get_employee_texts_with_metadata(limit=limit)
+                result["texts"].extend([item['text'] for item in employee_data])
+                result["sources"].extend(["employee"] * len(employee_data))
+                result["metadata"]["employee_count"] = len(employee_data)
+                result["detailed_metadata"].extend(employee_data)
+            else:
+                employee_texts = self.get_employee_texts(limit=limit)
+                result["texts"].extend(employee_texts)
+                result["sources"].extend(["employee"] * len(employee_texts))
+                result["metadata"]["employee_count"] = len(employee_texts)
         
         result["metadata"]["total_count"] = len(result["texts"])
         

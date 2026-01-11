@@ -14,6 +14,7 @@ export default function Welcome() {
     const [file, setFile] = useState(null)
     const [uploading, setUploading] = useState(false)
     const [error, setError] = useState("")
+    const [dragActive, setDragActive] = useState(false)
     const navigate = useNavigate()
 
     const handleFileChange = (e) => {
@@ -26,6 +27,37 @@ export default function Welcome() {
             ]
             if (validTypes.includes(selectedFile.type) || selectedFile.name.endsWith('.xlsx') || selectedFile.name.endsWith('.xls')) {
                 setFile(selectedFile)
+                setError("")
+            } else {
+                setError("Bitte wählen Sie eine Excel-Datei (.xlsx oder .xls)")
+                setFile(null)
+            }
+        }
+    }
+    
+    const handleDrag = (e) => {
+        e.preventDefault()
+        e.stopPropagation()
+        if (e.type === "dragenter" || e.type === "dragover") {
+            setDragActive(true)
+        } else if (e.type === "dragleave") {
+            setDragActive(false)
+        }
+    }
+    
+    const handleDrop = (e) => {
+        e.preventDefault()
+        e.stopPropagation()
+        setDragActive(false)
+        
+        if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+            const droppedFile = e.dataTransfer.files[0]
+            const validTypes = [
+                'application/vnd.ms-excel',
+                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            ]
+            if (validTypes.includes(droppedFile.type) || droppedFile.name.endsWith('.xlsx') || droppedFile.name.endsWith('.xls')) {
+                setFile(droppedFile)
                 setError("")
             } else {
                 setError("Bitte wählen Sie eine Excel-Datei (.xlsx oder .xls)")
@@ -54,6 +86,7 @@ export default function Welcome() {
             (c) => c.name.toLowerCase() === name.trim().toLowerCase()
         )
         setCompanyId(match ? match.id : null)
+        setCompanySuggestions([]) // Verstecke Vorschläge nach Auswahl
     }
 
     const handleUpload = async () => {
@@ -61,20 +94,39 @@ export default function Welcome() {
             setError("Bitte wählen Sie zuerst eine Datei aus")
             return
         }
-        if (!companyId) {
-        setError("Bitte wählen Sie eine Firma aus der Vorschlagsliste aus.")
-        return
+        if (!companyQuery.trim()) {
+            setError("Bitte geben Sie einen Firmennamen ein.")
+            return
         }
 
         setUploading(true)
         setError("")
 
         try {
+            // Prüfe ob Firma existiert oder erstelle sie
+            let finalCompanyId = companyId
+            
+            if (!finalCompanyId) {
+                // Versuche Firma zu finden oder erstellen
+                const createRes = await fetch(`${API_URL}/companies/`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ name: companyQuery.trim() })
+                })
+                
+                if (!createRes.ok) {
+                    throw new Error("Fehler beim Erstellen/Finden der Firma")
+                }
+                
+                const newCompany = await createRes.json()
+                finalCompanyId = newCompany.id
+            }
+            
             const formData = new FormData()
             formData.append("file", file)
-            formData.append("company_id", String(companyId))
+            formData.append("company_id", String(finalCompanyId))
 
-            const response = await fetch("http://localhost:8000/api/upload-excel", {
+            const response = await fetch(`${API_URL}/upload-excel`, {
                 method: "POST",
                 body: formData,
             })
@@ -86,8 +138,13 @@ export default function Welcome() {
             const result = await response.json()
             console.log("Upload erfolgreich:", result)
 
-            // Navigate to dashboard after successful upload
-            navigate("/dashboard")
+            // Navigate to dashboard after successful upload with company info
+            navigate("/dashboard", { 
+                state: { 
+                    companyId: finalCompanyId, 
+                    companyName: companyQuery.trim() 
+                } 
+            })
         } catch (err) {
             setError(err.message || "Fehler beim Hochladen der Datei")
         } finally {
@@ -96,14 +153,14 @@ export default function Welcome() {
     }
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100 flex items-center justify-center p-4">
+        <div className="min-h-screen bg-gradient-to-br from-slate-700 via-slate-800 to-slate-700 flex items-center justify-center p-4">
             <div className="w-full max-w-2xl">
                 {/* Welcome Header */}
                 <div className="text-center mb-8">
-                    <h1 className="text-5xl font-bold text-slate-900 mb-4">
+                    <h1 className="text-5xl font-bold text-white mb-4">
                         Willkommen bei AGB-Analysis!
                     </h1>
-                    <p className="text-xl text-slate-600">
+                    <p className="text-xl text-slate-200">
                         Laden Sie Ihre Excel-Datei hoch, um mit der Analyse zu beginnen
                     </p>
                 </div>
@@ -148,12 +205,22 @@ export default function Welcome() {
                             </datalist>
 
                             <p className="text-xs text-slate-500">
-                                Bitte wählen Sie eine Firma aus der Vorschlagsliste aus.
+                                Geben Sie einen neuen Firmennamen ein oder wählen Sie aus den Vorschlägen.
                             </p>
                         </div>
 
                         {/* File Input Area */}
-                        <div className="border-2 border-dashed border-slate-300 rounded-2xl p-8 text-center hover:border-blue-400 transition-colors">
+                        <div 
+                            className={`border-2 border-dashed rounded-2xl p-8 text-center transition-colors ${
+                                dragActive 
+                                    ? 'border-blue-500 bg-blue-50' 
+                                    : 'border-slate-300 hover:border-blue-400'
+                            }`}
+                            onDragEnter={handleDrag}
+                            onDragLeave={handleDrag}
+                            onDragOver={handleDrag}
+                            onDrop={handleDrop}
+                        >
                             <input
                                 type="file"
                                 id="file-upload"
@@ -203,7 +270,7 @@ export default function Welcome() {
                         {/* Upload Button */}
                         <Button
                             onClick={handleUpload}
-                            disabled={!file || uploading || !companyId}
+                            disabled={!file || uploading || !companyQuery.trim()}
                             className="w-full h-12 rounded-full text-lg font-semibold cursor-pointer disabled:cursor-not-allowed"
                             size="lg"
                         >

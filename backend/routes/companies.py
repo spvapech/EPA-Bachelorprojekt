@@ -1,9 +1,13 @@
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, HTTPException
+from pydantic import BaseModel
 from database.supabase_client import get_supabase_client
 from datetime import datetime, timedelta, timezone
 
 router = APIRouter(prefix="/api", tags=["Companies"])
 supabase = get_supabase_client()
+
+class CompanyCreate(BaseModel):
+    name: str
 
 @router.get("/companies/search")
 def search_companies(q: str = Query(..., min_length=1)):
@@ -18,7 +22,7 @@ def search_companies(q: str = Query(..., min_length=1)):
     )
     return res.data or []
 @router.get("/companies")
-def search_companies():
+def get_companies():
     # Vorschläge aus DB, case-insensitive, enthält-suche
     res = (
         supabase.table("companies")
@@ -32,6 +36,7 @@ def search_companies():
         if "id" in row and row["id"] is not None:
             row["id"] = str(row["id"])
     return data
+
 
 @router.get("/companies/{company_id}/ratings/avg")
 def get_company_ratings_avg(company_id: int):
@@ -163,3 +168,34 @@ def get_company_ratings_trend(company_id: int, days: int = Query(30, ge=1, le=36
         "overall": {"avgDelta": overall},
         "metrics": result,
     }    
+
+@router.post("/companies/")
+def create_company(company: CompanyCreate):
+    """
+    Creates a new company in the database.
+    Returns the created company with its ID.
+    """
+    # Check if company already exists
+    existing = (
+        supabase.table("companies")
+        .select("id,name")
+        .ilike("name", company.name)
+        .execute()
+    )
+    
+    if existing.data:
+        # Company already exists, return it
+        return existing.data[0]
+    
+    # Create new company
+    result = (
+        supabase.table("companies")
+        .insert({"name": company.name})
+        .execute()
+    )
+    
+    if not result.data:
+        raise HTTPException(status_code=500, detail="Failed to create company")
+    
+    return result.data[0]
+

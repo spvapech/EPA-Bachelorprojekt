@@ -5,8 +5,25 @@
 Willkommen zur Dokumentation des LDA Topic Modeling Systems für Kandidaten- und Mitarbeiter-Feedback.
 
 **Version:** 2.1  
-**Letzte Aktualisierung:** 5. Januar 2026  
+**Letzte Aktualisierung:** 9. Januar 2026  
 **Status:** ✅ Produktionsbereit
+
+---
+
+## 🆕 Neu: ML-basierte Sentiment-Analyse
+
+**Januar 2026:** Das System wurde mit Transformer-basierter Sentiment-Analyse erweitert!
+
+- **[SENTIMENT_ANALYSIS_UPGRADE.md](SENTIMENT_ANALYSIS_UPGRADE.md)** - Verwendung & Integration
+- **[SENTIMENT_ANALYSIS_COMPARISON.md](SENTIMENT_ANALYSIS_COMPARISON.md)** - Vergleich Lexicon vs. Transformer
+
+**Highlights:**
+- 🤖 German BERT Modell (oliverguhr/german-sentiment-bert)
+- 🎯 100% Genauigkeit (vs. 25% Lexicon in Tests)
+- 🔄 Dual-Mode: Lexicon (schnell) oder Transformer (genau)
+- ✅ Vollständig rückwärtskompatibel
+
+---
 
 ## 🚀 Schnellstart
 
@@ -23,6 +40,10 @@ Neu hier? Starte mit diesen Dokumenten:
 - **[QUICKSTART_LDA.md](QUICKSTART_LDA.md)** - LDA Topic Modeling: Erste Schritte, Installation, Training
 - **[TOPIC_OVERVIEW_GUIDE.md](TOPIC_OVERVIEW_GUIDE.md)** - Topic Overview: Integration & Verwendung
 - **[TOPIC_MODELING_README.md](TOPIC_MODELING_README.md)** - Feature-Übersicht
+
+### Sentiment-Analyse (Neu! 🆕)
+- **[SENTIMENT_ANALYSIS_UPGRADE.md](SENTIMENT_ANALYSIS_UPGRADE.md)** - ML-basierte Sentiment-Analyse
+- **[SENTIMENT_ANALYSIS_COMPARISON.md](SENTIMENT_ANALYSIS_COMPARISON.md)** - Lexicon vs. Transformer Vergleich
 
 ### Technische Details & Analyse
 - **[TOPIC_ANALYSIS_EXPLANATION.md](TOPIC_ANALYSIS_EXPLANATION.md)** - Wie die Topic-Analyse funktioniert
@@ -43,6 +64,10 @@ Neu hier? Starte mit diesen Dokumenten:
 
 ## 🎯 Nach Aufgabe
 
+### Ich möchte Sentiment-Analyse verwenden (Neu! 🆕)
+→ [SENTIMENT_ANALYSIS_UPGRADE.md](SENTIMENT_ANALYSIS_UPGRADE.md)  
+→ [SENTIMENT_ANALYSIS_COMPARISON.md](SENTIMENT_ANALYSIS_COMPARISON.md)
+
 ### Ich möchte ein LDA-Modell trainieren
 → [QUICKSTART_LDA.md](QUICKSTART_LDA.md)
 
@@ -57,7 +82,7 @@ Neu hier? Starte mit diesen Dokumenten:
 → [SUMMARY_FINAL_V2.1.md](SUMMARY_FINAL_V2.1.md)
 
 ### Ich möchte wissen, wie die Analyse funktioniert
-→ [TOPIC_ANALYSIS_EXPLANATION.md](TOPIC_ANALYSIS_EXPLANATION.md)
+→ [TOPIC_ANALYSIS_EXPLANATION.md](TOPIC_ANALYSIS_EXPLANATION.md)  
 → [RATING_CRITERIA_INTEGRATION.md](RATING_CRITERIA_INTEGRATION.md)
 
 ### Ich suche technische Details

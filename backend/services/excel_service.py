@@ -6,6 +6,12 @@ Handles uploading Excel files with candidate and employee data,
 normalizes columns, maps repeated "Sternebewertung" columns to
 DB columns (sternebewertung_<topic>), and imports into Supabase.
 
+Features:
+- Decodes HTML entities (&lt; &gt; &amp; &quot; etc.) from text fields
+- Normalizes column names to DB-friendly format
+- Maps rating columns to specific topics
+- Handles both candidate and employee data
+
 Assumptions (based on your schemas):
 - Candidates Excel is identified ONLY by column "Stellenbeschreibung" (-> stellenbeschreibung).
 - Employee Excel does NOT have that column.
@@ -21,6 +27,7 @@ from typing import Dict, Any, List, Optional
 from database.supabase_client import get_supabase_client
 import io
 import re
+import html
 
 
 # ----------------------------
@@ -94,6 +101,17 @@ def slugify(s: str) -> str:
     s = s.replace("ä", "ae").replace("ö", "oe").replace("ü", "ue").replace("ß", "ss")
     s = re.sub(r"[^a-z0-9]+", "_", s)
     return s.strip("_")
+
+
+def clean_text(text: str) -> str:
+    """
+    Clean text by decoding HTML entities.
+    Converts &lt;br/&gt; to <br/>, &amp; to &, etc.
+    """
+    if not text:
+        return text
+    # Decode HTML entities like &lt; &gt; &amp; &quot; etc.
+    return html.unescape(text)
 
 
 def normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
@@ -267,12 +285,12 @@ class ExcelProcessor:
         for idx, row in df.iterrows():
             try:
                 data: Dict[str, Any] = {
-                    "titel": str(row.get("titel")) if pd.notna(row.get("titel")) else None,
-                    "status": str(row.get("status")) if pd.notna(row.get("status")) else None,
+                    "titel": clean_text(str(row.get("titel"))) if pd.notna(row.get("titel")) else None,
+                    "status": clean_text(str(row.get("status"))) if pd.notna(row.get("status")) else None,
                     "datum": to_iso_dt(row.get("datum")),
                     "update_datum": to_iso_dt(row.get("update_datum")),
-                    "stellenbeschreibung": str(row.get("stellenbeschreibung")) if pd.notna(row.get("stellenbeschreibung")) else None,
-                    "verbesserungsvorschlaege": str(row.get("verbesserungsvorschlaege")) if pd.notna(row.get("verbesserungsvorschlaege")) else None,
+                    "stellenbeschreibung": clean_text(str(row.get("stellenbeschreibung"))) if pd.notna(row.get("stellenbeschreibung")) else None,
+                    "verbesserungsvorschlaege": clean_text(str(row.get("verbesserungsvorschlaege"))) if pd.notna(row.get("verbesserungsvorschlaege")) else None,
                     "company_id": company_id,
                 }
 
@@ -350,14 +368,14 @@ class ExcelProcessor:
         for idx, row in df.iterrows():
             try:
                 data: Dict[str, Any] = {
-                    "titel": str(row.get("titel")) if pd.notna(row.get("titel")) else None,
-                    "status": str(row.get("status")) if pd.notna(row.get("status")) else None,
+                    "titel": clean_text(str(row.get("titel"))) if pd.notna(row.get("titel")) else None,
+                    "status": clean_text(str(row.get("status"))) if pd.notna(row.get("status")) else None,
                     "datum": to_iso_dt(row.get("datum")),
                     "update_datum": to_iso_dt(row.get("update_datum")),
-                    "jobbeschreibung": str(row.get("jobbeschreibung")) if pd.notna(row.get("jobbeschreibung")) else None,
-                    "gut_am_arbeitgeber_finde_ich": str(row.get("gut_am_arbeitgeber_finde_ich")) if pd.notna(row.get("gut_am_arbeitgeber_finde_ich")) else None,
-                    "schlecht_am_arbeitgeber_finde_ich": str(row.get("schlecht_am_arbeitgeber_finde_ich")) if pd.notna(row.get("schlecht_am_arbeitgeber_finde_ich")) else None,
-                    "verbesserungsvorschlaege": str(row.get("verbesserungsvorschlaege")) if pd.notna(row.get("verbesserungsvorschlaege")) else None,
+                    "jobbeschreibung": clean_text(str(row.get("jobbeschreibung"))) if pd.notna(row.get("jobbeschreibung")) else None,
+                    "gut_am_arbeitgeber_finde_ich": clean_text(str(row.get("gut_am_arbeitgeber_finde_ich"))) if pd.notna(row.get("gut_am_arbeitgeber_finde_ich")) else None,
+                    "schlecht_am_arbeitgeber_finde_ich": clean_text(str(row.get("schlecht_am_arbeitgeber_finde_ich"))) if pd.notna(row.get("schlecht_am_arbeitgeber_finde_ich")) else None,
+                    "verbesserungsvorschlaege": clean_text(str(row.get("verbesserungsvorschlaege"))) if pd.notna(row.get("verbesserungsvorschlaege")) else None,
                     "company_id": company_id,
                 }
 
@@ -365,7 +383,7 @@ class ExcelProcessor:
                 for c in topic_text_cols:
                     v = row.get(c)
                     if pd.notna(v):
-                        data[c] = str(v)
+                        data[c] = clean_text(str(v))
 
                 # Ratings
                 vals: List[float] = []
