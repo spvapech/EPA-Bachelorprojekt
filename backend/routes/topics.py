@@ -482,38 +482,96 @@ async def get_topic_rating_correlation(limit: Optional[int] = None):
         )
 
 
-@router.post("/predict-with-sentiment")
-async def predict_topics_with_sentiment(request: PredictTopicsRequest):
+@router.get("/company/{company_id}/negative-topics")
+async def get_negative_topics_by_company(company_id: int, limit: Optional[int] = None):
     """
-    Predict topics for a text and include sentiment analysis.
-    
-    Args:
-        request: Text to analyze with threshold
-    
-    Returns:
-        Topics with probabilities and sentiment analysis
+    Return topics with negative sentiment for a given company id.
+
+    Uses the TopicRatingAnalyzer company-scoped aggregation and filters topics
+    where negative sentiment dominates or avg_sentiment_polarity is negative.
     """
-    if not _topic_analyzer:
-        raise HTTPException(
-            status_code=400,
-            detail="Model not trained. Please train a model first."
-        )
-    
+    global _topic_analyzer, _topic_rating_analyzer
+
+    if _topic_analyzer is None:
+        raise HTTPException(status_code=400, detail="No model trained. Please train a model first using /api/topics/train")
+
     try:
-        topics = _topic_analyzer.predict_topics(
-            request.text,
-            threshold=request.threshold,
-            include_sentiment=True
+        result = _topic_rating_analyzer.get_topic_rating_correlation_for_company(
+            _topic_analyzer,
+            company_id,
+            limit=limit
         )
-        
+
+        # Filter negative topics: avg_sentiment_polarity < 0 or more negative mentions than positive
+        negative_topics = [
+            t for t in result.get('topics', [])
+            if t.get('avg_sentiment_polarity', 0) < 0 or t.get('sentiments', {}).get('negative', 0) > t.get('sentiments', {}).get('positive', 0)
+        ]
+
+        # Sort by most negative (lowest avg_sentiment_polarity) then by mention_count
+        negative_topics.sort(key=lambda x: (x.get('avg_sentiment_polarity', 0), -x.get('mention_count', 0)))
+
         return {
             "status": "success",
-            "text_preview": request.text[:100] + "..." if len(request.text) > 100 else request.text,
-            "topics": topics
+            "company_id": company_id,
+            "negative_topics": negative_topics,
+            "total_negative": len(negative_topics)
         }
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Prediction failed: {str(e)}"
+        raise HTTPException(status_code=500, detail=f"Failed to get negative topics: {str(e)}")
+
+
+@router.get("/company/{company_id}/most-critical")
+async def get_most_critical_topic_by_company(company_id: int, limit: Optional[int] = None):
+    """
+    Return a single most critical topic for a given company id.
+
+    Chooses the topic with the highest proportion of negative mentions (negative share).
+    """
+    global _topic_analyzer, _topic_rating_analyzer
+
+    if _topic_analyzer is None:
+        raise HTTPException(status_code=400, detail="No model trained. Please train a model first using /api/topics/train")
+
+    try:
+        result = _topic_rating_analyzer.get_topic_rating_correlation_for_company(
+            _topic_analyzer,
+            company_id,
+            limit=limit
         )
+
+        topics = result.get('topics', [])
+        if not topics:
+            return {
+                "status": "success",
+                "most_critical": None
+            }
+
+        def negative_share(t: dict) -> float:
+            s = t.get('sentiments', {}) or {}
+            neg = s.get('negative', 0)
+            pos = s.get('positive', 0)
+            neu = s.get('neutral', 0)
+            total = neg + pos + neu
+            if total <= 0:
+                total = t.get('mention_count', 0) or 1
+            return neg / total if total else 0.0
+
+        # Select topic with highest negative share; tiebreaker: higher mention_count
+        most = max(topics, key=lambda t: (negative_share(t), t.get('mention_count', 0)))
+
+        # Attach computed negative share (as percent) for frontend display
+        most_copy = dict(most)
+        most_copy['negative_share_percent'] = round(negative_share(most) * 100)
+
+        return {
+            "status": "success",
+            "most_critical": most_copy
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get most critical topic: {str(e)}")
 

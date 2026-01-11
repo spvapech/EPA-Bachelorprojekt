@@ -654,6 +654,7 @@ export default function Dashboard() {
                         <MostCriticalModal
                             open={openMostCritical}
                             onOpenChange={setOpenMostCritical}
+                            companyId={selectedCompany}
                         />
 
                         <Card className="rounded-3xl shadow-smon" onClick={() => setOpenNegative(true)}>
@@ -671,6 +672,7 @@ export default function Dashboard() {
                         <NegativTopicModal
                             open={openNegative}
                             onOpenChange={setOpenNegative}
+                            companyId={selectedCompany}
                         />
 
 
