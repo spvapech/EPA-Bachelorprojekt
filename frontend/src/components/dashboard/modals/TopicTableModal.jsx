@@ -15,10 +15,11 @@ import {
 } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
+import { Button } from "@/components/ui/button"
 import { Search } from "lucide-react"
 import { useState } from "react"
 
-export default function TopicTableModal({ open, onOpenChange, topics, onTopicSelect }) {
+export default function TopicTableModal({ open, onOpenChange, topics, onTopicSelect, sourceFilter, onSourceFilterChange }) {
     const [searchTerm, setSearchTerm] = useState("")
 
     const getSentimentBadgeVariant = (sentiment) => {
@@ -48,6 +49,43 @@ export default function TopicTableModal({ open, onOpenChange, topics, onTopicSel
                         Alle Topics
                     </DialogTitle>
                 </DialogHeader>
+
+                {/* Filter Buttons */}
+                <div className="flex gap-2 mb-4">
+                    <Button
+                        variant="outline"
+                        onClick={() => onSourceFilterChange(null)}
+                        className={`flex-1 ${
+                            sourceFilter === null 
+                                ? 'bg-blue-500 text-white hover:bg-blue-600 border-blue-500' 
+                                : 'hover:bg-slate-100'
+                        }`}
+                    >
+                        Alle
+                    </Button>
+                    <Button
+                        variant="outline"
+                        onClick={() => onSourceFilterChange('employee')}
+                        className={`flex-1 ${
+                            sourceFilter === 'employee' 
+                                ? 'bg-blue-500 text-white hover:bg-blue-600 border-blue-500' 
+                                : 'hover:bg-slate-100'
+                        }`}
+                    >
+                        Mitarbeiter
+                    </Button>
+                    <Button
+                        variant="outline"
+                        onClick={() => onSourceFilterChange('candidates')}
+                        className={`flex-1 ${
+                            sourceFilter === 'candidates' 
+                                ? 'bg-blue-500 text-white hover:bg-blue-600 border-blue-500' 
+                                : 'hover:bg-slate-100'
+                        }`}
+                    >
+                        Bewerber
+                    </Button>
+                </div>
 
                 {/* Suchleiste */}
                 <div className="relative mb-4">

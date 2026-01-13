@@ -22,6 +22,7 @@ export function TopicOverviewCard({ companyId = 1 }) {
     const [selectedTopic, setSelectedTopic] = useState(null)
     const [detailModalOpen, setDetailModalOpen] = useState(false)
     const [tableModalOpen, setTableModalOpen] = useState(false)
+    const [sourceFilter, setSourceFilter] = useState(null) // null = both, 'employee', 'candidates'
 
     // Daten von API laden
     useEffect(() => {
@@ -30,9 +31,13 @@ export function TopicOverviewCard({ companyId = 1 }) {
                 setLoading(true)
                 setError(null)
                 
-                const response = await fetch(
-                    `${API_URL}/analytics/company/${companyId}/topic-overview`
-                )
+                // Build URL with optional source filter
+                let url = `${API_URL}/analytics/company/${companyId}/topic-overview`
+                if (sourceFilter) {
+                    url += `?source=${sourceFilter}`
+                }
+                
+                const response = await fetch(url)
                 
                 if (!response.ok) {
                     throw new Error(`API Error: ${response.status}`)
@@ -52,7 +57,7 @@ export function TopicOverviewCard({ companyId = 1 }) {
         if (companyId) {
             fetchTopics()
         }
-    }, [companyId])
+    }, [companyId, sourceFilter]) // Re-fetch when sourceFilter changes
 
     const handleCardClick = () => {
         setTableModalOpen(true)
@@ -165,6 +170,8 @@ export function TopicOverviewCard({ companyId = 1 }) {
                 onOpenChange={setTableModalOpen}
                 topics={topicsData}
                 onTopicSelect={handleTopicSelect}
+                sourceFilter={sourceFilter}
+                onSourceFilterChange={setSourceFilter}
             />
 
             {/* Detail Modal */}
@@ -174,6 +181,8 @@ export function TopicOverviewCard({ companyId = 1 }) {
                     onOpenChange={setDetailModalOpen}
                     topic={selectedTopic}
                     onBackToTable={handleBackToTable}
+                    sourceFilter={sourceFilter}
+                    onSourceFilterChange={setSourceFilter}
                 />
             )}
         </>

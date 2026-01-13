@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 from collections import defaultdict, Counter
 import re
 import html
+import random
 
 router = APIRouter(prefix="/api/analytics", tags=["Analytics"])
 supabase = get_supabase_client()
@@ -379,28 +380,40 @@ async def get_negative_topics(company_id: int):
 
 
 @router.get("/company/{company_id}/topic-overview")
-async def get_topic_overview(company_id: int):
+async def get_topic_overview(
+    company_id: int,
+    source: Optional[str] = Query(default=None, description="Filter by source: 'candidates' or 'employee'")
+):
     """
     Get topic overview data formatted for the frontend TopicOverviewCard.
     
     This endpoint analyzes reviews and extracts topics with their frequency,
     average rating, sentiment, and timeline data - matching the format of
     the dummy data in TopicOverviewCard.jsx.
+    
+    Args:
+        company_id: Company ID to analyze
+        source: Optional filter - 'candidates' for Bewerber or 'employee' for Mitarbeiter
     """
     try:
-        # Get all reviews for the company
-        candidates_response = supabase.table("candidates")\
-            .select("*")\
-            .eq("company_id", company_id)\
-            .execute()
+        # Get reviews based on source filter
+        candidates_data = []
+        employee_data = []
         
-        employee_response = supabase.table("employee")\
-            .select("*")\
-            .eq("company_id", company_id)\
-            .execute()
+        if source is None or source == "candidates":
+            candidates_response = supabase.table("candidates")\
+                .select("*")\
+                .eq("company_id", company_id)\
+                .execute()
+            candidates_data = candidates_response.data or []
         
-        candidates_data = candidates_response.data or []
-        employee_data = employee_response.data or []
+        if source is None or source == "employee":
+            employee_response = supabase.table("employee")\
+                .select("*")\
+                .eq("company_id", company_id)\
+                .execute()
+            employee_data = employee_response.data or []
+        
         all_reviews = candidates_data + employee_data
         
         if not all_reviews:
@@ -727,19 +740,20 @@ def analyze_topic(
                 current_date = current_date.replace(month=current_date.month + 1)
     
     # Select typical statements (up to 13 most relevant - 3 for "Typische Aussagen" + 10 for "Beispiel-Review")
-    typical_statements = example_texts[:13] if example_texts else [
-        f"Keine spezifischen Aussagen zu {topic_name} gefunden"
-    ]
-    
-    # Ensure we have review details for each typical statement
-    if len(review_details) < len(typical_statements):
-        # Pad with placeholder data if needed
-        for i in range(len(review_details), len(typical_statements)):
-            review_details.append({
-                "id": None,
-                "preview": typical_statements[i] if i < len(typical_statements) else "",
-                "fullReview": None
-            })
+    # Randomize the selection to show different examples each time
+    if review_details:
+        # Shuffle to get random examples
+        random.shuffle(review_details)
+        # Take up to 13 random examples
+        selected_reviews = review_details[:13]
+        typical_statements = [detail["preview"] for detail in selected_reviews]
+    else:
+        typical_statements = [f"Keine spezifischen Aussagen zu {topic_name} gefunden"]
+        selected_reviews = [{
+            "id": None,
+            "preview": typical_statements[0],
+            "fullReview": None
+        }]
     
     # Select one example
     example = typical_statements[0] if typical_statements else f"Thema: {topic_name}"
@@ -755,7 +769,7 @@ def analyze_topic(
         "color": color,
         "timelineData": timeline_data,
         "typicalStatements": typical_statements,
-        "reviewDetails": review_details[:13]  # Limit to 13 (3 + 10)
+        "reviewDetails": selected_reviews  # Use the randomly selected reviews
     }
 
 
