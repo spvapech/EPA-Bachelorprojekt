@@ -2,6 +2,7 @@ from fastapi import APIRouter, Query, HTTPException
 from pydantic import BaseModel
 from database.supabase_client import get_supabase_client
 from datetime import datetime, timedelta, timezone
+from typing import Optional
 
 router = APIRouter(prefix="/api", tags=["Companies"])
 supabase = get_supabase_client()
@@ -79,8 +80,264 @@ def get_company_ratings_avg(company_id: int):
     }
     
 @router.get("/companies/{company_id}/ratings/trend")
-def get_company_ratings_trend(company_id: int, days: int = Query(30, ge=1, le=3650)):
-    print(f"Trend request for company {company_id}, days {days}")
+def get_company_ratings_trend(
+    company_id: int,
+    days: int = Query(30, ge=1, le=3650),
+    mode: str = Query(
+        "rate",
+        description="Trend mode. 'rate' compares last N days vs previous N days and normalizes to 30 days. 'stable_months' compares last N full months vs the N months before. 'stable_all' auto-picks a comparable window (up to N months) based on available history.",
+    ),
+    months: int = Query(12, ge=1, le=120),
+):
+    """
+    Calculate trend by comparing ratings from two time periods based on review date (datum).
+    
+    - Current period: last {days} days
+    - Previous period: {days} days before that
+    - Delta = current_avg - previous_avg
+    
+    Uses the 'datum' field (review date) not 'created_at' for time-based filtering.
+    """
+    def to_float(x):
+        try:
+            return float(x) if x is not None else None
+        except (TypeError, ValueError):
+            return None
+
+    eps = 0.05
+
+    def sign_from_delta(delta_points: Optional[float]) -> str:
+        if delta_points is None:
+            return "flat"
+        if delta_points > eps:
+            return "up"
+        if delta_points < -eps:
+            return "down"
+        return "flat"
+
+    if mode in {"stable_months", "stable_all"}:
+        # "Stabil": volle Kalendermonate verwenden (aktueller, angefangener Monat wird NICHT gezählt)
+        now = datetime.now(timezone.utc).replace(microsecond=0)
+        end_exclusive = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+        def add_months(dt: datetime, delta_months: int) -> datetime:
+            total = dt.year * 12 + (dt.month - 1) + delta_months
+            new_year, new_month0 = divmod(total, 12)
+            return dt.replace(year=new_year, month=new_month0 + 1, day=1)
+
+        requested_months = months
+
+        if mode == "stable_all":
+            # Auto-select a window size that fits the available history.
+            first = (
+                supabase.table("employee")
+                .select("datum")
+                .eq("company_id", company_id)
+                .not_.is_("datum", None)
+                .order("datum", desc=False)
+                .limit(1)
+                .execute()
+            )
+            if not first.data:
+                return {
+                    "mode": mode,
+                    "months": None,
+                    "requestedMonths": requested_months,
+                    "current_range": {"from": None, "to": end_exclusive.isoformat()},
+                    "previous_range": {"from": None, "to": None},
+                    "overall": {"deltaPoints": None, "deltaPercent": None},
+                    "metrics": {},
+                }
+
+            try:
+                first_dt = datetime.fromisoformat(str(first.data[0]["datum"]).replace("Z", "+00:00"))
+            except Exception:
+                return {
+                    "mode": mode,
+                    "months": None,
+                    "requestedMonths": requested_months,
+                    "current_range": {"from": None, "to": end_exclusive.isoformat()},
+                    "previous_range": {"from": None, "to": None},
+                    "overall": {"deltaPoints": None, "deltaPercent": None},
+                    "metrics": {},
+                }
+
+            first_month_start = first_dt.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            total_months = (end_exclusive.year - first_month_start.year) * 12 + (end_exclusive.month - first_month_start.month)
+            if total_months < 2:
+                return {
+                    "mode": mode,
+                    "months": None,
+                    "requestedMonths": requested_months,
+                    "current_range": {"from": None, "to": end_exclusive.isoformat()},
+                    "previous_range": {"from": None, "to": None},
+                    "overall": {"deltaPoints": None, "deltaPercent": None},
+                    "metrics": {},
+                }
+
+            months = min(requested_months, max(1, total_months // 2))
+
+        # 2*months volle Monate: previous window + current window
+        start_all = add_months(end_exclusive, -2 * months)
+
+        # Compute stable monthly averages from raw rows in ONE (paginated) query.
+        # This avoids making 2*months RPC calls, which can hit rate limits / return empty data.
+        metric_to_column = {
+            "avg_arbeitsatmosphaere": "sternebewertung_arbeitsatmosphaere",
+            "avg_image": "sternebewertung_image",
+            "avg_work_life_balance": "sternebewertung_work_life_balance",
+            "avg_karriere_weiterbildung": "sternebewertung_karriere_weiterbildung",
+            "avg_gehalt_sozialleistungen": "sternebewertung_gehalt_sozialleistungen",
+            "avg_kollegenzusammenhalt": "sternebewertung_kollegenzusammenhalt",
+            "avg_umwelt_sozialbewusstsein": "sternebewertung_umwelt_sozialbewusstsein",
+            "avg_vorgesetztenverhalten": "sternebewertung_vorgesetztenverhalten",
+            "avg_kommunikation": "sternebewertung_kommunikation",
+            "avg_interessante_aufgaben": "sternebewertung_interessante_aufgaben",
+            "avg_umgang_aelteren_kollegen": "sternebewertung_umgang_mit_aelteren_kollegen",
+            "avg_arbeitsbedingungen": "sternebewertung_arbeitsbedingungen",
+            "avg_gleichberechtigung": "sternebewertung_gleichberechtigung",
+        }
+
+        select_fields = ["datum"] + list(metric_to_column.values())
+        select_clause = ",".join(select_fields)
+
+        batch_size = 1000
+        offset = 0
+
+        rows = []
+        while True:
+            query = (
+                supabase.table("employee")
+                .select(select_clause)
+                .eq("company_id", company_id)
+                .gte("datum", start_all.isoformat())
+                .lt("datum", end_exclusive.isoformat())
+                .range(offset, offset + batch_size - 1)
+            )
+            resp = query.execute()
+            batch = resp.data or []
+            rows.extend(batch)
+            if len(batch) < batch_size:
+                break
+            offset += batch_size
+
+        # month_key -> metric_key -> list[float]
+        monthly_values: dict[tuple[int, int], dict[str, list[float]]] = {}
+        for r in rows:
+            d = r.get("datum")
+            if not d:
+                continue
+            try:
+                dt = datetime.fromisoformat(str(d).replace("Z", "+00:00"))
+            except Exception:
+                continue
+
+            month_key = (dt.year, dt.month)
+            if month_key not in monthly_values:
+                monthly_values[month_key] = {k: [] for k in metric_to_column.keys()}
+
+            for metric_key, col in metric_to_column.items():
+                v = to_float(r.get(col))
+                if v is None:
+                    continue
+                monthly_values[month_key][metric_key].append(v)
+
+        # Reduce to month-level averages: month_key -> metric_key -> float
+        monthly_avgs: dict[tuple[int, int], dict[str, float]] = {}
+        for month_key, per_metric_lists in monthly_values.items():
+            month_avg_row = {}
+            for metric_key, vals in per_metric_lists.items():
+                if vals:
+                    month_avg_row[metric_key] = sum(vals) / len(vals)
+            if month_avg_row:
+                monthly_avgs[month_key] = month_avg_row
+
+        # Build the two windows of full months
+        def months_in_window(start: datetime, count: int) -> list[tuple[int, int]]:
+            out = []
+            cur = start
+            for _ in range(count):
+                out.append((cur.year, cur.month))
+                cur = add_months(cur, 1)
+            return out
+
+        prev_start = add_months(end_exclusive, -2 * months)
+        cur_start = add_months(end_exclusive, -months)
+        prev_month_keys = months_in_window(prev_start, months)
+        cur_month_keys = months_in_window(cur_start, months)
+
+        keys = set(metric_to_column.keys())
+
+        result = {}
+        deltas_for_overall = []
+        percent_for_overall = []
+
+        for k in keys:
+            prev_vals = [monthly_avgs.get(mk, {}).get(k) for mk in prev_month_keys]
+            cur_vals = [monthly_avgs.get(mk, {}).get(k) for mk in cur_month_keys]
+            prev_vals = [v for v in prev_vals if v is not None]
+            cur_vals = [v for v in cur_vals if v is not None]
+
+            prev_avg = (sum(prev_vals) / len(prev_vals)) if prev_vals else None
+            cur_avg = (sum(cur_vals) / len(cur_vals)) if cur_vals else None
+
+            if cur_avg is None:
+                result[k] = {
+                    "score": None,
+                    "prev": prev_avg,
+                    "delta": None,
+                    "deltaPercent": None,
+                    "sign": "flat",
+                    "has_prev": prev_avg is not None,
+                    "monthsUsed": {"current": len(cur_vals), "previous": len(prev_vals)},
+                }
+                continue
+
+            if prev_avg is None:
+                result[k] = {
+                    "score": round(cur_avg, 2),
+                    "prev": None,
+                    "delta": None,
+                    "deltaPercent": None,
+                    "sign": "new",
+                    "has_prev": False,
+                    "monthsUsed": {"current": len(cur_vals), "previous": 0},
+                }
+                continue
+
+            delta_points = cur_avg - prev_avg
+            delta_percent = None
+            if abs(prev_avg) > 1e-12:
+                delta_percent = (delta_points / prev_avg) * 100
+
+            deltas_for_overall.append(delta_points)
+            if delta_percent is not None:
+                percent_for_overall.append(delta_percent)
+
+            result[k] = {
+                "score": round(cur_avg, 2),
+                "prev": round(prev_avg, 2),
+                "delta": round(delta_points, 2),
+                "deltaPercent": round(delta_percent, 1) if delta_percent is not None else None,
+                "sign": sign_from_delta(delta_points),
+                "has_prev": True,
+                "monthsUsed": {"current": len(cur_vals), "previous": len(prev_vals)},
+            }
+
+        overall_points = round(sum(deltas_for_overall) / len(deltas_for_overall), 2) if deltas_for_overall else None
+        overall_percent = round(sum(percent_for_overall) / len(percent_for_overall), 1) if percent_for_overall else None
+
+        return {
+            "mode": mode,
+            "months": months,
+            "requestedMonths": requested_months,
+            "current_range": {"from": add_months(end_exclusive, -months).isoformat(), "to": end_exclusive.isoformat()},
+            "previous_range": {"from": add_months(end_exclusive, -2 * months).isoformat(), "to": add_months(end_exclusive, -months).isoformat()},
+            "overall": {"deltaPoints": overall_points, "deltaPercent": overall_percent},
+            "metrics": result,
+        }
+
+    # Default: legacy "rate" mode (days-based, normalized to 30 days)
     now = datetime.now(timezone.utc).replace(microsecond=0)
     cur_from = now - timedelta(days=days)
     prev_from = now - timedelta(days=2 * days)
@@ -98,9 +355,6 @@ def get_company_ratings_trend(company_id: int, days: int = Query(30, ge=1, le=36
         "p_to": prev_to.isoformat(),
     }).execute()
 
-    print(f"Cur data: {cur.data}")
-    print(f"Prev data: {prev.data}")
-
     cur_row = cur.data[0] if cur.data else {}
     prev_row = prev.data[0] if prev.data else {}
 
@@ -108,26 +362,12 @@ def get_company_ratings_trend(company_id: int, days: int = Query(30, ge=1, le=36
     EXCLUDE_KEYS = {"company_id", "count", "n", "from", "to"}
     keys = (set(cur_row.keys()) | set(prev_row.keys())) - EXCLUDE_KEYS
 
-    print(f"Keys: {keys}")
-    print(f"Cur row: {cur_row}")
-    print(f"Prev row: {prev_row}")
-
-    eps = 0.05
-
-    def to_float(x):
-        try:
-            return float(x) if x is not None else None
-        except (TypeError, ValueError):
-            return None
-
     result = {}
     deltas_for_overall = []
 
     for k in keys:
         c_val = to_float(cur_row.get(k))
         p_val = to_float(prev_row.get(k))
-
-        print(f"Key {k}: c_val={c_val}, p_val={p_val}")
 
         # wenn current fehlt → keine Aussage
         if c_val is None:
@@ -139,29 +379,28 @@ def get_company_ratings_trend(company_id: int, days: int = Query(30, ge=1, le=36
             result[k] = {"score": c_val, "prev": None, "delta": None, "sign": "new", "has_prev": False}
             continue
 
-        # normaler Trend
-        delta_raw = c_val - p_val
+        # Trendrate berechnen: Trend(t1, t2) = (Y_t2 - Y_t1) / (t2 - t1)
+        # Normalisiert auf 30 Tage (1 Monat) für Vergleichbarkeit
+        raw_diff = c_val - p_val
+        delta_per_month = (raw_diff / days) * 30  # Änderungsrate pro 30 Tage
+        
         sign = "flat"
-        if delta_raw > eps:
+        if delta_per_month > eps:
             sign = "up"
-        elif delta_raw < -eps:
+        elif delta_per_month < -eps:
             sign = "down"
 
-        delta = round(delta_raw, 1)
-        deltas_for_overall.append(delta_raw)
+        delta = round(delta_per_month, 1)
+        deltas_for_overall.append(delta_per_month)
 
         result[k] = {"score": c_val, "prev": p_val, "delta": delta, "sign": sign, "has_prev": True}
-
-    print(f"Deltas for overall: {deltas_for_overall}")
 
     overall = None
     if deltas_for_overall:
         overall = round(sum(deltas_for_overall) / len(deltas_for_overall), 1)
 
-    print(f"Overall avgDelta: {overall}")
-    print(f"Metrics: {result}")
-
     return {
+        "mode": mode,
         "days": days,
         "current_range": {"from": cur_from.isoformat(), "to": now.isoformat()},
         "previous_range": {"from": prev_from.isoformat(), "to": prev_to.isoformat()},

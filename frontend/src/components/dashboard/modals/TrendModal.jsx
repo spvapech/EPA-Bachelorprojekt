@@ -23,14 +23,20 @@ const LABELS = {
 };
 
 // Mapping für 1Y | 3Y | All
-const RANGE_TO_DAYS = {
-    "1Y": 365,
-    "3Y": 365 * 3,
-    "All": 365 * 10, // oder z.B. 99999
+// 1Y/3Y nutzen eine stabile Monatslogik (volle Monate):
+//   - current = letzte N volle Monate
+//   - previous = N volle Monate davor
+const RANGE_TO_STABLE_MONTHS = {
+    "1Y": 12,
+    "3Y": 36,
+};
+
+const RANGE_TO_DAYS_FALLBACK = {
+    "All": 730, // legacy fallback (unused if stable_all works)
 };
 
 export default function TrendModal({ open, onOpenChange, companyId }) {
-    const [range, setRange] = useState("All"); // "1Y" | "3Y" | "All"
+    const [range, setRange] = useState("1Y"); // Start mit kürzerem Zeitraum
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
@@ -38,13 +44,20 @@ export default function TrendModal({ open, onOpenChange, companyId }) {
     useEffect(() => {
         if (!open || !companyId) return;
 
-        const days = RANGE_TO_DAYS[range];
+        const stableMonths = RANGE_TO_STABLE_MONTHS[range];
+        const daysFallback = RANGE_TO_DAYS_FALLBACK[range];
 
         const controller = new AbortController();
         setLoading(true);
         setError("");
 
-        fetch(`${API_URL}/companies/${companyId}/ratings/trend?days=${days}`, {
+                const url = stableMonths
+                        ? `${API_URL}/companies/${companyId}/ratings/trend?mode=stable_months&months=${stableMonths}`
+                        : range === "All"
+                            ? `${API_URL}/companies/${companyId}/ratings/trend?mode=stable_all&months=12`
+                            : `${API_URL}/companies/${companyId}/ratings/trend?days=${daysFallback ?? 30}`;
+
+        fetch(url, {
             signal: controller.signal,
         })
             .then((r) => {
@@ -83,32 +96,35 @@ export default function TrendModal({ open, onOpenChange, companyId }) {
     const fmtDelta = (d, sign) => {
         if (sign === "new") return "neu";
         if (d === null || !Number.isFinite(d)) return "—";
-        const v = Math.round(d * 10) / 10;
-        return v > 0 ? `+${v}` : `${v}`;
+        const v = Math.abs(Math.round(d * 10) / 10);
+        return v > 0 ? `${v}` : `${v}`;
     };
+
     const trendColor = (sign) => {
         if (sign === "up") return "text-green-600";
         if (sign === "down") return "text-red-600";
         if (sign === "new") return "text-blue-600";
-        return "text-orange-500";
+        return "text-gray-600";
     };
 
     const arrow = (sign) =>
-        sign === "up" ? "↑" : sign === "down" ? "↓" : sign === "new" ;
+        sign === "up" ? "↑" : sign === "down" ? "↓" : "—";
 
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="min-w-4xl">
-                <DialogHeader>
-                    <DialogTitle>Trend</DialogTitle>
+            <DialogContent className="max-w-2xl rounded-3xl px-10 py-8">
+                <DialogHeader className="text-center">
+                    <DialogTitle className="text-4xl font-bold text-slate-800">
+                        Trend
+                    </DialogTitle>
 
-                    <div className="flex gap-2 text-sm">
+                    <div className="flex justify-center gap-4 mt-4 text-base">
                         {["1Y", "3Y", "All"].map((r) => (
                             <button
                                 key={r}
                                 type="button"
-                                className={range === r ? "text-blue-600 font-semibold underline" : "text-muted-foreground"}
+                                className={range === r ? "text-blue-600 font-bold underline" : "text-gray-500 font-semibold"}
                                 onClick={() => setRange(r)}
                             >
                                 {r}
@@ -117,41 +133,35 @@ export default function TrendModal({ open, onOpenChange, companyId }) {
                     </div>
                 </DialogHeader>
 
-                {loading && <div>Loading...</div>}
-                {error && <div className="text-red-600">{error}</div>}
-                {!companyId && <div className="text-muted-foreground">Bitte zuerst eine Firma auswählen.</div>}
+                {loading && <div className="text-center text-lg mt-6">Loading...</div>}
+                {error && <div className="text-center text-red-600 text-lg mt-6">{error}</div>}
+                {!companyId && <div className="text-center text-gray-500 mt-6">Bitte zuerst eine Firma auswählen.</div>}
 
                 {!loading && !error && companyId && (
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>Kategorie</TableHead>
-                                <TableHead>Trend</TableHead>
-                                <TableHead>Score</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {rows.map((row) => (
-                                <TableRow key={row.key}>
-                                    <TableCell className="font-medium">{row.title}</TableCell>
-                                    <TableCell>
-                                        <div className={`flex items-center gap-2 font-semibold ${trendColor(row.sign)}`}>
-                                            <span className="text-lg">{arrow(row.sign)}</span>
-                                            <span>{fmtDelta(row.delta)}</span>
-                                        </div>
-                                    </TableCell>
-                                    <TableCell>{row.score.toFixed(2)}</TableCell>
-                                </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
+                    <div className="mt-6 space-y-3">
+                        {rows.length === 0 && (
+                            <div className="text-center text-gray-500 mt-6">
+                                Keine Trend-Daten für diesen Zeitraum vorhanden.
+                            </div>
+                        )}
+                        {rows.map((row) => (
+                            <div key={row.key} className="flex items-center justify-between py-2 border-b border-gray-200">
+                                <div className="text-lg font-semibold text-black flex-1">
+                                    {row.title}:
+                                </div>
+                                <div className={`flex items-center gap-2 font-bold text-xl w-24 justify-end ${trendColor(row.sign)}`}>
+                                    <span>{arrow(row.sign)}</span>
+                                    <span>
+                                        {row.sign === "flat" ? "0" : fmtDelta(row.delta, row.sign)}
+                                    </span>
+                                </div>
+                                <div className="text-lg font-semibold text-orange-600 w-24 text-right">
+                                    {row.score.toFixed(1)}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
                 )}
-
-                <DialogFooter>
-                    <Button variant="outline" onClick={() => onOpenChange(false)}>
-                        Close
-                    </Button>
-                </DialogFooter>
             </DialogContent>
         </Dialog>
     );

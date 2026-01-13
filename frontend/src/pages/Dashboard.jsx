@@ -62,6 +62,7 @@ export default function Dashboard() {
     const [data, setData] = useState()
     const [trendData, setTrendData] = useState(null)
     const [companies, setCompanies] = useState([])
+    const [mostCriticalData, setMostCriticalData] = useState(null)
     
     // Sidebar states - Starts closed if company comes from welcome
     const [sidebarOpen, setSidebarOpen] = useState(!companyFromWelcome)
@@ -307,6 +308,7 @@ export default function Dashboard() {
     useEffect(() => {
         getAvg()
         getTrend()
+        getMostCritical()
 
     }, [selectedCompany])
     async function getAvg() {
@@ -330,16 +332,71 @@ export default function Dashboard() {
         }
 
         try {
-            const res = await fetch(`${API_URL}/companies/${selectedCompany}/ratings/trend?days=30`);
+            // Dashboard KPI should match the stable 1Y definition: last 12 full months vs previous 12 full months
+            const res = await fetch(
+                `${API_URL}/companies/${selectedCompany}/ratings/trend?mode=stable_months&months=12`
+            );
             if (!res.ok) return;
 
             const json = await res.json();
             console.log('Trend response:', json);
-            const avgDelta = json.overall?.avgDelta?.toString() ?? "0.0";
+            const deltaPointsRaw = json.overall?.deltaPoints ?? json.overall?.avgDelta;
+            const deltaPoints = typeof deltaPointsRaw === 'number' ? deltaPointsRaw : parseFloat(deltaPointsRaw);
 
-            setTrendData({ avgDelta });
+            if (!Number.isFinite(deltaPoints)) {
+                setTrendData(null);
+                return;
+            }
+
+            const rounded = Math.round(deltaPoints * 10) / 10;
+            let sign = 'flat';
+            if (rounded > 0.05) sign = 'up';
+            else if (rounded < -0.05) sign = 'down';
+
+            setTrendData({ avgDelta: rounded.toFixed(1), sign });
         } catch {
             // optional ignorieren
+        }
+    }
+
+    async function getMostCritical() {
+        if (!selectedCompany) {
+            setMostCriticalData(null);
+            return;
+        }
+
+        try {
+            const res = await fetch(`${API_URL}/topics/company/${selectedCompany}/most-critical`);
+            if (!res.ok) return;
+
+            const json = await res.json();
+            const item = json.most_critical;
+            
+            if (item) {
+                // Extrahiere das erste Wort aus topic_words oder topic_text
+                let topicName = "-";
+                if (Array.isArray(item.topic_words) && item.topic_words.length > 0) {
+                    const firstWord = item.topic_words[0];
+                    topicName = typeof firstWord === 'object' ? (firstWord.word || "-") : String(firstWord);
+                } else if (item.topic_text) {
+                    topicName = String(item.topic_text).split(",")[0].trim();
+                }
+                
+                // Kapitalisiere ersten Buchstaben
+                if (topicName && topicName !== "-") {
+                    topicName = topicName.charAt(0).toUpperCase() + topicName.slice(1);
+                }
+                
+                // Score
+                const score = item.correlation ?? item.score ?? "-";
+                const scoreStr = typeof score === 'number' ? score.toFixed(2) : String(score);
+                
+                setMostCriticalData({ topicName, score: scoreStr });
+            } else {
+                setMostCriticalData(null);
+            }
+        } catch {
+            setMostCriticalData(null);
         }
     }
 
@@ -622,10 +679,35 @@ export default function Dashboard() {
                                 </CardTitle>
                             </CardHeader>
                             <CardContent className="pt-2 flex flex-col items-center gap-2">
-
-                                <div className="text-xl font-bold">
-                                    {trendData?.avgDelta && <span className={parseFloat(trendData.avgDelta) > 0 ? 'text-green-500' : parseFloat(trendData.avgDelta) < 0 ? 'text-red-500' : 'text-orange-500'}>{parseFloat(trendData.avgDelta) > 0 ? '+' : ''}{trendData.avgDelta}</span>}
-                                </div>
+                                {trendData?.avgDelta ? (
+                                    <>
+                                        <div
+                                            className={
+                                                trendData.sign === 'up'
+                                                    ? 'text-green-600 text-5xl font-extrabold leading-none'
+                                                    : trendData.sign === 'down'
+                                                      ? 'text-red-600 text-5xl font-extrabold leading-none'
+                                                      : 'text-slate-500 text-5xl font-extrabold leading-none'
+                                            }
+                                        >
+                                            {trendData.sign === 'up' ? '↑' : trendData.sign === 'down' ? '↓' : '—'}
+                                        </div>
+                                        <div
+                                            className={
+                                                parseFloat(trendData.avgDelta) > 0
+                                                    ? 'text-green-600 text-2xl font-extrabold'
+                                                    : parseFloat(trendData.avgDelta) < 0
+                                                      ? 'text-red-600 text-2xl font-extrabold'
+                                                      : 'text-slate-700 text-2xl font-extrabold'
+                                            }
+                                        >
+                                            {parseFloat(trendData.avgDelta) > 0 ? '+' : ''}
+                                            {trendData.avgDelta}
+                                        </div>
+                                    </>
+                                ) : (
+                                    <div className="text-slate-400 text-xl font-bold">—</div>
+                                )}
                             </CardContent>
                         </Card>
                         <TrendModal
@@ -638,17 +720,19 @@ export default function Dashboard() {
                             <div className="text-3xl font-bold">-0.3</div>
                         </TrendModal>
 
-                        <Card className="rounded-3xl shadow-sm" onClick={() => setOpenMostCritical(true)}>
+                        <Card className="rounded-3xl shadow-sm cursor-pointer hover:shadow-md transition-shadow" onClick={() => setOpenMostCritical(true)}>
                             <CardHeader className="pb-2">
-                                <CardTitle className="text-xl font-bold text-slate-800">
+                                <CardTitle className="text-lg font-bold text-slate-800">
                                     Most Critical
                                 </CardTitle>
                             </CardHeader>
-                            <CardContent className="pt-2">
-                                <div className="text-2xl font-extrabold text-red-700">
-
+                            <CardContent className="pt-2 text-center">
+                                <div className="text-3xl font-bold text-red-600">
+                                    {mostCriticalData ? mostCriticalData.topicName : "-"}
                                 </div>
-                                <div className="text-lg font-bold text-red-700"></div>
+                                <div className="text-xl font-bold text-red-600 mt-1">
+                                    {mostCriticalData ? mostCriticalData.score : "-"}
+                                </div>
                             </CardContent>
                         </Card>
                         <MostCriticalModal

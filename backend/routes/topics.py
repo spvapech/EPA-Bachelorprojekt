@@ -529,11 +529,15 @@ async def get_most_critical_topic_by_company(company_id: int, limit: Optional[in
     Return a single most critical topic for a given company id.
 
     Chooses the topic with the highest proportion of negative mentions (negative share).
+    Includes trend calculation comparing old vs new reviews.
     """
     global _topic_analyzer, _topic_rating_analyzer
 
     if _topic_analyzer is None:
-        raise HTTPException(status_code=400, detail="No model trained. Please train a model first using /api/topics/train")
+        raise HTTPException(
+            status_code=400,
+            detail="No model trained. Please train a model first using /api/topics/train"
+        )
 
     try:
         result = _topic_rating_analyzer.get_topic_rating_correlation_for_company(
@@ -542,7 +546,7 @@ async def get_most_critical_topic_by_company(company_id: int, limit: Optional[in
             limit=limit
         )
 
-        topics = result.get('topics', [])
+        topics = result.get("topics", []) or []
         if not topics:
             return {
                 "status": "success",
@@ -550,28 +554,170 @@ async def get_most_critical_topic_by_company(company_id: int, limit: Optional[in
             }
 
         def negative_share(t: dict) -> float:
-            s = t.get('sentiments', {}) or {}
-            neg = s.get('negative', 0)
-            pos = s.get('positive', 0)
-            neu = s.get('neutral', 0)
+            s = t.get("sentiments", {}) or {}
+            neg = float(s.get("negative", 0) or 0)
+            pos = float(s.get("positive", 0) or 0)
+            neu = float(s.get("neutral", 0) or 0)
+
             total = neg + pos + neu
             if total <= 0:
-                total = t.get('mention_count', 0) or 1
-            return neg / total if total else 0.0
+                total = float(t.get("mention_count", 0) or 0)
+
+            if total <= 0:
+                return 0.0
+            return neg / total
+
+        def extract_words(t: dict) -> list[str]:
+            # Unterstützt verschiedene Feldnamen je nach Analyzer-Output
+            w = t.get("words") or t.get("keywords") or t.get("top_words") or t.get("terms") or []
+            if isinstance(w, str):
+                return [x.strip() for x in w.split(",") if x.strip()]
+            if isinstance(w, (list, tuple)):
+                result = []
+                for x in w:
+                    if isinstance(x, dict):
+                        # Extrahiere 'word' aus {'word': '...', 'weight': ...}
+                        word = x.get("word") or x.get("term") or x.get("label") or ""
+                        if word:
+                            result.append(str(word).strip())
+                    elif x:
+                        result.append(str(x).strip())
+                return result
+            return []
 
         # Select topic with highest negative share; tiebreaker: higher mention_count
-        most = max(topics, key=lambda t: (negative_share(t), t.get('mention_count', 0)))
+        most = max(
+            topics,
+            key=lambda t: (negative_share(t), int(t.get("mention_count", 0) or 0))
+        )
 
-        # Attach computed negative share (as percent) for frontend display
+        topic_words = extract_words(most)
+        if limit is not None and isinstance(limit, int) and limit > 0:
+            topic_words = topic_words[:limit]
+
+        # topic id (robust)
+        topic_id = most.get("topic_id")
+        if topic_id is None:
+            topic_id = most.get("topic")
+        if topic_id is None:
+            topic_id = most.get("id")
+
+        # Calculate trend: compare old vs new reviews for this topic
+        trend = calculate_topic_trend(company_id, topic_id, topic_words)
+
+        # build final object for frontend
         most_copy = dict(most)
-        most_copy['negative_share_percent'] = round(negative_share(most) * 100)
+        most_copy["topic_id"] = topic_id
+        most_copy["topic_words"] = topic_words
+        most_copy["topic_text"] = ", ".join(topic_words)  # <- das ist dein "Topic" Text
+        most_copy["negative_share_percent"] = round(negative_share(most) * 100)
+        most_copy["trend"] = trend
 
         return {
             "status": "success",
             "most_critical": most_copy
         }
+
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get most critical topic: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get most critical topic: {str(e)}"
+        )
 
+
+def calculate_topic_trend(company_id: int, topic_id: int, topic_words: list[str]) -> dict:
+    """
+    Calculate trend by comparing negative share in old vs new reviews.
+    
+    Returns:
+        dict with 'delta' (change in negative share %), 'direction' (up/down/stable), 
+        'old_negative_share', 'new_negative_share'
+    """
+    from database.supabase_client import get_supabase_client
+    from datetime import datetime, timedelta, timezone
+    
+    supabase = get_supabase_client()
+    
+    try:
+        # Define time periods: last 30 days vs previous 30 days
+        now = datetime.now(timezone.utc)
+        cutoff_date = now - timedelta(days=30)
+        old_cutoff = now - timedelta(days=60)
+        
+        # Fetch all employee reviews for this company
+        response = supabase.table("employee")\
+            .select("datum, created_at, gut_am_arbeitgeber_finde_ich, schlecht_am_arbeitgeber_finde_ich, verbesserungsvorschlaege")\
+            .eq("company_id", company_id)\
+            .gte("datum", old_cutoff.isoformat())\
+            .execute()
+        
+        reviews = response.data if response.data else []
+        
+        if len(reviews) < 2:
+            return {"delta": 0, "direction": "stable", "message": "Not enough data"}
+        
+        # Analyze each review for topic presence and sentiment
+        from models.sentiment_analyzer import SentimentAnalyzer
+        sentiment_analyzer = SentimentAnalyzer()
+        
+        old_reviews = []  # Reviews from 60-30 days ago
+        new_reviews = []  # Reviews from last 30 days
+        
+        for review in reviews:
+            review_date = datetime.fromisoformat(review.get("datum").replace("Z", "+00:00")) if review.get("datum") else datetime.fromisoformat(review.get("created_at").replace("Z", "+00:00"))
+            
+            # Combine text fields
+            text = " ".join([
+                str(review.get("gut_am_arbeitgeber_finde_ich", "")),
+                str(review.get("schlecht_am_arbeitgeber_finde_ich", "")),
+                str(review.get("verbesserungsvorschlaege", ""))
+            ]).lower()
+            
+            # Check if any topic word appears in the review
+            contains_topic = any(word.lower() in text for word in topic_words)
+            
+            if not contains_topic:
+                continue
+            
+            # Analyze sentiment
+            sentiment_result = sentiment_analyzer.analyze_sentiment(text)
+            is_negative = sentiment_result.get("label", "").lower() == "negative"
+            
+            # Categorize by time period
+            if review_date < cutoff_date:
+                old_reviews.append({"negative": is_negative})
+            else:
+                new_reviews.append({"negative": is_negative})
+        
+        # Calculate negative share for each period
+        old_negative_count = sum(1 for r in old_reviews if r["negative"])
+        new_negative_count = sum(1 for r in new_reviews if r["negative"])
+        
+        old_negative_share = (old_negative_count / len(old_reviews) * 100) if old_reviews else 0
+        new_negative_share = (new_negative_count / len(new_reviews) * 100) if new_reviews else 0
+        
+        # Calculate delta (positive delta means it got WORSE, more negative)
+        delta = round(new_negative_share - old_negative_share, 1)
+        
+        # Determine direction
+        if abs(delta) < 5:  # Less than 5% change is stable
+            direction = "stable"
+        elif delta > 0:
+            direction = "up"  # More negative = worse
+        else:
+            direction = "down"  # Less negative = better
+        
+        return {
+            "delta": delta,
+            "direction": direction,
+            "old_negative_share": round(old_negative_share, 1),
+            "new_negative_share": round(new_negative_share, 1),
+            "old_review_count": len(old_reviews),
+            "new_review_count": len(new_reviews)
+        }
+        
+    except Exception as e:
+        print(f"Error calculating trend: {str(e)}")
+        return {"delta": 0, "direction": "stable", "error": str(e)}
