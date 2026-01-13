@@ -61,9 +61,9 @@
 
         return (
             <Dialog open={open} onOpenChange={onOpenChange}>
-                <DialogContent className="min-w-4xl">
+                <DialogContent className="min-w-3xl">
                     <DialogHeader className="text-center">
-                        <DialogTitle className="text-[52px] font-extrabold text-slate-800 leading-tight">
+                        <DialogTitle className="text-3x1 font-extrabold text-slate-800 leading-tight">
                             {loading ? "Lade…" : (item ? `Most Critical: ${renderTopicLabel(item)}` : "Most Critical")}
                         </DialogTitle>
 
