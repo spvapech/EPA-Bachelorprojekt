@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 from collections import defaultdict, Counter
 import re
 import html
+import random
 
 router = APIRouter(prefix="/api/analytics", tags=["Analytics"])
 supabase = get_supabase_client()
@@ -120,9 +121,10 @@ async def get_company_overview(company_id: int):
 @router.get("/company/{company_id}/timeline")
 async def get_company_timeline(
     company_id: int,
-    days: int = Query(default=90, description="Number of days to include")
+    days: int = Query(default=365, description="Number of days to include"),
+    forecast_months: int = Query(default=6, description="Number of months to forecast")
 ):
-    """Get timeline data for ratings over time."""
+    """Get timeline data for ratings over time with forecast."""
     try:
         cutoff_date = datetime.now() - timedelta(days=days)
         
@@ -166,13 +168,120 @@ async def get_company_timeline(
         # Sort by date
         timeline_data.sort(key=lambda x: x["date"])
         
+        # Group by month for aggregation
+        monthly_data = defaultdict(list)
+        for item in timeline_data:
+            try:
+                date = datetime.fromisoformat(item["date"].replace("Z", "+00:00"))
+                month_key = date.strftime("%Y-%m")
+                monthly_data[month_key].append(item["score"])
+            except:
+                pass
+        
+        # Create aggregated monthly timeline
+        aggregated_timeline = []
+        for month_key in sorted(monthly_data.keys()):
+            scores = monthly_data[month_key]
+            date_obj = datetime.strptime(month_key, "%Y-%m")
+            aggregated_timeline.append({
+                "date": month_key,
+                "date_display": date_obj.strftime("%b %Y"),
+                "score": round(sum(scores) / len(scores), 2),
+                "count": len(scores),
+                "is_forecast": False
+            })
+        
+        # Calculate forecast using linear regression
+        forecast_data = calculate_forecast(aggregated_timeline, forecast_months)
+        
         return {
-            "timeline": timeline_data,
-            "total_points": len(timeline_data)
+            "timeline": aggregated_timeline,
+            "forecast": forecast_data,
+            "total_points": len(timeline_data),
+            "current_date": datetime.now().isoformat()
         }
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching timeline: {str(e)}")
+
+
+def calculate_forecast(historical_data: List[Dict[str, Any]], months: int) -> List[Dict[str, Any]]:
+    """
+    Calculate forecast using linear regression based on historical data.
+    
+    Args:
+        historical_data: List of historical monthly data points
+        months: Number of months to forecast
+        
+    Returns:
+        List of forecast data points
+    """
+    if len(historical_data) < 2:
+        # Not enough data for forecast
+        return []
+    
+    # Extract x (time index) and y (score) values
+    x_values = list(range(len(historical_data)))
+    y_values = [point["score"] for point in historical_data]
+    
+    # Calculate linear regression: y = mx + b
+    n = len(x_values)
+    sum_x = sum(x_values)
+    sum_y = sum(y_values)
+    sum_xy = sum(x * y for x, y in zip(x_values, y_values))
+    sum_x_squared = sum(x * x for x in x_values)
+    
+    # Slope (m) and intercept (b)
+    denominator = n * sum_x_squared - sum_x * sum_x
+    
+    if denominator == 0:
+        # Fallback: use average of last values
+        avg_score = sum(y_values) / len(y_values)
+        forecast = []
+        last_date = datetime.strptime(historical_data[-1]["date"], "%Y-%m")
+        for i in range(1, months + 1):
+            # Calculate next month
+            month_offset = last_date.month + i
+            year_offset = (month_offset - 1) // 12
+            month = ((month_offset - 1) % 12) + 1
+            next_month = last_date.replace(year=last_date.year + year_offset, month=month)
+            forecast.append({
+                "date": next_month.strftime("%Y-%m"),
+                "date_display": next_month.strftime("%b %Y"),
+                "score": round(avg_score, 2),
+                "is_forecast": True
+            })
+        return forecast
+    
+    m = (n * sum_xy - sum_x * sum_y) / denominator
+    b = (sum_y - m * sum_x) / n
+    
+    # Generate forecast
+    forecast = []
+    last_date = datetime.strptime(historical_data[-1]["date"], "%Y-%m")
+    
+    for i in range(1, months + 1):
+        # Calculate next month
+        month_offset = last_date.month + i
+        year_offset = (month_offset - 1) // 12
+        month = ((month_offset - 1) % 12) + 1
+        next_month = last_date.replace(year=last_date.year + year_offset, month=month)
+        
+        # Predict score using linear regression
+        future_x = len(historical_data) + i - 1
+        predicted_score = m * future_x + b
+        
+        # Ensure score is within reasonable bounds (0-5 for ratings)
+        predicted_score = max(0, min(5, predicted_score))
+        
+        forecast.append({
+            "date": next_month.strftime("%Y-%m"),
+            "date_display": next_month.strftime("%b %Y"),
+            "score": round(predicted_score, 2),
+            "is_forecast": True
+        })
+    
+    return forecast
 
 
 @router.get("/company/{company_id}/category-ratings")
@@ -379,28 +488,40 @@ async def get_negative_topics(company_id: int):
 
 
 @router.get("/company/{company_id}/topic-overview")
-async def get_topic_overview(company_id: int):
+async def get_topic_overview(
+    company_id: int,
+    source: Optional[str] = Query(default=None, description="Filter by source: 'candidates' or 'employee'")
+):
     """
     Get topic overview data formatted for the frontend TopicOverviewCard.
     
     This endpoint analyzes reviews and extracts topics with their frequency,
     average rating, sentiment, and timeline data - matching the format of
     the dummy data in TopicOverviewCard.jsx.
+    
+    Args:
+        company_id: Company ID to analyze
+        source: Optional filter - 'candidates' for Bewerber or 'employee' for Mitarbeiter
     """
     try:
-        # Get all reviews for the company
-        candidates_response = supabase.table("candidates")\
-            .select("*")\
-            .eq("company_id", company_id)\
-            .execute()
+        # Get reviews based on source filter
+        candidates_data = []
+        employee_data = []
         
-        employee_response = supabase.table("employee")\
-            .select("*")\
-            .eq("company_id", company_id)\
-            .execute()
+        if source is None or source == "candidates":
+            candidates_response = supabase.table("candidates")\
+                .select("*")\
+                .eq("company_id", company_id)\
+                .execute()
+            candidates_data = candidates_response.data or []
         
-        candidates_data = candidates_response.data or []
-        employee_data = employee_response.data or []
+        if source is None or source == "employee":
+            employee_response = supabase.table("employee")\
+                .select("*")\
+                .eq("company_id", company_id)\
+                .execute()
+            employee_data = employee_response.data or []
+        
         all_reviews = candidates_data + employee_data
         
         if not all_reviews:
@@ -727,19 +848,20 @@ def analyze_topic(
                 current_date = current_date.replace(month=current_date.month + 1)
     
     # Select typical statements (up to 13 most relevant - 3 for "Typische Aussagen" + 10 for "Beispiel-Review")
-    typical_statements = example_texts[:13] if example_texts else [
-        f"Keine spezifischen Aussagen zu {topic_name} gefunden"
-    ]
-    
-    # Ensure we have review details for each typical statement
-    if len(review_details) < len(typical_statements):
-        # Pad with placeholder data if needed
-        for i in range(len(review_details), len(typical_statements)):
-            review_details.append({
-                "id": None,
-                "preview": typical_statements[i] if i < len(typical_statements) else "",
-                "fullReview": None
-            })
+    # Randomize the selection to show different examples each time
+    if review_details:
+        # Shuffle to get random examples
+        random.shuffle(review_details)
+        # Take up to 13 random examples
+        selected_reviews = review_details[:13]
+        typical_statements = [detail["preview"] for detail in selected_reviews]
+    else:
+        typical_statements = [f"Keine spezifischen Aussagen zu {topic_name} gefunden"]
+        selected_reviews = [{
+            "id": None,
+            "preview": typical_statements[0],
+            "fullReview": None
+        }]
     
     # Select one example
     example = typical_statements[0] if typical_statements else f"Thema: {topic_name}"
@@ -755,7 +877,7 @@ def analyze_topic(
         "color": color,
         "timelineData": timeline_data,
         "typicalStatements": typical_statements,
-        "reviewDetails": review_details[:13]  # Limit to 13 (3 + 10)
+        "reviewDetails": selected_reviews  # Use the randomly selected reviews
     }
 
 

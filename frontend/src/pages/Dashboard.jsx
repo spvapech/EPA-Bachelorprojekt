@@ -765,7 +765,7 @@ export default function Dashboard() {
 
                     {/* Charts row */}
                     <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        {/* <TimelineCard /> */}
+                        <TimelineCard companyId={selectedCompany || selectedCompanyId} />
                         {/* <CategoryRatingCard /> */}
                     </div>
 

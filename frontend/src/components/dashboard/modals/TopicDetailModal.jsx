@@ -112,7 +112,7 @@ const GaugeChart = ({ sentiment, value }) => {
     )
 }
 
-export default function TopicDetailModal({ open, onOpenChange, topic, onBackToTable }) {
+export default function TopicDetailModal({ open, onOpenChange, topic, onBackToTable, sourceFilter, onSourceFilterChange }) {
     const [currentExampleIndex, setCurrentExampleIndex] = React.useState(3) // Start at index 3 (4th element)
     const [timeFilter, setTimeFilter] = React.useState("all") // "all", "1y", "6m", "3m", "1m"
     const [reviewDetailModalOpen, setReviewDetailModalOpen] = React.useState(false)
@@ -317,6 +317,51 @@ export default function TopicDetailModal({ open, onOpenChange, topic, onBackToTa
                         
                         {isControlPanelOpen && (
                         <div className="mt-2 p-4 bg-slate-50 rounded-lg border border-slate-200">
+                            {/* Source Filter Buttons */}
+                            <div className="mb-4 pb-4 border-b border-slate-200">
+                                <Label className="text-sm font-semibold text-slate-700 mb-2 block">Datenquelle filtern</Label>
+                                <div className="flex gap-2">
+                                    <Button
+                                        variant="outline"
+                                        onClick={() => onSourceFilterChange(null)}
+                                        size="sm"
+                                        className={`flex-1 ${
+                                            sourceFilter === null 
+                                                ? 'bg-blue-500 text-white hover:bg-blue-600 border-blue-500' 
+                                                : 'hover:bg-slate-100'
+                                        }`}
+                                    >
+                                        Alle
+                                    </Button>
+                                    <Button
+                                        variant="outline"
+                                        onClick={() => onSourceFilterChange('employee')}
+                                        size="sm"
+                                        className={`flex-1 ${
+                                            sourceFilter === 'employee' 
+                                                ? 'bg-blue-500 text-white hover:bg-blue-600 border-blue-500' 
+                                                : 'hover:bg-slate-100'
+                                        }`}
+                                    >
+                                        Mitarbeiter
+                                    </Button>
+                                    <Button
+                                        variant="outline"
+                                        onClick={() => onSourceFilterChange('candidates')}
+                                        size="sm"
+                                        className={`flex-1 ${
+                                            sourceFilter === 'candidates' 
+                                                ? 'bg-blue-500 text-white hover:bg-blue-600 border-blue-500' 
+                                                : 'hover:bg-slate-100'
+                                        }`}
+                                    >
+                                        Bewerber
+                                    </Button>
+                                </div>
+                            </div>
+                            
+                            {/* Visibility Controls */}
+                            <Label className="text-sm font-semibold text-slate-700 mb-2 block">Sichtbare Bereiche</Label>
                             <div className="grid grid-cols-5 gap-4">
                                 <div className="flex items-center space-x-2">
                                     <Checkbox 
