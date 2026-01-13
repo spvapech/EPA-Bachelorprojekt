@@ -375,18 +375,15 @@ export default function Dashboard() {
             const item = json.most_critical;
             
             if (item) {
-                // Prefer affected category label over raw topic word
+                // Topic name (prefer real topic word like in the modal)
                 let topicName = "-";
-                if (Array.isArray(item.categories) && item.categories.length > 0) {
-                    topicName = String(item.categories[0]);
-                } else if (Array.isArray(item.affected_categories) && item.affected_categories.length > 0) {
-                    topicName = String(item.affected_categories[0]);
-                } else if (Array.isArray(item.topic_words) && item.topic_words.length > 0) {
+                if (Array.isArray(item.topic_words) && item.topic_words.length > 0) {
                     const firstWord = item.topic_words[0];
                     topicName = typeof firstWord === 'object' ? (firstWord.word || "-") : String(firstWord);
                 } else if (item.topic_text) {
                     topicName = String(item.topic_text).split(",")[0].trim();
                 }
+
                 
                 // Kapitalisiere ersten Buchstaben
                 if (topicName && topicName !== "-") {

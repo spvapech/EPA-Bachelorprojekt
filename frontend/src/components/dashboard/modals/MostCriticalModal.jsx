@@ -4,9 +4,7 @@ import {
     DialogContent,
     DialogHeader,
     DialogTitle,
-    DialogFooter,
 } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
 import { API_URL } from "../../../config";
 
 export default function MostCriticalModal({ open, onOpenChange, companyId = null }) {
@@ -53,26 +51,19 @@ export default function MostCriticalModal({ open, onOpenChange, companyId = null
 
         let topicName = "";
 
-        // Prefer affected categories (what is impacted) over raw topic words
-        if (Array.isArray(m.categories) && m.categories.length > 0) {
-            topicName = toWord(m.categories[0]);
-        } else if (Array.isArray(m.affected_categories) && m.affected_categories.length > 0) {
-            topicName = toWord(m.affected_categories[0]);
-        }
-
         // Backend gibt topic_words array zurück - nimm nur das ERSTE Wort
-        if (!topicName && Array.isArray(m.topic_words) && m.topic_words.length > 0) {
+        if (Array.isArray(m.topic_words) && m.topic_words.length > 0) {
             topicName = toWord(m.topic_words[0]); // toWord extrahiert aus {word: "...", weight: ...}
         }
         // Fallback: topic_text string - nimm nur das erste Wort
-        else if (!topicName && m.topic_text && String(m.topic_text).trim()) {
+        else if (m.topic_text && String(m.topic_text).trim()) {
             topicName = String(m.topic_text).split(",")[0].trim();
         }
         // Legacy fallbacks
-        else if (!topicName && m.topic_name) {
+        else if (m.topic_name) {
             topicName = String(m.topic_name).trim();
         }
-        else if (!topicName && m.topic_label) {
+        else if (m.topic_label) {
             topicName = String(m.topic_label).trim();
         }
 
@@ -90,7 +81,7 @@ export default function MostCriticalModal({ open, onOpenChange, companyId = null
         if (v === null || v === undefined) return "-";
         
         const num = Number(v);
-        return Number.isFinite(num) ? num.toFixed(2) : String(v);
+        return Number.isFinite(num) ? num.toFixed(1) : String(v);
     };
 
 
@@ -178,22 +169,22 @@ export default function MostCriticalModal({ open, onOpenChange, companyId = null
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="max-w-xl rounded-3xl px-10 py-8">
                 <DialogHeader className="text-center">
-                    <DialogTitle className="text-3xl font-bold text-slate-800">
+                    <DialogTitle className="text-5xl font-extrabold text-slate-800">
                         Most Critical
                     </DialogTitle>
 
                     {/* Topic (rot) */}
-                    <div className="mt-3 text-4xl font-bold text-red-600">
+                    <div className="mt-6 text-[40px] font-extrabold text-red-700">
                         {loading ? "…" : error ? "-" : topicName}
                     </div>
 
                     {/* Score (rot) */}
-                    <div className="mt-1 text-2xl font-bold text-red-600">
+                    <div className="mt-2 text-[22px] font-extrabold text-red-700">
                         {loading ? "…" : error ? "-" : score}
                     </div>
                 </DialogHeader>
 
-                <div className="mt-6 space-y-4">
+                <div className="mt-12 space-y-8">
                     {loading ? (
                         <div className="text-center text-lg">Lade Daten…</div>
                     ) : error ? (
@@ -203,32 +194,23 @@ export default function MostCriticalModal({ open, onOpenChange, companyId = null
                     ) : (
                         <>
                             {/* Anteil negativer Reviews */}
-                            <div className="flex items-center justify-between text-lg font-semibold">
-                                <div className="text-black">
-                                    Anteil negativer Reviews:
-                                </div>
-                                <div className="text-black">
-                                    {negP === null ? "-" : `${negP} %`}
-                                </div>
+                            <div className="flex items-center justify-between">
+                                <div className="text-[28px] font-extrabold text-black">Anteil negativer Reviews:</div>
+                                <div className="text-[28px] font-extrabold text-black">{negP === null ? "-" : `${negP} %`}</div>
                             </div>
 
                             {/* Impact */}
-                            <div className="flex items-center justify-between text-lg font-semibold">
-                                <div className="text-black">
-                                    Impact-Indikator:
-                                </div>
-                                <div className="text-red-600">{impact}</div>
+                            <div className="flex items-center justify-between">
+                                <div className="text-[28px] font-extrabold text-black">Impact-Indikator:</div>
+                                <div className="text-[32px] font-extrabold text-red-600">{impact}</div>
                             </div>
 
                             {/* Betroffene Kategorien */}
-                            <div className="mt-8 text-center">
-                                <div className="text-xl font-bold text-black mb-4">
-                                    Betroffene Kategorien:
-                                </div>
-
-                                <div className="space-y-2">
+                            <div className="mt-6 text-center">
+                                <div className="text-[30px] font-extrabold text-black">Betroffene Kategorien:</div>
+                                <div className="mt-8 space-y-4">
                                     {(affectedCategories.length ? affectedCategories : ["Allgemein"]).map((c, idx) => (
-                                        <div key={`${c}-${idx}`} className="text-lg font-semibold text-black">
+                                        <div key={`${c}-${idx}`} className="text-[34px] font-extrabold text-black leading-tight">
                                             {c}
                                         </div>
                                     ))}
