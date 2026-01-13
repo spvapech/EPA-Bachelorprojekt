@@ -3,7 +3,7 @@ API routes for LDA Topic Model functionality.
 Provides endpoints for training, analyzing, and managing topic models.
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 from typing import List, Dict, Any, Optional
 from models.lda_topic_model import LDATopicAnalyzer
@@ -524,12 +524,34 @@ async def get_negative_topics_by_company(company_id: int, limit: Optional[int] =
 
 
 @router.get("/company/{company_id}/most-critical")
-async def get_most_critical_topic_by_company(company_id: int, limit: Optional[int] = None):
+async def get_most_critical_topic_by_company(
+    company_id: int,
+    limit: Optional[int] = None,
+    threshold: float = Query(
+        default=3.5,
+        ge=0.0,
+        le=5.0,
+        description="Critical threshold for topic score (avg rating). Topics below this threshold are considered critical.",
+    ),
+    weighting: str = Query(
+        default="sqrt",
+        description="Weighting strategy for volume. One of: none, sqrt, log.",
+    ),
+    trend_window_days: int = Query(
+        default=30,
+        ge=7,
+        le=365,
+        description="Window size (days) used for topic trend calculation (last N days vs previous N days).",
+    ),
+):
     """
     Return a single most critical topic for a given company id.
 
-    Chooses the topic with the highest proportion of negative mentions (negative share).
-    Includes trend calculation comparing old vs new reviews.
+    Definition (robust + explainable):
+        criticality = max(0, threshold - score) * weight
+    where score is the topic's avg_rating and weight is derived from review volume.
+
+    Also returns trend info (rating and negative share) comparing the last N days vs the previous N days.
     """
     global _topic_analyzer, _topic_rating_analyzer
 
@@ -567,6 +589,57 @@ async def get_most_critical_topic_by_company(company_id: int, limit: Optional[in
                 return 0.0
             return neg / total
 
+        def review_count(t: dict) -> int:
+            s = t.get("sentiments", {}) or {}
+            try:
+                return int((s.get("positive", 0) or 0) + (s.get("neutral", 0) or 0) + (s.get("negative", 0) or 0))
+            except Exception:
+                return 0
+
+        def score_value(t: dict) -> Optional[float]:
+            v = t.get("score")
+            if v is None:
+                v = t.get("avg_rating")
+            if v is None:
+                return None
+            try:
+                num = float(v)
+            except Exception:
+                return None
+            if not (num == num):
+                return None
+            return num
+
+        def weight_for(t: dict) -> tuple[float, int, str]:
+            base = review_count(t)
+            base_label = "review_count"
+            if base <= 0:
+                base = int(t.get("mention_count", 0) or 0)
+                base_label = "mention_count"
+
+            if base < 0:
+                base = 0
+
+            if weighting == "none":
+                return 1.0, base, base_label
+
+            if weighting == "log":
+                import math
+                return float(math.log1p(base)), base, base_label
+
+            # default: sqrt
+            import math
+            return float(math.sqrt(base)), base, base_label
+
+        def criticality_for(t: dict) -> tuple[float, float, float, int, str]:
+            score = score_value(t)
+            if score is None:
+                return 0.0, 0.0, 0.0, 0, "review_count"
+
+            shortfall = max(0.0, float(threshold) - float(score))
+            w, base, base_label = weight_for(t)
+            return shortfall * w, shortfall, w, base, base_label
+
         def extract_words(t: dict) -> list[str]:
             # Unterstützt verschiedene Feldnamen je nach Analyzer-Output
             w = t.get("words") or t.get("keywords") or t.get("top_words") or t.get("terms") or []
@@ -585,11 +658,32 @@ async def get_most_critical_topic_by_company(company_id: int, limit: Optional[in
                 return result
             return []
 
-        # Select topic with highest negative share; tiebreaker: higher mention_count
-        most = max(
-            topics,
-            key=lambda t: (negative_share(t), int(t.get("mention_count", 0) or 0))
-        )
+        # Prefer topics with an actual rating signal; fallback to all topics if none qualify
+        rated_topics = [t for t in topics if score_value(t) is not None and (t.get("ratings") or [])]
+        candidate_topics = rated_topics or topics
+
+        # If any topic is below threshold, select by maximum criticality.
+        # Otherwise, select the lowest score (still the most concerning), then by volume.
+        any_below = any((score_value(t) is not None and score_value(t) < threshold) for t in candidate_topics)
+
+        if any_below:
+            most = max(
+                candidate_topics,
+                key=lambda t: (
+                    criticality_for(t)[0],
+                    weight_for(t)[1],
+                    negative_share(t),
+                ),
+            )
+        else:
+            most = min(
+                candidate_topics,
+                key=lambda t: (
+                    score_value(t) if score_value(t) is not None else float("inf"),
+                    -weight_for(t)[1],
+                    -negative_share(t),
+                ),
+            )
 
         topic_words = extract_words(most)
         if limit is not None and isinstance(limit, int) and limit > 0:
@@ -602,20 +696,48 @@ async def get_most_critical_topic_by_company(company_id: int, limit: Optional[in
         if topic_id is None:
             topic_id = most.get("id")
 
-        # Calculate trend: compare old vs new reviews for this topic
-        trend = calculate_topic_trend(company_id, topic_id, topic_words)
+        # Calculate trends: compare old vs new reviews for this topic
+        trend_negative = calculate_topic_trend(company_id, topic_id, topic_words, window_days=trend_window_days)
+        trend_rating = calculate_topic_rating_trend(company_id, topic_words, window_days=trend_window_days)
 
         # build final object for frontend
         most_copy = dict(most)
         most_copy["topic_id"] = topic_id
         most_copy["topic_words"] = topic_words
         most_copy["topic_text"] = ", ".join(topic_words)  # <- das ist dein "Topic" Text
+        score = score_value(most)
+        crit, shortfall, w, w_base, w_base_label = criticality_for(most)
+
+        # provide consistent score fields for frontend
+        if score is not None:
+            most_copy["score"] = float(score)
+
+        most_copy["threshold"] = float(threshold)
+        most_copy["shortfall"] = round(float(shortfall), 4)
+        most_copy["weight"] = round(float(w), 4)
+        most_copy["weight_base"] = int(w_base)
+        most_copy["weight_base_label"] = str(w_base_label)
+        most_copy["criticality"] = round(float(crit), 6)
+        most_copy["review_count"] = int(review_count(most))
+        most_copy["rating_count"] = len(most.get("ratings") or [])
+
         most_copy["negative_share_percent"] = round(negative_share(most) * 100)
-        most_copy["trend"] = trend
+        most_copy["trend"] = {
+            "window_days": int(trend_window_days),
+            "negative_share": trend_negative,
+            "rating": trend_rating,
+        }
+
+        if not any_below:
+            most_copy["note"] = "No topic is currently below the configured threshold; returning the lowest-scoring topic."
 
         return {
             "status": "success",
-            "most_critical": most_copy
+            "company_id": company_id,
+            "threshold": float(threshold),
+            "weighting": weighting,
+            "trend_window_days": int(trend_window_days),
+            "most_critical": most_copy,
         }
 
     except HTTPException:
@@ -627,7 +749,7 @@ async def get_most_critical_topic_by_company(company_id: int, limit: Optional[in
         )
 
 
-def calculate_topic_trend(company_id: int, topic_id: int, topic_words: list[str]) -> dict:
+def calculate_topic_trend(company_id: int, topic_id: int, topic_words: list[str], window_days: int = 30) -> dict:
     """
     Calculate trend by comparing negative share in old vs new reviews.
     
@@ -641,10 +763,10 @@ def calculate_topic_trend(company_id: int, topic_id: int, topic_words: list[str]
     supabase = get_supabase_client()
     
     try:
-        # Define time periods: last 30 days vs previous 30 days
+        # Define time periods: last N days vs previous N days
         now = datetime.now(timezone.utc)
-        cutoff_date = now - timedelta(days=30)
-        old_cutoff = now - timedelta(days=60)
+        cutoff_date = now - timedelta(days=window_days)
+        old_cutoff = now - timedelta(days=window_days * 2)
         
         # Fetch all employee reviews for this company
         response = supabase.table("employee")\
@@ -720,4 +842,98 @@ def calculate_topic_trend(company_id: int, topic_id: int, topic_words: list[str]
         
     except Exception as e:
         print(f"Error calculating trend: {str(e)}")
+        return {"delta": 0, "direction": "stable", "error": str(e)}
+
+
+def calculate_topic_rating_trend(company_id: int, topic_words: list[str], window_days: int = 30) -> dict:
+    """Calculate trend in avg_rating for reviews that mention the topic words.
+
+    Compares average 'durchschnittsbewertung' for reviews in the last N days vs the previous N days.
+
+    Returns:
+        dict with 'delta' (new - old), 'direction' (up/down/stable),
+        'old_avg_rating', 'new_avg_rating', 'old_review_count', 'new_review_count'
+    """
+    from database.supabase_client import get_supabase_client
+    from datetime import datetime, timedelta, timezone
+
+    supabase = get_supabase_client()
+
+    try:
+        now = datetime.now(timezone.utc)
+        cutoff_date = now - timedelta(days=window_days)
+        old_cutoff = now - timedelta(days=window_days * 2)
+
+        response = supabase.table("employee")\
+            .select("datum, created_at, durchschnittsbewertung, gut_am_arbeitgeber_finde_ich, schlecht_am_arbeitgeber_finde_ich, verbesserungsvorschlaege")\
+            .eq("company_id", company_id)\
+            .gte("datum", old_cutoff.isoformat())\
+            .execute()
+
+        reviews = response.data if response.data else []
+        if len(reviews) < 2:
+            return {"delta": 0, "direction": "stable", "message": "Not enough data"}
+
+        old_ratings: list[float] = []
+        new_ratings: list[float] = []
+
+        for review in reviews:
+            date_raw = review.get("datum") or review.get("created_at")
+            if not date_raw:
+                continue
+
+            try:
+                review_date = datetime.fromisoformat(str(date_raw).replace("Z", "+00:00"))
+            except Exception:
+                continue
+
+            text = " ".join([
+                str(review.get("gut_am_arbeitgeber_finde_ich", "")),
+                str(review.get("schlecht_am_arbeitgeber_finde_ich", "")),
+                str(review.get("verbesserungsvorschlaege", "")),
+            ]).lower()
+
+            if not any(word.lower() in text for word in topic_words):
+                continue
+
+            rating_raw = review.get("durchschnittsbewertung")
+            if rating_raw is None:
+                continue
+
+            try:
+                rating = float(rating_raw)
+            except Exception:
+                continue
+
+            if review_date < cutoff_date:
+                old_ratings.append(rating)
+            else:
+                new_ratings.append(rating)
+
+        if not old_ratings and not new_ratings:
+            return {"delta": 0, "direction": "stable", "message": "No topic-matching ratings"}
+
+        old_avg = (sum(old_ratings) / len(old_ratings)) if old_ratings else 0.0
+        new_avg = (sum(new_ratings) / len(new_ratings)) if new_ratings else 0.0
+
+        delta = round(new_avg - old_avg, 2)
+
+        if abs(delta) < 0.05:
+            direction = "stable"
+        elif delta > 0:
+            direction = "up"  # rating increased (better)
+        else:
+            direction = "down"  # rating decreased (worse)
+
+        return {
+            "delta": delta,
+            "direction": direction,
+            "old_avg_rating": round(old_avg, 2),
+            "new_avg_rating": round(new_avg, 2),
+            "old_review_count": len(old_ratings),
+            "new_review_count": len(new_ratings),
+        }
+
+    except Exception as e:
+        print(f"Error calculating rating trend: {str(e)}")
         return {"delta": 0, "direction": "stable", "error": str(e)}

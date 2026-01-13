@@ -387,8 +387,8 @@ export default function Dashboard() {
                     topicName = topicName.charAt(0).toUpperCase() + topicName.slice(1);
                 }
                 
-                // Score
-                const score = item.correlation ?? item.score ?? "-";
+                // Score (Backend liefert nun konsistent `score` = avg_rating)
+                const score = item.score ?? item.avg_rating ?? item.correlation ?? "-";
                 const scoreStr = typeof score === 'number' ? score.toFixed(2) : String(score);
                 
                 setMostCriticalData({ topicName, score: scoreStr });

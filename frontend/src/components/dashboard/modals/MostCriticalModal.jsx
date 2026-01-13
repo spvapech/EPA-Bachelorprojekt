@@ -78,12 +78,33 @@ export default function MostCriticalModal({ open, onOpenChange, companyId = null
     const getScore = (m) => {
         if (!m) return "-";
         
-        // Backend gibt correlation zurück
-        const v = m.correlation ?? m.score ?? m.impact_score ?? null;
+        // Backend liefert nun konsistent `score` (avg_rating)
+        const v = m.score ?? m.avg_rating ?? m.correlation ?? m.impact_score ?? null;
         if (v === null || v === undefined) return "-";
         
         const num = Number(v);
         return Number.isFinite(num) ? num.toFixed(2) : String(v);
+    };
+
+    const getThreshold = (m) => {
+        if (!m) return null;
+        const v = m.threshold;
+        const num = Number(v);
+        return Number.isFinite(num) ? num : null;
+    };
+
+    const getShortfall = (m) => {
+        if (!m) return null;
+        const v = m.shortfall;
+        const num = Number(v);
+        return Number.isFinite(num) ? num : null;
+    };
+
+    const getCriticality = (m) => {
+        if (!m) return null;
+        const v = m.criticality;
+        const num = Number(v);
+        return Number.isFinite(num) ? num : null;
     };
 
     const getTopicWords = (m) => {
@@ -165,6 +186,9 @@ export default function MostCriticalModal({ open, onOpenChange, companyId = null
     const score = getScore(item);
     const negP = negativeSharePercent(item);
     const impact = impactIndicator(item);
+    const threshold = getThreshold(item);
+    const shortfall = getShortfall(item);
+    const criticality = getCriticality(item);
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
@@ -194,6 +218,42 @@ export default function MostCriticalModal({ open, onOpenChange, companyId = null
                         <div className="text-center text-lg">Kein kritischstes Topic gefunden.</div>
                     ) : (
                         <>
+                            {/* Warum kritisch? */}
+                            <div className="mt-2 rounded-2xl bg-slate-50 px-5 py-4">
+                                <div className="text-lg font-bold text-slate-800 mb-3">Warum kritisch?</div>
+
+                                <div className="flex items-center justify-between text-base font-semibold">
+                                    <div className="text-black">Schwelle (Threshold):</div>
+                                    <div className="text-black">{threshold === null ? "-" : threshold.toFixed(2)}</div>
+                                </div>
+
+                                <div className="flex items-center justify-between text-base font-semibold mt-2">
+                                    <div className="text-black">Score (Topic Ø-Bewertung):</div>
+                                    <div className="text-black">{score}</div>
+                                </div>
+
+                                <div className="flex items-center justify-between text-base font-semibold mt-2">
+                                    <div className="text-black">Abstand zur Schwelle:</div>
+                                    <div className={shortfall && shortfall > 0 ? "text-red-600" : "text-black"}>
+                                        {shortfall === null ? "-" : shortfall.toFixed(2)}
+                                    </div>
+                                </div>
+
+                                <div className="flex items-center justify-between text-base font-semibold mt-2">
+                                    <div className="text-black">Datenbasis (Reviews mit Topic):</div>
+                                    <div className="text-black">{Number.isFinite(Number(item.review_count)) ? item.review_count : "-"}</div>
+                                </div>
+
+                                <div className="flex items-center justify-between text-base font-semibold mt-2">
+                                    <div className="text-black">Kritikalität (berechnet):</div>
+                                    <div className="text-black">{criticality === null ? "-" : criticality.toFixed(3)}</div>
+                                </div>
+
+                                {item.note ? (
+                                    <div className="mt-3 text-sm text-slate-600">{String(item.note)}</div>
+                                ) : null}
+                            </div>
+
                             {/* Anteil negativer Reviews */}
                             <div className="flex items-center justify-between text-lg font-semibold">
                                 <div className="text-black">
