@@ -121,9 +121,10 @@ async def get_company_overview(company_id: int):
 @router.get("/company/{company_id}/timeline")
 async def get_company_timeline(
     company_id: int,
-    days: int = Query(default=90, description="Number of days to include")
+    days: int = Query(default=365, description="Number of days to include"),
+    forecast_months: int = Query(default=6, description="Number of months to forecast")
 ):
-    """Get timeline data for ratings over time."""
+    """Get timeline data for ratings over time with forecast."""
     try:
         cutoff_date = datetime.now() - timedelta(days=days)
         
@@ -167,13 +168,120 @@ async def get_company_timeline(
         # Sort by date
         timeline_data.sort(key=lambda x: x["date"])
         
+        # Group by month for aggregation
+        monthly_data = defaultdict(list)
+        for item in timeline_data:
+            try:
+                date = datetime.fromisoformat(item["date"].replace("Z", "+00:00"))
+                month_key = date.strftime("%Y-%m")
+                monthly_data[month_key].append(item["score"])
+            except:
+                pass
+        
+        # Create aggregated monthly timeline
+        aggregated_timeline = []
+        for month_key in sorted(monthly_data.keys()):
+            scores = monthly_data[month_key]
+            date_obj = datetime.strptime(month_key, "%Y-%m")
+            aggregated_timeline.append({
+                "date": month_key,
+                "date_display": date_obj.strftime("%b %Y"),
+                "score": round(sum(scores) / len(scores), 2),
+                "count": len(scores),
+                "is_forecast": False
+            })
+        
+        # Calculate forecast using linear regression
+        forecast_data = calculate_forecast(aggregated_timeline, forecast_months)
+        
         return {
-            "timeline": timeline_data,
-            "total_points": len(timeline_data)
+            "timeline": aggregated_timeline,
+            "forecast": forecast_data,
+            "total_points": len(timeline_data),
+            "current_date": datetime.now().isoformat()
         }
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching timeline: {str(e)}")
+
+
+def calculate_forecast(historical_data: List[Dict[str, Any]], months: int) -> List[Dict[str, Any]]:
+    """
+    Calculate forecast using linear regression based on historical data.
+    
+    Args:
+        historical_data: List of historical monthly data points
+        months: Number of months to forecast
+        
+    Returns:
+        List of forecast data points
+    """
+    if len(historical_data) < 2:
+        # Not enough data for forecast
+        return []
+    
+    # Extract x (time index) and y (score) values
+    x_values = list(range(len(historical_data)))
+    y_values = [point["score"] for point in historical_data]
+    
+    # Calculate linear regression: y = mx + b
+    n = len(x_values)
+    sum_x = sum(x_values)
+    sum_y = sum(y_values)
+    sum_xy = sum(x * y for x, y in zip(x_values, y_values))
+    sum_x_squared = sum(x * x for x in x_values)
+    
+    # Slope (m) and intercept (b)
+    denominator = n * sum_x_squared - sum_x * sum_x
+    
+    if denominator == 0:
+        # Fallback: use average of last values
+        avg_score = sum(y_values) / len(y_values)
+        forecast = []
+        last_date = datetime.strptime(historical_data[-1]["date"], "%Y-%m")
+        for i in range(1, months + 1):
+            # Calculate next month
+            month_offset = last_date.month + i
+            year_offset = (month_offset - 1) // 12
+            month = ((month_offset - 1) % 12) + 1
+            next_month = last_date.replace(year=last_date.year + year_offset, month=month)
+            forecast.append({
+                "date": next_month.strftime("%Y-%m"),
+                "date_display": next_month.strftime("%b %Y"),
+                "score": round(avg_score, 2),
+                "is_forecast": True
+            })
+        return forecast
+    
+    m = (n * sum_xy - sum_x * sum_y) / denominator
+    b = (sum_y - m * sum_x) / n
+    
+    # Generate forecast
+    forecast = []
+    last_date = datetime.strptime(historical_data[-1]["date"], "%Y-%m")
+    
+    for i in range(1, months + 1):
+        # Calculate next month
+        month_offset = last_date.month + i
+        year_offset = (month_offset - 1) // 12
+        month = ((month_offset - 1) % 12) + 1
+        next_month = last_date.replace(year=last_date.year + year_offset, month=month)
+        
+        # Predict score using linear regression
+        future_x = len(historical_data) + i - 1
+        predicted_score = m * future_x + b
+        
+        # Ensure score is within reasonable bounds (0-5 for ratings)
+        predicted_score = max(0, min(5, predicted_score))
+        
+        forecast.append({
+            "date": next_month.strftime("%Y-%m"),
+            "date_display": next_month.strftime("%b %Y"),
+            "score": round(predicted_score, 2),
+            "is_forecast": True
+        })
+    
+    return forecast
 
 
 @router.get("/company/{company_id}/category-ratings")
