@@ -53,19 +53,26 @@ export default function MostCriticalModal({ open, onOpenChange, companyId = null
 
         let topicName = "";
 
+        // Prefer affected categories (what is impacted) over raw topic words
+        if (Array.isArray(m.categories) && m.categories.length > 0) {
+            topicName = toWord(m.categories[0]);
+        } else if (Array.isArray(m.affected_categories) && m.affected_categories.length > 0) {
+            topicName = toWord(m.affected_categories[0]);
+        }
+
         // Backend gibt topic_words array zurück - nimm nur das ERSTE Wort
-        if (Array.isArray(m.topic_words) && m.topic_words.length > 0) {
+        if (!topicName && Array.isArray(m.topic_words) && m.topic_words.length > 0) {
             topicName = toWord(m.topic_words[0]); // toWord extrahiert aus {word: "...", weight: ...}
         }
         // Fallback: topic_text string - nimm nur das erste Wort
-        else if (m.topic_text && String(m.topic_text).trim()) {
+        else if (!topicName && m.topic_text && String(m.topic_text).trim()) {
             topicName = String(m.topic_text).split(",")[0].trim();
         }
         // Legacy fallbacks
-        else if (m.topic_name) {
+        else if (!topicName && m.topic_name) {
             topicName = String(m.topic_name).trim();
         }
-        else if (m.topic_label) {
+        else if (!topicName && m.topic_label) {
             topicName = String(m.topic_label).trim();
         }
 
@@ -86,26 +93,6 @@ export default function MostCriticalModal({ open, onOpenChange, companyId = null
         return Number.isFinite(num) ? num.toFixed(2) : String(v);
     };
 
-    const getThreshold = (m) => {
-        if (!m) return null;
-        const v = m.threshold;
-        const num = Number(v);
-        return Number.isFinite(num) ? num : null;
-    };
-
-    const getShortfall = (m) => {
-        if (!m) return null;
-        const v = m.shortfall;
-        const num = Number(v);
-        return Number.isFinite(num) ? num : null;
-    };
-
-    const getCriticality = (m) => {
-        if (!m) return null;
-        const v = m.criticality;
-        const num = Number(v);
-        return Number.isFinite(num) ? num : null;
-    };
 
     const getTopicWords = (m) => {
         if (!m) return [];
@@ -186,9 +173,6 @@ export default function MostCriticalModal({ open, onOpenChange, companyId = null
     const score = getScore(item);
     const negP = negativeSharePercent(item);
     const impact = impactIndicator(item);
-    const threshold = getThreshold(item);
-    const shortfall = getShortfall(item);
-    const criticality = getCriticality(item);
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
@@ -218,42 +202,6 @@ export default function MostCriticalModal({ open, onOpenChange, companyId = null
                         <div className="text-center text-lg">Kein kritischstes Topic gefunden.</div>
                     ) : (
                         <>
-                            {/* Warum kritisch? */}
-                            <div className="mt-2 rounded-2xl bg-slate-50 px-5 py-4">
-                                <div className="text-lg font-bold text-slate-800 mb-3">Warum kritisch?</div>
-
-                                <div className="flex items-center justify-between text-base font-semibold">
-                                    <div className="text-black">Schwelle (Threshold):</div>
-                                    <div className="text-black">{threshold === null ? "-" : threshold.toFixed(2)}</div>
-                                </div>
-
-                                <div className="flex items-center justify-between text-base font-semibold mt-2">
-                                    <div className="text-black">Score (Topic Ø-Bewertung):</div>
-                                    <div className="text-black">{score}</div>
-                                </div>
-
-                                <div className="flex items-center justify-between text-base font-semibold mt-2">
-                                    <div className="text-black">Abstand zur Schwelle:</div>
-                                    <div className={shortfall && shortfall > 0 ? "text-red-600" : "text-black"}>
-                                        {shortfall === null ? "-" : shortfall.toFixed(2)}
-                                    </div>
-                                </div>
-
-                                <div className="flex items-center justify-between text-base font-semibold mt-2">
-                                    <div className="text-black">Datenbasis (Reviews mit Topic):</div>
-                                    <div className="text-black">{Number.isFinite(Number(item.review_count)) ? item.review_count : "-"}</div>
-                                </div>
-
-                                <div className="flex items-center justify-between text-base font-semibold mt-2">
-                                    <div className="text-black">Kritikalität (berechnet):</div>
-                                    <div className="text-black">{criticality === null ? "-" : criticality.toFixed(3)}</div>
-                                </div>
-
-                                {item.note ? (
-                                    <div className="mt-3 text-sm text-slate-600">{String(item.note)}</div>
-                                ) : null}
-                            </div>
-
                             {/* Anteil negativer Reviews */}
                             <div className="flex items-center justify-between text-lg font-semibold">
                                 <div className="text-black">

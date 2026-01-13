@@ -502,6 +502,35 @@ async def get_negative_topics_by_company(company_id: int, limit: Optional[int] =
             limit=limit
         )
 
+        def negative_share(t: dict) -> float:
+            s = t.get("sentiments", {}) or {}
+            neg = float(s.get("negative", 0) or 0)
+            pos = float(s.get("positive", 0) or 0)
+            neu = float(s.get("neutral", 0) or 0)
+
+            total = neg + pos + neu
+            if total <= 0:
+                total = float(t.get("mention_count", 0) or 0)
+            if total <= 0:
+                return 0.0
+            return neg / total
+
+        def extract_words(t: dict) -> list[str]:
+            w = t.get("topic_words") or t.get("words") or t.get("keywords") or t.get("top_words") or t.get("terms") or []
+            if isinstance(w, str):
+                return [x.strip() for x in w.split(",") if x.strip()]
+            if isinstance(w, (list, tuple)):
+                out: list[str] = []
+                for x in w:
+                    if isinstance(x, dict):
+                        word = x.get("word") or x.get("term") or x.get("label") or ""
+                        if word:
+                            out.append(str(word).strip())
+                    elif x:
+                        out.append(str(x).strip())
+                return out
+            return []
+
         # Filter negative topics: avg_sentiment_polarity < 0 or more negative mentions than positive
         negative_topics = [
             t for t in result.get('topics', [])
@@ -511,11 +540,43 @@ async def get_negative_topics_by_company(company_id: int, limit: Optional[int] =
         # Sort by most negative (lowest avg_sentiment_polarity) then by mention_count
         negative_topics.sort(key=lambda x: (x.get('avg_sentiment_polarity', 0), -x.get('mention_count', 0)))
 
+        # Enrich for frontend modal
+        enriched = []
+        for t in negative_topics:
+            topic_words = extract_words(t)
+            topic_words = [w for w in topic_words if w]
+
+            topic_label = None
+            if topic_words:
+                topic_label = topic_words[0]
+                topic_label = topic_label[:1].upper() + topic_label[1:]
+
+            enriched_topic = dict(t)
+            enriched_topic["topic_words"] = topic_words
+            enriched_topic["topic_text"] = ", ".join(topic_words)
+            enriched_topic["topic_label"] = topic_label
+            enriched_topic["negative_share_percent"] = round(negative_share(t) * 100)
+
+            # Compute kritikpunkte + betroffene Kategorien from employee reviews mentioning topic words
+            try:
+                kritikpunkte = extract_kritikpunkte_for_topic(company_id, topic_words, max_points=3, max_rows=200)
+                categories = extract_affected_categories_for_topic(company_id, topic_words, max_categories=2, max_rows=200)
+            except Exception:
+                kritikpunkte = []
+                categories = []
+
+            if kritikpunkte:
+                enriched_topic["kritikpunkte"] = kritikpunkte
+            if categories:
+                enriched_topic["categories"] = categories
+
+            enriched.append(enriched_topic)
+
         return {
             "status": "success",
             "company_id": company_id,
-            "negative_topics": negative_topics,
-            "total_negative": len(negative_topics)
+            "negative_topics": enriched,
+            "total_negative": len(enriched)
         }
     except HTTPException:
         raise
@@ -728,6 +789,14 @@ async def get_most_critical_topic_by_company(
             "rating": trend_rating,
         }
 
+        # Affected categories (for UI display)
+        try:
+            categories = extract_affected_categories_for_topic(company_id, topic_words, max_categories=2, max_rows=300)
+        except Exception:
+            categories = []
+        if categories:
+            most_copy["categories"] = categories
+
         if not any_below:
             most_copy["note"] = "No topic is currently below the configured threshold; returning the lowest-scoring topic."
 
@@ -843,6 +912,195 @@ def calculate_topic_trend(company_id: int, topic_id: int, topic_words: list[str]
     except Exception as e:
         print(f"Error calculating trend: {str(e)}")
         return {"delta": 0, "direction": "stable", "error": str(e)}
+
+
+def extract_kritikpunkte_for_topic(
+    company_id: int,
+    topic_words: list[str],
+    max_points: int = 3,
+    max_rows: int = 200,
+) -> list[str]:
+    from database.supabase_client import get_supabase_client
+    import re
+    from collections import Counter
+
+    supabase = get_supabase_client()
+    if not topic_words:
+        return []
+
+    response = supabase.table("employee")\
+        .select("schlecht_am_arbeitgeber_finde_ich, verbesserungsvorschlaege")\
+        .eq("company_id", company_id)\
+        .limit(max_rows)\
+        .execute()
+
+    rows = response.data or []
+    texts: list[str] = []
+    topic_words_l = [w.lower() for w in topic_words if w]
+
+    for r in rows:
+        neg = str(r.get("schlecht_am_arbeitgeber_finde_ich") or "")
+        imp = str(r.get("verbesserungsvorschlaege") or "")
+        combined = (neg + " " + imp).strip()
+        if not combined:
+            continue
+        cl = combined.lower()
+        if not any(w in cl for w in topic_words_l):
+            continue
+        # focus on negative-ish text fields
+        if neg.strip():
+            texts.append(neg)
+        if imp.strip():
+            texts.append(imp)
+
+    if not texts:
+        return []
+
+    stop = {
+        "und","oder","aber","dass","das","der","die","den","dem","des","ein","eine","einer","eines",
+        "mit","ohne","für","auf","im","in","am","an","zu","von","bei","als","auch","nicht","nur",
+        "ist","sind","war","waren","wird","werden","ich","wir","man","sehr","mehr","weniger","noch",
+        "kein","keine","keinen","keiner","keines","über","unter","vor","nach","aus","um","wie","weil",
+    }
+
+    token_re = re.compile(r"[a-zA-ZäöüÄÖÜß]+", re.UNICODE)
+    tokens: list[str] = []
+    for t in texts:
+        toks = [x.lower() for x in token_re.findall(t)]
+        toks = [x for x in toks if len(x) >= 3 and x not in stop]
+        tokens.extend(toks)
+
+    if len(tokens) < 4:
+        return []
+
+    bigrams = Counter()
+    trigrams = Counter()
+    for i in range(len(tokens) - 1):
+        bigrams[(tokens[i], tokens[i + 1])] += 1
+    for i in range(len(tokens) - 2):
+        trigrams[(tokens[i], tokens[i + 1], tokens[i + 2])] += 1
+
+    phrases: list[tuple[str, int]] = []
+    for (a, b, c), cnt in trigrams.most_common(50):
+        if cnt < 2:
+            break
+        phrases.append((f"{a} {b} {c}", cnt))
+    if len(phrases) < max_points:
+        for (a, b), cnt in bigrams.most_common(50):
+            if cnt < 2:
+                break
+            phrases.append((f"{a} {b}", cnt))
+
+    # de-dup and return top N
+    seen = set()
+    out: list[str] = []
+    for p, _ in sorted(phrases, key=lambda x: (-x[1], x[0])):
+        if p in seen:
+            continue
+        seen.add(p)
+        out.append(p)
+        if len(out) >= max_points:
+            break
+    return out
+
+
+def extract_affected_categories_for_topic(
+    company_id: int,
+    topic_words: list[str],
+    max_categories: int = 2,
+    max_rows: int = 200,
+) -> list[str]:
+    from database.supabase_client import get_supabase_client
+
+    supabase = get_supabase_client()
+    if not topic_words:
+        return []
+
+    rating_fields = {
+        "arbeitsatmosphaere": "sternebewertung_arbeitsatmosphaere",
+        "image": "sternebewertung_image",
+        "work_life_balance": "sternebewertung_work_life_balance",
+        "karriere_weiterbildung": "sternebewertung_karriere_weiterbildung",
+        "gehalt_sozialleistungen": "sternebewertung_gehalt_sozialleistungen",
+        "kollegenzusammenhalt": "sternebewertung_kollegenzusammenhalt",
+        "umwelt_sozialbewusstsein": "sternebewertung_umwelt_sozialbewusstsein",
+        "vorgesetztenverhalten": "sternebewertung_vorgesetztenverhalten",
+        "kommunikation": "sternebewertung_kommunikation",
+        "interessante_aufgaben": "sternebewertung_interessante_aufgaben",
+        "umgang_mit_aelteren_kollegen": "sternebewertung_umgang_mit_aelteren_kollegen",
+        "arbeitsbedingungen": "sternebewertung_arbeitsbedingungen",
+        "gleichberechtigung": "sternebewertung_gleichberechtigung",
+    }
+
+    label_map = {
+        "arbeitsatmosphaere": "Arbeitsatmosphäre",
+        "image": "Image",
+        "work_life_balance": "Work-Life-Balance",
+        "karriere_weiterbildung": "Karriere/Weiterbildung",
+        "gehalt_sozialleistungen": "Gehalt/Sozialleistungen",
+        "kollegenzusammenhalt": "Kollegenzusammenhalt",
+        "umwelt_sozialbewusstsein": "Umwelt-/Sozialbewusstsein",
+        "vorgesetztenverhalten": "Vorgesetztenverhalten",
+        "kommunikation": "Kommunikation",
+        "interessante_aufgaben": "Interessante Aufgaben",
+        "umgang_mit_aelteren_kollegen": "Umgang mit älteren Kollegen",
+        "arbeitsbedingungen": "Arbeitsbedingungen",
+        "gleichberechtigung": "Gleichberechtigung",
+    }
+
+    select_cols = ["gut_am_arbeitgeber_finde_ich", "schlecht_am_arbeitgeber_finde_ich", "verbesserungsvorschlaege"]
+    select_cols += list(rating_fields.values())
+    response = supabase.table("employee")\
+        .select(", ".join(select_cols))\
+        .eq("company_id", company_id)\
+        .limit(max_rows)\
+        .execute()
+
+    rows = response.data or []
+    topic_words_l = [w.lower() for w in topic_words if w]
+    if not rows:
+        return []
+
+    sums: dict[str, float] = {}
+    counts: dict[str, int] = {}
+
+    for r in rows:
+        text = " ".join([
+            str(r.get("gut_am_arbeitgeber_finde_ich") or ""),
+            str(r.get("schlecht_am_arbeitgeber_finde_ich") or ""),
+            str(r.get("verbesserungsvorschlaege") or ""),
+        ]).lower()
+        if not text.strip():
+            continue
+        if not any(w in text for w in topic_words_l):
+            continue
+
+        for key, col in rating_fields.items():
+            val = r.get(col)
+            if val is None:
+                continue
+            try:
+                num = float(val)
+            except Exception:
+                continue
+            sums[key] = sums.get(key, 0.0) + num
+            counts[key] = counts.get(key, 0) + 1
+
+    avgs = []
+    for key, total in sums.items():
+        cnt = counts.get(key, 0)
+        if cnt <= 0:
+            continue
+        avgs.append((key, total / cnt, cnt))
+
+    if not avgs:
+        return []
+
+    avgs.sort(key=lambda x: (x[1], -x[2]))
+    out: list[str] = []
+    for key, _, _ in avgs[:max_categories]:
+        out.append(label_map.get(key, key.replace("_", " ").title()))
+    return out
 
 
 def calculate_topic_rating_trend(company_id: int, topic_words: list[str], window_days: int = 30) -> dict:

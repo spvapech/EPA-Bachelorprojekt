@@ -63,6 +63,7 @@ export default function Dashboard() {
     const [trendData, setTrendData] = useState(null)
     const [companies, setCompanies] = useState([])
     const [mostCriticalData, setMostCriticalData] = useState(null)
+    const [negativeTopicItem, setNegativeTopicItem] = useState(null)
     
     // Sidebar states - Starts closed if company comes from welcome
     const [sidebarOpen, setSidebarOpen] = useState(!companyFromWelcome)
@@ -309,6 +310,7 @@ export default function Dashboard() {
         getAvg()
         getTrend()
         getMostCritical()
+        getNegativeTopic()
 
     }, [selectedCompany])
     async function getAvg() {
@@ -373,9 +375,13 @@ export default function Dashboard() {
             const item = json.most_critical;
             
             if (item) {
-                // Extrahiere das erste Wort aus topic_words oder topic_text
+                // Prefer affected category label over raw topic word
                 let topicName = "-";
-                if (Array.isArray(item.topic_words) && item.topic_words.length > 0) {
+                if (Array.isArray(item.categories) && item.categories.length > 0) {
+                    topicName = String(item.categories[0]);
+                } else if (Array.isArray(item.affected_categories) && item.affected_categories.length > 0) {
+                    topicName = String(item.affected_categories[0]);
+                } else if (Array.isArray(item.topic_words) && item.topic_words.length > 0) {
                     const firstWord = item.topic_words[0];
                     topicName = typeof firstWord === 'object' ? (firstWord.word || "-") : String(firstWord);
                 } else if (item.topic_text) {
@@ -397,6 +403,27 @@ export default function Dashboard() {
             }
         } catch {
             setMostCriticalData(null);
+        }
+    }
+
+    async function getNegativeTopic() {
+        if (!selectedCompany) {
+            setNegativeTopicItem(null)
+            return
+        }
+
+        try {
+            const res = await fetch(`${API_URL}/topics/company/${selectedCompany}/negative-topics`)
+            if (!res.ok) {
+                setNegativeTopicItem(null)
+                return
+            }
+
+            const json = await res.json()
+            const list = json?.negative_topics || []
+            setNegativeTopicItem(list.length ? list[0] : null)
+        } catch {
+            setNegativeTopicItem(null)
         }
     }
 
@@ -749,7 +776,16 @@ export default function Dashboard() {
                             </CardHeader>
                             <CardContent className="pt-2">
                                 <div className="text-2xl font-extrabold text-orange-400">
-
+                                    {Array.isArray(negativeTopicItem?.categories) && negativeTopicItem.categories.length
+                                        ? String(negativeTopicItem.categories[0])
+                                        : Array.isArray(negativeTopicItem?.affected_categories) && negativeTopicItem.affected_categories.length
+                                          ? String(negativeTopicItem.affected_categories[0])
+                                          : "-"}
+                                </div>
+                                <div className="text-xl font-bold text-black mt-1 text-center">
+                                    {negativeTopicItem?.negative_share_percent !== undefined && negativeTopicItem?.negative_share_percent !== null
+                                        ? `${Math.round(Number(negativeTopicItem.negative_share_percent))} %`
+                                        : "-"}
                                 </div>
                             </CardContent>
                         </Card>
@@ -757,6 +793,7 @@ export default function Dashboard() {
                             open={openNegative}
                             onOpenChange={setOpenNegative}
                             companyId={selectedCompany}
+                            topic={negativeTopicItem}
                         />
 
 

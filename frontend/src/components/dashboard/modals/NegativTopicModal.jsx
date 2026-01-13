@@ -58,22 +58,39 @@ export default function NegativTopicModal({ open, onOpenChange, topic: propTopic
   }, [open, propTopic, companyId]);
 
   // Helper mapping
-  const getTitle = (m) => m?.title || "Negatives Topic";
+  const getTitle = (m) => m?.title || "Negative Topic";
   const getTopicLabel = (m) => {
     if (!m) return "-";
-    if (m.topic) return m.topic;
-    if (m.top_words && Array.isArray(m.top_words)) return m.top_words.map((w) => w.word).slice(0, 5).join(", ");
+
+    // Prefer affected categories (what is impacted) over topic words
+    if (Array.isArray(m.categories) && m.categories.length) {
+      const c = String(m.categories[0] ?? "").trim();
+      return c || "-";
+    }
+    if (Array.isArray(m.affected_categories) && m.affected_categories.length) {
+      const c = String(m.affected_categories[0] ?? "").trim();
+      return c || "-";
+    }
+
+    // Fallbacks
+    if (m.topic_label) return String(m.topic_label);
+    if (m.topic) return String(m.topic);
+    if (m.top_words && Array.isArray(m.top_words) && m.top_words.length) return m.top_words.map((w) => w.word).slice(0, 1).join(", ");
     return "-";
   };
 
   const getNegativeShare = (m) => {
     if (!m) return "-";
+    if (m.negative_share_percent !== undefined && m.negative_share_percent !== null) {
+      const p = Number(m.negative_share_percent);
+      return Number.isFinite(p) ? `${Math.round(p)} %` : "-";
+    }
     const s = m.sentiments || {};
     const neg = s.negative || 0;
     const pos = s.positive || 0;
     const neu = s.neutral || 0;
     const total = neg + pos + neu || m.mention_count || 1;
-    return `${Math.round((neg / total) * 100)}%`;
+    return `${Math.round((neg / total) * 100)} %`;
   };
 
   const getKritikpunkte = (m) => {
@@ -93,7 +110,7 @@ export default function NegativTopicModal({ open, onOpenChange, topic: propTopic
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="min-w-3xl">
+      <DialogContent className="max-w-xl rounded-3xl px-10 py-8">
         <DialogHeader className="text-center">
           <DialogTitle className="text-3xl font-extrabold text-slate-800 leading-tight">
             {loading ? "Lade…" : getTitle(modal)}
@@ -122,12 +139,9 @@ export default function NegativTopicModal({ open, onOpenChange, topic: propTopic
                 <div className="text-[30px] font-extrabold text-black">Häufige Kritikpunkte:</div>
 
                 <div className="mt-6 flex justify-center">
-                  <ul className="text-left space-y-2 text-[30px] font-extrabold text-black">
+                  <ul className="list-disc list-inside text-left space-y-2 text-[30px] font-extrabold text-black">
                     {getKritikpunkte(modal).map((k) => (
-                      <li key={k} className="flex items-start gap-4">
-                        <span className="mt-2">-</span>
-                        <span>{k}</span>
-                      </li>
+                      <li key={k}>{k}</li>
                     ))}
                   </ul>
                 </div>
