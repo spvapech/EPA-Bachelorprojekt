@@ -16,7 +16,8 @@ class TopicRatingAnalyzer:
     
     def __init__(self):
         self.db = TopicModelDatabase()
-        self.sentiment_analyzer = SentimentAnalyzer()
+        # Use transformer mode for accurate rating analysis
+        self.sentiment_analyzer = SentimentAnalyzer(mode="transformer")
         
     def analyze_employee_reviews_with_ratings(
         self, 

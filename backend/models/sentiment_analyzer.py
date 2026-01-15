@@ -28,13 +28,22 @@ class SentimentAnalyzer:
         """
         self.mode = mode
         self._transformer_pipeline = None
+        self._transformer_available = False
         
         # Initialize lexicon-based components
         self._init_lexicon()
         
         # Initialize transformer if requested
         if mode == "transformer":
-            self._init_transformer()
+            try:
+                self._init_transformer()
+                self._transformer_available = True
+            except Exception as e:
+                logger.warning(
+                    f"Could not initialize transformer mode: {e}. "
+                    "Falling back to lexicon mode."
+                )
+                self.mode = "lexicon"
     
     def _init_lexicon(self):
         """Initialize lexicon-based sentiment analysis components."""
@@ -296,7 +305,7 @@ class SentimentAnalyzer:
             - subjectivity: float between 0 (objective) and 1 (subjective)
             - confidence: float representing confidence in the classification
         """
-        if self.mode == "transformer":
+        if self.mode == "transformer" and self._transformer_available:
             return self._analyze_with_transformer(text)
         else:
             return self._analyze_with_lexicon(text)
@@ -312,7 +321,15 @@ class SentimentAnalyzer:
             raise ValueError("Mode must be 'lexicon' or 'transformer'")
         
         if mode == "transformer" and not self._transformer_pipeline:
-            self._init_transformer()
+            try:
+                self._init_transformer()
+                self._transformer_available = True
+            except Exception as e:
+                logger.warning(
+                    f"Could not initialize transformer mode: {e}. "
+                    "Staying in lexicon mode."
+                )
+                return
         
         self.mode = mode
         logger.info(f"Switched to {mode} mode")

@@ -574,7 +574,7 @@ class LDATopicAnalyzer:
         
         return topics
     
-    def predict_topics(self, text: str, threshold: float = 0.1, include_sentiment: bool = False) -> List[Dict[str, Any]]:
+    def predict_topics(self, text: str, threshold: float = 0.1, include_sentiment: bool = False, sentiment_mode: str = "lexicon") -> List[Dict[str, Any]]:
         """
         Predict topics for a given text.
         
@@ -582,6 +582,7 @@ class LDATopicAnalyzer:
             text: Input text to analyze
             threshold: Minimum probability threshold for topics
             include_sentiment: Whether to include sentiment analysis
+            sentiment_mode: Sentiment analysis mode - "lexicon" (fast) or "transformer" (accurate)
             
         Returns:
             List of topics with probabilities and optionally sentiment
@@ -620,7 +621,7 @@ class LDATopicAnalyzer:
         # Add sentiment analysis if requested
         if include_sentiment and text:
             from models.sentiment_analyzer import SentimentAnalyzer
-            sentiment_analyzer = SentimentAnalyzer()
+            sentiment_analyzer = SentimentAnalyzer(mode=sentiment_mode)
             sentiment = sentiment_analyzer.analyze_sentiment(text)
             for result in results:
                 result["sentiment"] = sentiment
@@ -633,6 +634,7 @@ class LDATopicAnalyzer:
     def analyze_topics_with_sentiment(self, texts: List[str]) -> List[Dict[str, Any]]:
         """
         Analyze topics and sentiment for multiple texts.
+        Uses lexicon mode for efficiency with large batches.
         
         Args:
             texts: List of texts to analyze
@@ -644,7 +646,8 @@ class LDATopicAnalyzer:
             raise ValueError("Model not trained yet")
         
         from models.sentiment_analyzer import SentimentAnalyzer
-        sentiment_analyzer = SentimentAnalyzer()
+        # Use lexicon mode for batch processing (faster)
+        sentiment_analyzer = SentimentAnalyzer(mode="lexicon")
         
         results = []
         for idx, text in enumerate(texts):

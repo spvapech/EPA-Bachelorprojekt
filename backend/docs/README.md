@@ -44,6 +44,11 @@ Neu hier? Starte mit diesen Dokumenten:
 ### Sentiment-Analyse (Neu! 🆕)
 - **[SENTIMENT_ANALYSIS_UPGRADE.md](SENTIMENT_ANALYSIS_UPGRADE.md)** - ML-basierte Sentiment-Analyse
 - **[SENTIMENT_ANALYSIS_COMPARISON.md](SENTIMENT_ANALYSIS_COMPARISON.md)** - Lexicon vs. Transformer Vergleich
+- **[SENTIMENT_MODE_SELECTION.md](SENTIMENT_MODE_SELECTION.md)** - ⭐ Modell-Auswahl, Test-Ergebnisse & Begründung
+
+### Evaluation & Testing (Neu! 🆕)
+- **[TOPIC_MODELING_EVALUATION.md](TOPIC_MODELING_EVALUATION.md)** - ⭐ Topic Modeling: Metriken, Ergebnisse & Bewertung
+- **[SENTIMENT_MODE_SELECTION.md](SENTIMENT_MODE_SELECTION.md)** - Sentiment Analysis: Test-Ergebnisse & Modell-Vergleich
 
 ### Technische Details & Analyse
 - **[TOPIC_ANALYSIS_EXPLANATION.md](TOPIC_ANALYSIS_EXPLANATION.md)** - Wie die Topic-Analyse funktioniert

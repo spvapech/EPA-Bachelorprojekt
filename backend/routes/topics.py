@@ -850,8 +850,9 @@ def calculate_topic_trend(company_id: int, topic_id: int, topic_words: list[str]
             return {"delta": 0, "direction": "stable", "message": "Not enough data"}
         
         # Analyze each review for topic presence and sentiment
+        # Use transformer mode for accurate trend analysis
         from models.sentiment_analyzer import SentimentAnalyzer
-        sentiment_analyzer = SentimentAnalyzer()
+        sentiment_analyzer = SentimentAnalyzer(mode="transformer")
         
         old_reviews = []  # Reviews from 60-30 days ago
         new_reviews = []  # Reviews from last 30 days
