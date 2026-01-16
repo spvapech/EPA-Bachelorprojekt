@@ -4,7 +4,8 @@ API routes for analytics and company data.
 
 from fastapi import APIRouter, HTTPException, Query
 from database.supabase_client import get_supabase_client
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Literal
+from services.topic_average_rating_service import get_topic_rating_timeseries
 from datetime import datetime, timedelta
 from collections import defaultdict, Counter
 import re
@@ -656,6 +657,30 @@ async def get_topic_overview(
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error generating topic overview: {str(e)}")
+
+#sara: topicRatingCard
+@router.get("/company/{company_id}/topic-ratings-timeseries")
+async def topic_ratings_timeseries(
+    company_id: int,
+    source: Literal["employee", "candidates"] = Query(..., description="employee or candidates"),
+    granularity: Literal["month", "year"] = Query("month", description="month or year"),
+    start: Optional[str] = Query(None, description="ISO date/time, e.g. 2023-01-01"),
+    end: Optional[str] = Query(None, description="ISO date/time, e.g. 2024-12-31"),
+):
+    """
+    Returns average star-ratings per topic grouped by month/year for a company.
+    Output format fits a line chart: [{period: 'YYYY-MM', topicA: 3.2, ...}, ...]
+    """
+    try:
+        return get_topic_rating_timeseries(
+            source=source,
+            company_id=company_id,
+            granularity=granularity,
+            start=start,
+            end=end,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error building topic ratings timeseries: {str(e)}")
 
 
 def analyze_topic(

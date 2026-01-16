@@ -15,7 +15,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { TimelineCard } from "@/components/dashboard/TimelineCard"
-import { CategoryRatingCard } from "@/components/dashboard/CategoryRatingCard"
+import { TopicRatingCard } from "@/components/dashboard/TopicRatingCard"
 import { DominantTopicsCard } from "@/components/dashboard/DominantTopicsCard"
 import { IndividualReviewsCard } from "@/components/dashboard/IndividualReviewsCard"
 import { TopicOverviewCard } from "@/components/dashboard/TopicOverviewCard"
@@ -800,7 +800,7 @@ export default function Dashboard() {
                     {/* Charts row */}
                     <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
                         <TimelineCard companyId={selectedCompany || selectedCompanyId} />
-                        {/* <CategoryRatingCard /> */}
+                        <TopicRatingCard companyId={selectedCompany || selectedCompanyId} />
                     </div>
 
                     {/* Topic Overview */}
