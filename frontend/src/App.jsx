@@ -7,7 +7,7 @@ export default function App() {
     <Router>
       <Routes>
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
-        <Route path="/welcome" element={<Welcome />} />
+        {/* <Route path="/welcome" element={<Welcome />} /> */}
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>

@@ -480,8 +480,8 @@ export function TopicRatingCard({ companyId }) {
       <Card className="rounded-3xl shadow-sm">
         <CardHeader className="flex flex-row items-center justify-between">
           <div>
-            <CardTitle className="text-xl font-bold text-slate-800">Topic Rating</CardTitle>
-            <p className="text-sm text-slate-500 mt-1">Bewertungsanalyse nach Themen</p>
+            <CardTitle className="text-xl font-bold text-slate-800">Topic Bewertungen ⭐</CardTitle>
+            {/* <p className="text-sm text-slate-500 mt-1">Bewertungsanalyse nach Themen</p> */}
           </div>
           <FilterDropdowns />
         </CardHeader>
@@ -505,7 +505,7 @@ export function TopicRatingCard({ companyId }) {
       <Card className="rounded-3xl shadow-sm">
         <CardHeader className="flex flex-row items-center justify-between">
           <div>
-            <CardTitle className="text-xl font-bold text-slate-800">Topic Sternbewertungen</CardTitle>
+            <CardTitle className="text-xl font-bold text-slate-800">Topic Bewertungen (⭐)</CardTitle>
             <p className="text-sm text-slate-500 mt-1">Durchschnittliche Sternbewertungen nach Themen</p>
           </div>
           <FilterDropdowns />
@@ -528,11 +528,11 @@ export function TopicRatingCard({ companyId }) {
       >
         <CardHeader className="flex flex-row items-center justify-between">
           <div>
-            <CardTitle className="text-xl font-bold text-slate-800 flex items-center gap-2">
-              Topic Rating
+            <CardTitle className="text-xl font-bold text-slate-800 flex items-center gap-2 whitespace-nowrap">
+              Topic Bewertungen (⭐)
               <Maximize2 className="h-4 w-4 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity" />
             </CardTitle>
-            <p className="text-sm text-slate-500 mt-1">Bewertungsanalyse nach Themen</p>
+            {/* <p className="text-sm text-slate-500 mt-1">Bewertungsanalyse nach Themen</p> */}
           </div>
 
           <div onClick={(e) => e.stopPropagation()}>
@@ -541,7 +541,7 @@ export function TopicRatingCard({ companyId }) {
         </CardHeader>
 
         <CardContent className="pb-6">
-          <div className="relative h-[280px] w-full">
+          <div className="relative h-[280px] w-full border-0 outline-none">
             <TopicChart height={280} />
 
             {refreshing && (
@@ -565,7 +565,7 @@ export function TopicRatingCard({ companyId }) {
           style={{ width: "90vw", maxWidth: "90vw", height: "85vh", maxHeight: "85vh" }}
         >
           <DialogHeader className="flex flex-row items-center justify-between pb-2 flex-shrink-0">
-            <DialogTitle className="text-xl font-bold text-slate-800">Topic Rating – Detailansicht</DialogTitle>
+            <DialogTitle className="text-xl font-bold text-slate-800">Topics durchschnittliche Sternbewertungen ⭐</DialogTitle>
             <div onClick={(e) => e.stopPropagation()}>
               <FilterDropdowns />
             </div>
