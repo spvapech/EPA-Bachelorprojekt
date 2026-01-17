@@ -28,8 +28,8 @@ const SOURCE_LABEL = {
 }
 
 const GRANULARITY_LABEL = {
-  year: "ges. Zeitraum",
-  month: "Monat",
+  overall: "ges. Zeitraum",
+  year: "Jahr",
 }
 
 function parseYear(period) {
@@ -54,7 +54,7 @@ function prettifyTopicKey(key) {
 export function TopicRatingCard({ companyId }) {
   // Defaults
   const [source, setSource] = useState("employee")
-  const [granularity, setGranularity] = useState("year")
+  const [granularity, setGranularity] = useState("overall")
 
   const [topics, setTopics] = useState([])
   const [rawData, setRawData] = useState([])
@@ -65,8 +65,11 @@ export function TopicRatingCard({ companyId }) {
 
   const [modalOpen, setModalOpen] = useState(false)
 
-  // Monat-View braucht Jahr-Auswahl
+  // Jahr-View (Monatsdaten) braucht selectedYear
   const [selectedYear, setSelectedYear] = useState(null)
+  // Jahre aus DB (separat laden, nicht aus rawData ableiten!)
+  const [years, setYears] = useState([])
+
 
   // Topics ein/ausblenden
   const [hiddenTopics, setHiddenTopics] = useState(() => new Set())
@@ -88,6 +91,47 @@ export function TopicRatingCard({ companyId }) {
   ]
   const topicColor = (idx) => palette[idx % palette.length]
 
+  useEffect(() => {
+    if (!companyId) return
+
+    const fetchYears = async () => {
+      try {
+        // Jahre immer aus der DB über API holen:
+        const url =
+          `${API_URL}/analytics/company/${companyId}/topic-ratings-timeseries` +
+          `?source=${source}&granularity=year`
+
+        const res = await fetch(url)
+        if (!res.ok) throw new Error(`API Error (years): ${res.status}`)
+        const json = await res.json()
+
+        const ys = (json.data || [])
+          .map((d) => parseYear(d.period))
+          .filter((y) => y !== null)
+
+        const uniq = Array.from(new Set(ys)).sort((a, b) => a - b)
+        setYears(uniq)
+
+        if (granularity === "year") {
+          const newest = uniq.length ? uniq[uniq.length - 1] : null
+          setSelectedYear((prev) => {
+            if (prev == null) return newest
+            if (uniq.includes(prev)) return prev
+            return newest
+          })
+        }
+
+      } catch (e) {
+        console.error("Error fetching years:", e)
+        setYears([])
+        // selectedYear nicht hart nullen, nur wenn du willst
+      }
+    }
+
+    fetchYears()
+  }, [companyId, source, granularity])
+
+
   // Fetch
   useEffect(() => {
     if (!companyId) return
@@ -99,16 +143,30 @@ export function TopicRatingCard({ companyId }) {
       try {
         setError(null)
 
+        // UI granularity -> API granularity mapping
+        const apiGranularity = granularity === "overall" ? "year" : "month"
+
         let url =
           `${API_URL}/analytics/company/${companyId}/topic-ratings-timeseries` +
-          `?source=${source}&granularity=${granularity}`
+          `?source=${source}&granularity=${apiGranularity}`
 
-        // Wenn Monat gewählt: Jahr einschränken
-        if (granularity === "month" && selectedYear) {
-          const start = `${selectedYear}-01-01`
-          const end = `${selectedYear}-12-31`
-          url += `&start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`
+        // Wenn "Jahr"-Modus: Monate innerhalb selectedYear anzeigen
+        if (granularity === "year") {
+          if (selectedYear) {
+            const start = `${selectedYear}-01-01`
+            const end = `${selectedYear}-12-31`
+            url += `&start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`
+          } else {
+            // Falls selectedYear noch nicht da ist: wir warten lieber auf den years-effect
+            // und fetchen nicht "alle Monate aller Jahre" (sonst flackert die UI)
+            setTopics([])
+            setRawData([])
+            setLoading(false)
+            setRefreshing(false)
+            return
+          }
         }
+
 
         const res = await fetch(url)
         if (!res.ok) throw new Error(`API Error: ${res.status}`)
@@ -117,15 +175,7 @@ export function TopicRatingCard({ companyId }) {
         setTopics(json.topics || [])
         setRawData(json.data || [])
 
-        // Bei Monat: wenn selectedYear noch null, nimm neuestes Jahr aus den Daten
-        if (granularity === "month") {
-          const years = (json.data || [])
-            .map((d) => parseYear(d.period))
-            .filter((y) => y !== null)
-          const uniq = Array.from(new Set(years)).sort((a, b) => a - b)
-          const newest = uniq.length ? uniq[uniq.length - 1] : null
-          setSelectedYear((prev) => prev ?? newest)
-        }
+
 
         // Reset: standardmäßig nur Top 5 sichtbar
         const allTopics = json.topics || []
@@ -152,14 +202,6 @@ export function TopicRatingCard({ companyId }) {
     fetchData()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [companyId, source, granularity, selectedYear])
-
-  // verfügbare Jahre (aus rawData)
-  const availableYears = useMemo(() => {
-    const years = (rawData || [])
-      .map((d) => parseYear(d.period))
-      .filter((y) => y !== null)
-    return Array.from(new Set(years)).sort((a, b) => a - b)
-  }, [rawData])
 
   // Top-5 Topics nach Häufigkeit (wie oft Werte vorhanden)
   const topicCounts = useMemo(() => {
@@ -194,7 +236,7 @@ export function TopicRatingCard({ companyId }) {
   const chartData = useMemo(() => {
     return (rawData || []).map((row) => ({
       ...row,
-      periodLabel: granularity === "month" ? formatMonthLabel(row.period) : row.period,
+    periodLabel: granularity === "year" ? formatMonthLabel(row.period) : row.period,
     }))
   }, [rawData, granularity])
 
@@ -277,20 +319,20 @@ export function TopicRatingCard({ companyId }) {
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          <DropdownMenuItem
-            onClick={() => {
-              setGranularity("year")
-              setSelectedYear(null)
-            }}
-          >
-            ges. Zeitraum
+          <DropdownMenuItem onClick={() => { 
+            setGranularity("overall")
+            setSelectedYear(null) }}> ges. Zeitraum
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => setGranularity("month")}>Monat</DropdownMenuItem>
+          <DropdownMenuItem onClick={() => {
+            setGranularity("year")
+              // selectedYear wird im years-effect automatisch auf "neuestes" gesetzt, falls null
+            }}> Jahr
+          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
 
       {/* Year selector only for month-view */}
-      {granularity === "month" && (
+      {granularity === "year" && (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" className="rounded-full h-9 gap-2">
@@ -300,10 +342,10 @@ export function TopicRatingCard({ companyId }) {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            {availableYears.length === 0 ? (
+            {years.length === 0 ? (
               <DropdownMenuItem disabled>Keine Jahre</DropdownMenuItem>
             ) : (
-              availableYears.map((y) => (
+              years.map((y) => (
                 <DropdownMenuItem key={y} onClick={() => setSelectedYear(y)}>
                   {y}
                 </DropdownMenuItem>
@@ -409,19 +451,23 @@ export function TopicRatingCard({ companyId }) {
           formatter={(value) => prettifyTopicKey(value)}
         />
 
-        {visibleTopics.map((topic, idx) => (
-          <Line
-            key={topic}
-            type="monotone"
-            dataKey={topic}
-            stroke={topicColor(idx)}
-            strokeWidth={2.5}
-            dot={{ r: 3, strokeWidth: 0 }}
-            activeDot={{ r: 5 }}
-            connectNulls={false}
-            name={prettifyTopicKey(topic)}
-          />
-        ))}
+        {visibleTopics.map((topic) => {
+          const colorIdx = (topics || []).indexOf(topic) // stabiler Index aus "topics"
+          return (
+            <Line
+              key={topic}
+              type="monotone"
+              dataKey={topic}
+              stroke={topicColor(Math.max(colorIdx, 0))}
+              strokeWidth={2.5}
+              dot={{ r: 3, strokeWidth: 0 }}
+              activeDot={{ r: 5 }}
+              connectNulls={false}
+              name={prettifyTopicKey(topic)}
+            />
+          )
+        })}
+
       </LineChart>
     </ResponsiveContainer>
   )
@@ -442,8 +488,10 @@ export function TopicRatingCard({ companyId }) {
         <CardContent>
           <div className="h-[280px] flex items-center justify-center">
             <div className="flex flex-col items-center gap-2">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-              <p className="text-slate-500">Inhalt wird geladen...</p>
+              {/* <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div> */}
+              {/* <p className="text-slate-500">Inhalt wird geladen...</p> */}
+              <p className="text-slate-500">Kein Firma ausgewählt</p>
+
             </div>
           </div>
         </CardContent>
@@ -457,8 +505,8 @@ export function TopicRatingCard({ companyId }) {
       <Card className="rounded-3xl shadow-sm">
         <CardHeader className="flex flex-row items-center justify-between">
           <div>
-            <CardTitle className="text-xl font-bold text-slate-800">Topic Rating</CardTitle>
-            <p className="text-sm text-slate-500 mt-1">Bewertungsanalyse nach Themen</p>
+            <CardTitle className="text-xl font-bold text-slate-800">Topic Sternbewertungen</CardTitle>
+            <p className="text-sm text-slate-500 mt-1">Durchschnittliche Sternbewertungen nach Themen</p>
           </div>
           <FilterDropdowns />
         </CardHeader>
@@ -551,7 +599,7 @@ export function TopicRatingCard({ companyId }) {
 
               <p className="text-xs text-slate-400">
                 {SOURCE_LABEL[source]} · {GRANULARITY_LABEL[granularity]}
-                {granularity === "month" && selectedYear ? ` · ${selectedYear}` : ""}
+                {granularity === "year" && selectedYear ? ` · ${selectedYear}` : ""}
               </p>
             </div>
           </div>
