@@ -435,7 +435,42 @@ export default function Dashboard() {
                 const json = await res.json()
                 const list = json?.negative_topics || []
                 if (Array.isArray(list) && list.length) {
-                    setNegativeTopicItem(list[0])
+                    const mentionsOf = (t) => {
+                        const n = Number(t?.mention_count)
+                        return Number.isFinite(n) ? n : 0
+                    }
+                    const ratingOf = (t) => {
+                        const r = Number(t?.avg_rating)
+                        return Number.isFinite(r) ? r : NaN
+                    }
+                    const impactOf = (t) => {
+                        const n = Math.max(0, mentionsOf(t))
+                        const r = ratingOf(t)
+                        if (!Number.isFinite(r)) return 0
+                        return n * Math.max(0, 5 - r)
+                    }
+
+                    const chosen = list.reduce((best, cur) => {
+                        const bi = impactOf(best)
+                        const ci = impactOf(cur)
+                        if (ci > bi) return cur
+                        if (ci < bi) return best
+                        // tie-breaker: lower rating, then higher mentions
+                        const br = ratingOf(best)
+                        const cr = ratingOf(cur)
+                        if (Number.isFinite(br) && Number.isFinite(cr)) {
+                            if (cr < br) return cur
+                            if (cr > br) return best
+                        }
+                        return mentionsOf(cur) > mentionsOf(best) ? cur : best
+                    }, list[0])
+
+                    setNegativeTopicItem({
+                        ...chosen,
+                        title: "Negative Topic",
+                        topic_label: chosen?.topic_label || chosen?.topic || chosen?.topic_text,
+                        categories: Array.isArray(chosen?.categories) ? chosen.categories : (chosen?.topic_label ? [chosen.topic_label] : []),
+                    })
                     return
                 }
             }
@@ -455,6 +490,9 @@ export default function Dashboard() {
 
             const normSent = (s) => String(s || "").toLowerCase()
             const isNeg = (t) => normSent(t?.sentiment).includes("neg")
+            const isNeu = (t) => normSent(t?.sentiment).includes("neu")
+            const isPos = (t) => normSent(t?.sentiment).includes("pos")
+            const hasNoSentiment = (t) => !normSent(t?.sentiment)
             const ratingOf = (t) => {
                 const r = Number(t?.avgRating)
                 return Number.isFinite(r) ? r : NaN
@@ -464,21 +502,37 @@ export default function Dashboard() {
                 return Number.isFinite(f) ? f : 0
             }
 
-            const negativePool = topics.filter(isNeg)
-            const pool = negativePool.length ? negativePool : topics
-            const withRating = pool.filter((t) => Number.isFinite(ratingOf(t)))
-            const ratingPool = withRating.length ? withRating : pool
+            // Exclude positive topics; if any negative exist => use only negative, else only neutral.
+            const negativeOnly = topics.filter(isNeg)
+            const neutralOnly = topics.filter(isNeu)
+            const noSentimentOnly = topics.filter(hasNoSentiment)
+            const basePool = negativeOnly.length
+                ? negativeOnly
+                : (neutralOnly.length ? neutralOnly : (noSentimentOnly.length ? noSentimentOnly : topics.filter((t) => !isPos(t))))
+
+            const withRating = basePool.filter((t) => Number.isFinite(ratingOf(t)))
+            const ratingPool = withRating.length ? withRating : basePool
+
+            // Relationship/impact: high frequency + low rating => more critical
+            const impactOf = (t) => {
+                const f = Math.max(0, freqOf(t))
+                const r = ratingOf(t)
+                if (!Number.isFinite(r)) return 0
+                return f * Math.max(0, 5 - r)
+            }
 
             const chosen = ratingPool.reduce((best, cur) => {
+                const bi = impactOf(best)
+                const ci = impactOf(cur)
+                if (ci > bi) return cur
+                if (ci < bi) return best
+                // tie-breaker: lower rating, then higher frequency
                 const br = ratingOf(best)
                 const cr = ratingOf(cur)
-                if (!Number.isFinite(br) && Number.isFinite(cr)) return cur
-                if (Number.isFinite(br) && !Number.isFinite(cr)) return best
                 if (Number.isFinite(br) && Number.isFinite(cr)) {
                     if (cr < br) return cur
                     if (cr > br) return best
                 }
-                // tie-breaker: higher frequency
                 return freqOf(cur) > freqOf(best) ? cur : best
             }, ratingPool[0])
 
@@ -870,11 +924,6 @@ export default function Dashboard() {
                             <CardContent className="pt-2">
                                 <div className="text-2xl font-extrabold text-orange-400">
                                     {getNegativeTopicName(negativeTopicItem)}
-                                </div>
-                                <div className="text-xl font-bold text-black mt-1 text-center">
-                                    {negativeTopicItem?.negative_share_percent !== undefined && negativeTopicItem?.negative_share_percent !== null
-                                        ? `${Math.round(Number(negativeTopicItem.negative_share_percent))} %`
-                                        : "-"}
                                 </div>
                             </CardContent>
                         </Card>

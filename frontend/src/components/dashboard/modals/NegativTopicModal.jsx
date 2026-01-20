@@ -15,6 +15,31 @@ export default function NegativTopicModal({ open, onOpenChange, topic: propTopic
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
+  const toArray = (v) => (Array.isArray(v) ? v : (v ? [v] : []));
+
+  const deriveKritikpunkte = (m) => {
+    if (!m) return [];
+
+    const fromKritikpunkte = Array.isArray(m.kritikpunkte) ? m.kritikpunkte : [];
+    if (fromKritikpunkte.length) return fromKritikpunkte;
+
+    const fromTypical = Array.isArray(m.typicalStatements) ? m.typicalStatements : [];
+    if (fromTypical.length) return fromTypical;
+
+    const fromReviewDetails = Array.isArray(m.reviewDetails)
+      ? m.reviewDetails.map((d) => d?.preview).filter(Boolean)
+      : [];
+    if (fromReviewDetails.length) return fromReviewDetails;
+
+    const fromExample = typeof m.example === "string" && m.example.trim() ? [m.example] : [];
+    if (fromExample.length) return fromExample;
+
+    const fromWords = toArray(m.topic_words).length
+      ? toArray(m.topic_words)
+      : (typeof m.topic_text === "string" ? m.topic_text.split(",").map((x) => x.trim()).filter(Boolean) : []);
+    return fromWords;
+  };
+
   const extractSubjectPhrase = (text) => {
     if (!text) return "";
     let t = String(text)
@@ -97,44 +122,38 @@ export default function NegativTopicModal({ open, onOpenChange, topic: propTopic
     if (companyId) {
       setLoading(true);
       setError(null);
-      const threshold = 3.5;
-      const weight = (n) => Math.sqrt(Math.max(0, Number(n) || 0));
-
-      const pickMostCritical = (topics, ratingKey, volumeKey) => {
-        const scoreValue = (t) => {
-          const v = Number(t?.[ratingKey]);
-          return Number.isFinite(v) ? v : NaN;
-        };
-        const volumeValue = (t) => Number(t?.[volumeKey]) || 0;
-        const criticality = (t) => {
-          const r = scoreValue(t);
-          if (!Number.isFinite(r)) return -Infinity;
-          const deficit = Math.max(0, threshold - r);
-          return deficit * weight(volumeValue(t));
-        };
-
-        const pool = Array.isArray(topics) ? topics : [];
+      const pickByImpact = (items, ratingKey, volumeKey) => {
+        const pool = Array.isArray(items) ? items : [];
         if (!pool.length) return null;
 
-        const scored = pool
-          .map((t) => ({ t, c: criticality(t) }))
-          .filter((x) => Number.isFinite(x.c));
+        const ratingOf = (t) => {
+          const r = Number(t?.[ratingKey]);
+          return Number.isFinite(r) ? r : NaN;
+        };
+        const volumeOf = (t) => {
+          const v = Number(t?.[volumeKey]);
+          return Number.isFinite(v) ? v : 0;
+        };
+        const impactOf = (t) => {
+          const v = Math.max(0, volumeOf(t));
+          const r = ratingOf(t);
+          if (!Number.isFinite(r)) return 0;
+          return v * Math.max(0, 5 - r);
+        };
 
-        const anyCritical = scored.some((x) => x.c > 0);
-        if (anyCritical) {
-          return scored.reduce((best, cur) => (cur.c > best.c ? cur : best), scored[0]).t;
-        }
-
-        return pool.reduce((best, current) => {
-          const bestRating = scoreValue(best);
-          const currentRating = scoreValue(current);
-          if (!Number.isFinite(bestRating)) return current;
-          if (!Number.isFinite(currentRating)) return best;
-          if (currentRating < bestRating) return current;
-          if (currentRating > bestRating) return best;
-          const bestVol = volumeValue(best);
-          const currentVol = volumeValue(current);
-          return currentVol > bestVol ? current : best;
+        return pool.reduce((best, cur) => {
+          const bi = impactOf(best);
+          const ci = impactOf(cur);
+          if (ci > bi) return cur;
+          if (ci < bi) return best;
+          // tie-breaker: lower rating, then higher volume
+          const br = ratingOf(best);
+          const cr = ratingOf(cur);
+          if (Number.isFinite(br) && Number.isFinite(cr)) {
+            if (cr < br) return cur;
+            if (cr > br) return best;
+          }
+          return volumeOf(cur) > volumeOf(best) ? cur : best;
         }, pool[0]);
       };
 
@@ -144,16 +163,44 @@ export default function NegativTopicModal({ open, onOpenChange, topic: propTopic
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
           return res.json();
         })
-        .then((data) => {
+        .then(async (data) => {
           const list = data?.negative_topics || [];
           if (!Array.isArray(list) || list.length === 0) {
             throw new Error("Keine negativen Topics vorhanden");
           }
 
-          const most = pickMostCritical(list, "avg_rating", "mention_count") || list[0];
+          const most = pickByImpact(list, "avg_rating", "mention_count") || list[0];
+
+          // If backend did not provide kritikpunkte, fill from topic-overview as a reliable fallback.
+          let kritikpunkte = deriveKritikpunkte(most);
+          if (!kritikpunkte.length) {
+            try {
+              const overviewRes = await fetch(`${API_URL}/analytics/company/${companyId}/topic-overview`);
+              if (overviewRes.ok) {
+                const overview = await overviewRes.json();
+                const topics = Array.isArray(overview?.topics) ? overview.topics : [];
+                const keys = [
+                  ...(Array.isArray(most?.categories) ? most.categories : []),
+                  most?.topic_label,
+                  most?.topic,
+                ]
+                  .filter(Boolean)
+                  .map((x) => String(x).toLowerCase());
+
+                const match = topics.find((t) => keys.includes(String(t?.topic || "").toLowerCase()));
+                if (match) {
+                  kritikpunkte = deriveKritikpunkte(match);
+                }
+              }
+            } catch {
+              // ignore and keep empty
+            }
+          }
+
           setModal({
             ...most,
             title: "Negative Topic",
+            kritikpunkte: kritikpunkte.slice(0, 3),
           });
         })
         .catch(() => {
@@ -170,18 +217,30 @@ export default function NegativTopicModal({ open, onOpenChange, topic: propTopic
                 return;
               }
 
-              const withRatings = topics.filter((t) => Number(t?.avgRating) > 0);
-              const pool = withRatings.length ? withRatings : topics;
-              const most = pickMostCritical(pool, "avgRating", "frequency") || pool[0];
+              const normSent = (s) => String(s || "").toLowerCase();
+              const isNeg = (t) => normSent(t?.sentiment).includes("neg");
+              const isNeu = (t) => normSent(t?.sentiment).includes("neu");
+              const isPos = (t) => normSent(t?.sentiment).includes("pos");
+              const hasNoSentiment = (t) => !normSent(t?.sentiment);
 
+              const negativeOnly = topics.filter(isNeg);
+              const neutralOnly = topics.filter(isNeu);
+              const noSentimentOnly = topics.filter(hasNoSentiment);
+              const basePool = negativeOnly.length
+                ? negativeOnly
+                : (neutralOnly.length ? neutralOnly : (noSentimentOnly.length ? noSentimentOnly : topics.filter((t) => !isPos(t))));
+
+              const withRatings = basePool.filter((t) => Number.isFinite(Number(t?.avgRating)));
+              const pool = withRatings.length ? withRatings : basePool;
+              const most = pickByImpact(pool, "avgRating", "frequency") || pool[0];
+
+              const kritikpunkte = deriveKritikpunkte(most);
               setModal({
                 ...most,
                 title: "Negative Topic",
                 topic_label: most?.topic,
                 categories: most?.topic ? [most.topic] : [],
-                kritikpunkte: Array.isArray(most?.typicalStatements)
-                  ? most.typicalStatements.slice(0, 3)
-                  : (most?.example ? [most.example] : []),
+                kritikpunkte: kritikpunkte.slice(0, 3),
               });
             });
         })
@@ -219,31 +278,35 @@ export default function NegativTopicModal({ open, onOpenChange, topic: propTopic
       return Number.isFinite(p) ? `${Math.round(p)} %` : "-";
     }
 
-    // Topic-overview fallback: only provides a single sentiment label.
-    // Use a small heuristic so the UI can still show a percentage.
-    if (m.sentiment) {
-      const s = String(m.sentiment).toLowerCase();
-      if (s.includes("neg")) return "70 %";
-      if (s.includes("neu")) return "45 %";
-      if (s.includes("pos")) return "20 %";
+    // If we have sentiment distribution, compute a real ratio.
+    const s = m.sentiments || {};
+    const neg = Number(s.negative) || 0;
+    const pos = Number(s.positive) || 0;
+    const neu = Number(s.neutral) || 0;
+    const total = neg + pos + neu;
+    if (total > 0) {
+      return `${Math.round((neg / total) * 100)} %`;
     }
 
-    // If we only have a rating, derive a rough estimate.
+    // Topic-overview fallback: only provides a single sentiment label.
+    // Use a consistent estimate for the UI.
+    if (m.sentiment) {
+      const label = String(m.sentiment).toLowerCase();
+      if (label.includes("neg")) return "70 %";
+      if (label.includes("neu")) return "45 %";
+      if (label.includes("pos")) return "20 %";
+    }
+
+    // Last resort: derive from rating on a 0..5 scale.
     const r = m.avgRating !== undefined && m.avgRating !== null
       ? Number(m.avgRating)
       : (m.avg_rating !== undefined && m.avg_rating !== null ? Number(m.avg_rating) : NaN);
     if (Number.isFinite(r)) {
-      if (r < 2.5) return "70 %";
-      if (r < 3.5) return "45 %";
-      return "20 %";
+      const p = Math.max(0, Math.min(100, ((5 - r) / 5) * 100));
+      return `${Math.round(p)} %`;
     }
 
-    const s = m.sentiments || {};
-    const neg = s.negative || 0;
-    const pos = s.positive || 0;
-    const neu = s.neutral || 0;
-    const total = neg + pos + neu || m.mention_count || 1;
-    return `${Math.round((neg / total) * 100)} %`;
+    return "-";
   };
 
   const getPrimaryMetric = (m) => ({
@@ -253,18 +316,23 @@ export default function NegativTopicModal({ open, onOpenChange, topic: propTopic
 
   const getKritikpunkte = (m) => {
     if (!m) return ["Keine Daten"];
-    if (m.kritikpunkte && m.kritikpunkte.length) {
-      return m.kritikpunkte
-        .map((k) => summarizeKritikpunkt(k, 45))
-        .filter(Boolean)
-        .slice(0, 3);
-    }
+    const raw = deriveKritikpunkte(m);
+
+    const points = raw
+      .map((k) => summarizeKritikpunkt(k, 45))
+      .filter(Boolean)
+      .slice(0, 3);
+
+    if (points.length) return points;
+
     if (m.top_words && m.top_words.length) {
-      return m.top_words
+      const words = m.top_words
         .map((w) => summarizeKritikpunkt(w.word, 30))
         .filter(Boolean)
         .slice(0, 3);
+      if (words.length) return words;
     }
+
     return ["Keine Kritikpunkte gefunden"];
   };
 
