@@ -77,6 +77,8 @@ export default function Dashboard() {
     const [uploading, setUploading] = useState(false)
     const [error, setError] = useState("")
     const [highlightedIndex, setHighlightedIndex] = useState(-1)
+
+    const effectiveCompanyId = selectedCompany || selectedCompanyId || companyFromWelcome || null
     
     async function getCompanies() {
         try {
@@ -311,11 +313,15 @@ export default function Dashboard() {
         getTrend()
         getMostCritical()
         getNegativeTopic()
-
-    }, [selectedCompany])
+    }, [effectiveCompanyId])
     async function getAvg() {
+        const companyId = selectedCompany || selectedCompanyId || companyFromWelcome
+        if (!companyId) {
+            setData(null)
+            return
+        }
         try {
-            const res = await fetch(`${API_URL}/companies/${selectedCompany}/ratings`)
+            const res = await fetch(`${API_URL}/companies/${companyId}/ratings`)
             if (!res.ok) return
             setData(await res.json())
 
@@ -328,7 +334,8 @@ export default function Dashboard() {
     }
 
     async function getTrend() {
-        if (!selectedCompany) {
+        const companyId = selectedCompany || selectedCompanyId || companyFromWelcome
+        if (!companyId) {
             setTrendData(null);
             return;
         }
@@ -336,7 +343,7 @@ export default function Dashboard() {
         try {
             // Dashboard KPI should match the stable 1Y definition: last 12 full months vs previous 12 full months
             const res = await fetch(
-                `${API_URL}/companies/${selectedCompany}/ratings/trend?mode=stable_months&months=12`
+                `${API_URL}/companies/${companyId}/ratings/trend?mode=stable_months&months=12`
             );
             if (!res.ok) return;
 
@@ -362,66 +369,145 @@ export default function Dashboard() {
     }
 
     async function getMostCritical() {
-        if (!selectedCompany) {
+        const companyId = selectedCompany || selectedCompanyId || companyFromWelcome
+        if (!companyId) {
             setMostCriticalData(null);
             return;
         }
 
         try {
-            const res = await fetch(`${API_URL}/topics/company/${selectedCompany}/most-critical`);
+            const res = await fetch(`${API_URL}/companies/${companyId}/ratings/avg`);
             if (!res.ok) return;
 
             const json = await res.json();
-            const item = json.most_critical;
-            
-            if (item) {
-                // Topic name (prefer real topic word like in the modal)
-                let topicName = "-";
-                if (Array.isArray(item.topic_words) && item.topic_words.length > 0) {
-                    const firstWord = item.topic_words[0];
-                    topicName = typeof firstWord === 'object' ? (firstWord.word || "-") : String(firstWord);
-                } else if (item.topic_text) {
-                    topicName = String(item.topic_text).split(",")[0].trim();
-                }
 
-                
-                // Kapitalisiere ersten Buchstaben
-                if (topicName && topicName !== "-") {
-                    topicName = topicName.charAt(0).toUpperCase() + topicName.slice(1);
-                }
-                
-                // Score (Backend liefert nun konsistent `score` = avg_rating)
-                const score = item.score ?? item.avg_rating ?? item.correlation ?? "-";
-                const scoreStr = typeof score === 'number' ? score.toFixed(2) : String(score);
-                
-                setMostCriticalData({ topicName, score: scoreStr });
-            } else {
+            if (!json || typeof json !== "object") {
                 setMostCriticalData(null);
+                return;
             }
+
+            const labelMap = {
+                avg_arbeitsatmosphaere: "Arbeitsatmosphäre",
+                avg_image: "Image",
+                avg_work_life_balance: "Work-Life-Balance",
+                avg_karriere_weiterbildung: "Karriere/Weiterbildung",
+                avg_gehalt_sozialleistungen: "Gehalt/Sozialleistungen",
+                avg_kollegenzusammenhalt: "Kollegenzusammenhalt",
+                avg_umwelt_sozialbewusstsein: "Umwelt-/Sozialbewusstsein",
+                avg_vorgesetztenverhalten: "Vorgesetztenverhalten",
+                avg_kommunikation: "Kommunikation",
+                avg_interessante_aufgaben: "Interessante Aufgaben",
+                avg_umgang_aelteren_kollegen: "Umgang mit älteren Kollegen",
+                avg_arbeitsbedingungen: "Arbeitsbedingungen",
+                avg_gleichberechtigung: "Gleichberechtigung",
+            };
+
+            const entries = Object.entries(json)
+                .map(([key, value]) => ({
+                    key,
+                    title: labelMap[key] ?? key,
+                    score: Number(value),
+                }))
+                .filter((x) => Number.isFinite(x.score));
+
+            if (!entries.length) {
+                setMostCriticalData(null);
+                return;
+            }
+
+            const min = entries.reduce((best, cur) => (cur.score < best.score ? cur : best), entries[0]);
+            setMostCriticalData({ topicName: min.title, score: min.score.toFixed(2) });
         } catch {
             setMostCriticalData(null);
         }
     }
 
     async function getNegativeTopic() {
-        if (!selectedCompany) {
+        const companyId = selectedCompany || selectedCompanyId || companyFromWelcome
+        if (!companyId) {
             setNegativeTopicItem(null)
             return
         }
 
         try {
-            const res = await fetch(`${API_URL}/topics/company/${selectedCompany}/negative-topics`)
-            if (!res.ok) {
+            const res = await fetch(`${API_URL}/topics/company/${companyId}/negative-topics`)
+            if (res.ok) {
+                const json = await res.json()
+                const list = json?.negative_topics || []
+                if (Array.isArray(list) && list.length) {
+                    setNegativeTopicItem(list[0])
+                    return
+                }
+            }
+
+            // Fallback (same idea as NegativTopicModal): use topic-overview if LDA/model endpoint isn't available
+            const fallbackRes = await fetch(`${API_URL}/analytics/company/${companyId}/topic-overview`)
+            if (!fallbackRes.ok) {
+                setNegativeTopicItem(null)
+                return
+            }
+            const fallbackJson = await fallbackRes.json()
+            const topics = Array.isArray(fallbackJson?.topics) ? fallbackJson.topics : []
+            if (!topics.length) {
                 setNegativeTopicItem(null)
                 return
             }
 
-            const json = await res.json()
-            const list = json?.negative_topics || []
-            setNegativeTopicItem(list.length ? list[0] : null)
+            const normSent = (s) => String(s || "").toLowerCase()
+            const isNeg = (t) => normSent(t?.sentiment).includes("neg")
+            const ratingOf = (t) => {
+                const r = Number(t?.avgRating)
+                return Number.isFinite(r) ? r : NaN
+            }
+            const freqOf = (t) => {
+                const f = Number(t?.frequency)
+                return Number.isFinite(f) ? f : 0
+            }
+
+            const negativePool = topics.filter(isNeg)
+            const pool = negativePool.length ? negativePool : topics
+            const withRating = pool.filter((t) => Number.isFinite(ratingOf(t)))
+            const ratingPool = withRating.length ? withRating : pool
+
+            const chosen = ratingPool.reduce((best, cur) => {
+                const br = ratingOf(best)
+                const cr = ratingOf(cur)
+                if (!Number.isFinite(br) && Number.isFinite(cr)) return cur
+                if (Number.isFinite(br) && !Number.isFinite(cr)) return best
+                if (Number.isFinite(br) && Number.isFinite(cr)) {
+                    if (cr < br) return cur
+                    if (cr > br) return best
+                }
+                // tie-breaker: higher frequency
+                return freqOf(cur) > freqOf(best) ? cur : best
+            }, ratingPool[0])
+
+            // Normalize shape for dashboard + modal
+            setNegativeTopicItem({
+                ...chosen,
+                title: "Negative Topic",
+                topic_label: chosen?.topic,
+                categories: chosen?.topic ? [chosen.topic] : chosen?.categories,
+            })
         } catch {
             setNegativeTopicItem(null)
         }
+    }
+
+    const getNegativeTopicName = (t) => {
+        if (!t) return "-"
+        if (t.topic_label) return String(t.topic_label)
+        if (t.topic_text) return String(t.topic_text)
+        if (t.topic) return String(t.topic)
+        if (Array.isArray(t.topic_words) && t.topic_words.length) return String(t.topic_words[0])
+        if (Array.isArray(t.top_words) && t.top_words.length) {
+            const w = t.top_words[0]
+            if (typeof w === "string") return w
+            if (w && typeof w === "object" && w.word) return String(w.word)
+        }
+        if (Array.isArray(t.categories) && t.categories.length) return String(t.categories[0])
+        if (Array.isArray(t.affected_categories) && t.affected_categories.length) return String(t.affected_categories[0])
+        return "-"
     }
 
 
@@ -739,12 +825,22 @@ export default function Dashboard() {
                             onOpenChange={setOpenTrend}
                             title="Trend"
                             description="Company trend"
-                            companyId={selectedCompany}
+                            companyId={effectiveCompanyId}
                         >
                             <div className="text-3xl font-bold">-0.3</div>
                         </TrendModal>
 
-                        <Card className="rounded-3xl shadow-sm cursor-pointer hover:shadow-md transition-shadow" onClick={() => setOpenMostCritical(true)}>
+                        <Card
+                            className="rounded-3xl shadow-sm cursor-pointer hover:shadow-md transition-shadow"
+                            onClick={() => {
+                                if (!effectiveCompanyId) {
+                                    setError("Bitte wählen Sie zuerst eine Firma aus, um die Analyse zu starten.")
+                                    setSidebarOpen(true)
+                                    return
+                                }
+                                setOpenMostCritical(true)
+                            }}
+                        >
                             <CardHeader className="pb-2">
                                 <CardTitle className="text-lg font-bold text-slate-800">
                                     Most Critical
@@ -762,7 +858,7 @@ export default function Dashboard() {
                         <MostCriticalModal
                             open={openMostCritical}
                             onOpenChange={setOpenMostCritical}
-                            companyId={selectedCompany}
+                            companyId={effectiveCompanyId}
                         />
 
                         <Card className="rounded-3xl shadow-smon" onClick={() => setOpenNegative(true)}>
@@ -773,11 +869,7 @@ export default function Dashboard() {
                             </CardHeader>
                             <CardContent className="pt-2">
                                 <div className="text-2xl font-extrabold text-orange-400">
-                                    {Array.isArray(negativeTopicItem?.categories) && negativeTopicItem.categories.length
-                                        ? String(negativeTopicItem.categories[0])
-                                        : Array.isArray(negativeTopicItem?.affected_categories) && negativeTopicItem.affected_categories.length
-                                          ? String(negativeTopicItem.affected_categories[0])
-                                          : "-"}
+                                    {getNegativeTopicName(negativeTopicItem)}
                                 </div>
                                 <div className="text-xl font-bold text-black mt-1 text-center">
                                     {negativeTopicItem?.negative_share_percent !== undefined && negativeTopicItem?.negative_share_percent !== null
@@ -789,7 +881,7 @@ export default function Dashboard() {
                         <NegativTopicModal
                             open={openNegative}
                             onOpenChange={setOpenNegative}
-                            companyId={selectedCompany}
+                            companyId={effectiveCompanyId}
                             topic={negativeTopicItem}
                         />
 
