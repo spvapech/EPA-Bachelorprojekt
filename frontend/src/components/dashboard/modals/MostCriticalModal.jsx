@@ -68,7 +68,7 @@ export default function MostCriticalModal({ open, onOpenChange, companyId = null
 
                 const sorted = [...entries].sort((a, b) => a.score - b.score);
                 const min = sorted[0];
-                const affected = sorted.slice(0, 2).map((x) => x.title);
+                const affected = sorted.slice(0, 1).map((x) => x.title);
 
                 // Aus Score grob "negativen Anteil" ableiten (0..5 -> 100..0)
                 const negative_share_percent = Math.max(
@@ -91,7 +91,6 @@ export default function MostCriticalModal({ open, onOpenChange, companyId = null
     }, [open, companyId]);
 
     const categoryTitle = item?.title ?? "-";
-    const score = item && Number.isFinite(item.score) ? item.score.toFixed(1) : "-";
 
     const negP = useMemo(() => {
         if (!item) return null;
@@ -116,7 +115,7 @@ export default function MostCriticalModal({ open, onOpenChange, companyId = null
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="w-[720px] max-w-[92vw] rounded-3xl px-10 py-10 bg-white shadow-2xl">
+            <DialogContent className="w-[95vw] sm:w-full sm:max-w-4xl max-h-[85vh] overflow-y-auto rounded-2xl p-6 sm:p-10 bg-white shadow-2xl">
                 <DialogHeader className="text-left">
                     <DialogTitle className="text-5xl font-extrabold text-slate-800 tracking-tight">
                         Most Critical
@@ -125,11 +124,6 @@ export default function MostCriticalModal({ open, onOpenChange, companyId = null
                     {/* Topic (rot) */}
                     <div className="mt-8 text-[42px] font-extrabold text-red-700 leading-tight">
                         {loading ? "…" : error ? "-" : categoryTitle}
-                    </div>
-
-                    {/* Score (rot) */}
-                    <div className="mt-4 text-[20px] font-extrabold text-red-700">
-                        {loading ? "…" : error ? "-" : score}
                     </div>
                 </DialogHeader>
 
