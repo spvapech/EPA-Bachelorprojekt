@@ -756,7 +756,7 @@ export default function Dashboard() {
                             )}
                         </div>
 
-                        <div className="w-[300px] max-w-full">
+                        {/* <div className="w-[300px] max-w-full">
                             <div className="relative">
                                 <Popover open={openCompany} onOpenChange={setOpenCompany}>
                                     <PopoverTrigger asChild>
@@ -806,7 +806,7 @@ export default function Dashboard() {
                                     </PopoverContent>
                                 </Popover>
                             </div>
-                        </div>
+                        </div> */}
                     </div>
 
                     {/* KPI cards */}
