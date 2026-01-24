@@ -123,48 +123,50 @@ async def get_company_overview(company_id: int):
 async def get_company_timeline(
     company_id: int,
     days: int = Query(default=365, description="Number of days to include"),
-    forecast_months: int = Query(default=6, description="Number of months to forecast")
+    forecast_months: int = Query(default=6, description="Number of months to forecast"),
+    source: str = Query(default="all", description="Data source: 'employee', 'candidates', or 'all'")
 ):
     """Get timeline data for ratings over time with forecast."""
     try:
         cutoff_date = datetime.now() - timedelta(days=days)
         
-        # Get candidates data
-        candidates_response = supabase.table("candidates")\
-            .select("durchschnittsbewertung, datum")\
-            .eq("company_id", company_id)\
-            .gte("datum", cutoff_date.isoformat())\
-            .order("datum")\
-            .execute()
-        
-        # Get employee data
-        employee_response = supabase.table("employee")\
-            .select("durchschnittsbewertung, datum")\
-            .eq("company_id", company_id)\
-            .gte("datum", cutoff_date.isoformat())\
-            .order("datum")\
-            .execute()
-        
-        candidates_data = candidates_response.data or []
-        employee_data = employee_response.data or []
-        
-        # Combine and format data
         timeline_data = []
-        for item in candidates_data:
-            if item.get("datum") and item.get("durchschnittsbewertung"):
-                timeline_data.append({
-                    "date": item["datum"],
-                    "score": float(item["durchschnittsbewertung"]),
-                    "type": "candidate"
-                })
         
-        for item in employee_data:
-            if item.get("datum") and item.get("durchschnittsbewertung"):
-                timeline_data.append({
-                    "date": item["datum"],
-                    "score": float(item["durchschnittsbewertung"]),
-                    "type": "employee"
-                })
+        # Get candidates data (if source is 'candidates' or 'all')
+        if source in ["candidates", "all"]:
+            candidates_response = supabase.table("candidates")\
+                .select("durchschnittsbewertung, datum")\
+                .eq("company_id", company_id)\
+                .gte("datum", cutoff_date.isoformat())\
+                .order("datum")\
+                .execute()
+            
+            candidates_data = candidates_response.data or []
+            for item in candidates_data:
+                if item.get("datum") and item.get("durchschnittsbewertung"):
+                    timeline_data.append({
+                        "date": item["datum"],
+                        "score": float(item["durchschnittsbewertung"]),
+                        "type": "candidate"
+                    })
+        
+        # Get employee data (if source is 'employee' or 'all')
+        if source in ["employee", "all"]:
+            employee_response = supabase.table("employee")\
+                .select("durchschnittsbewertung, datum")\
+                .eq("company_id", company_id)\
+                .gte("datum", cutoff_date.isoformat())\
+                .order("datum")\
+                .execute()
+            
+            employee_data = employee_response.data or []
+            for item in employee_data:
+                if item.get("datum") and item.get("durchschnittsbewertung"):
+                    timeline_data.append({
+                        "date": item["datum"],
+                        "score": float(item["durchschnittsbewertung"]),
+                        "type": "employee"
+                    })
         
         # Sort by date
         timeline_data.sort(key=lambda x: x["date"])
