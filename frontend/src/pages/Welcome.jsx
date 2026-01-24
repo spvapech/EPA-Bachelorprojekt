@@ -1,15 +1,16 @@
 import { useState } from "react"
 import { useNavigate } from "react-router-dom"
-import { Upload, FileSpreadsheet, ArrowRight } from "lucide-react"
+import { FileSpreadsheet, ArrowRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { CompanySearchSelect } from "@/components/CompanySearchSelect"
 import { API_URL } from "../config"
 
 
 export default function Welcome() {
     const [companyQuery, setCompanyQuery] = useState("")
     const [companyId, setCompanyId] = useState(null)
-    const [companySuggestions, setCompanySuggestions] = useState([])
+    const [selectedCompany, setSelectedCompany] = useState(null)
 
     const [file, setFile] = useState(null)
     const [uploading, setUploading] = useState(false)
@@ -66,27 +67,9 @@ export default function Welcome() {
         }
     }
 
-    const fetchCompanies = async (q) => {
-        const query = q.trim()
-        if (!query) {
-            setCompanySuggestions([])
-            return
-        }
-        try {
-            const res = await fetch(`${API_URL}/companies/search?q=${encodeURIComponent(query)}`)
-            if (!res.ok) return
-            const data = await res.json()
-            setCompanySuggestions(Array.isArray(data) ? data : [])
-        } catch {
-            // optional: ignorieren
-        }
-    }
-    const resolveSelectedCompany = (name) => {
-        const match = companySuggestions.find(
-            (c) => c.name.toLowerCase() === name.trim().toLowerCase()
-        )
-        setCompanyId(match ? match.id : null)
-        setCompanySuggestions([]) // Verstecke Vorschläge nach Auswahl
+    const handleCompanySelect = (company) => {
+        setSelectedCompany(company)
+        setCompanyId(company ? company.id : null)
     }
 
     const handleUpload = async () => {
@@ -184,25 +167,11 @@ export default function Welcome() {
                                 Firmenname <span className="text-red-600">*</span>
                             </label>
 
-                            <input
+                            <CompanySearchSelect
                                 value={companyQuery}
-                                onChange={(e) => {
-                                const v = e.target.value
-                                setCompanyQuery(v)
-                                setCompanyId(null)          // wenn User weiter tippt, reset
-                                fetchCompanies(v)
-                                }}
-                                onBlur={(e) => resolveSelectedCompany(e.target.value)}
-                                list="company-suggestions"
-                                placeholder="Firmenname eingeben"
-                                className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                                onValueChange={setCompanyQuery}
+                                onCompanySelect={handleCompanySelect}
                             />
-
-                            <datalist id="company-suggestions">
-                                {companySuggestions.map((c) => (
-                                <option key={c.id} value={c.name} />
-                                ))}
-                            </datalist>
 
                             <p className="text-xs text-slate-500">
                                 Geben Sie einen neuen Firmennamen ein oder wählen Sie aus den Vorschlägen.

@@ -24,12 +24,11 @@ def search_companies(q: str = Query(..., min_length=1)):
     return res.data or []
 @router.get("/companies")
 def get_companies():
-    # Vorschläge aus DB, case-insensitive, enthält-suche
+    # Alle Firmen aus DB abrufen
     res = (
         supabase.table("companies")
         .select("id,name")
         .order("name", desc=False)
-        .limit(10)
         .execute()
     )
     data = res.data or []

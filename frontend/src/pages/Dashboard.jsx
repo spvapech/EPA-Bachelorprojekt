@@ -14,6 +14,7 @@ import {
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
+import { CompanySearchSelect } from "@/components/CompanySearchSelect"
 import { TimelineCard } from "@/components/dashboard/TimelineCard"
 import { TopicRatingCard } from "@/components/dashboard/TopicRatingCard"
 import { DominantTopicsCard } from "@/components/dashboard/DominantTopicsCard"
@@ -115,6 +116,17 @@ export default function Dashboard() {
         setSelectedCompanyName(company.name)
         setCompanySuggestions([])
         setHighlightedIndex(-1)
+    }
+    
+    // Handler for CompanySearchSelect
+    const handleCompanySelectFromDropdown = (company) => {
+        if (company) {
+            setSelectedCompanyId(company.id)
+            setSelectedCompanyName(company.name)
+        } else {
+            setSelectedCompanyId(null)
+            setSelectedCompanyName("")
+        }
     }
     
     const handleKeyDown = (e) => {
@@ -593,41 +605,17 @@ export default function Dashboard() {
                             
                             {!needsUpload ? (
                                 <>
-                                    {/* Company Input with Autocomplete */}
+                                    {/* Company Input with Searchable Dropdown */}
                                     <div className="space-y-3">
                                         <label className="text-sm font-medium">
                                             Firmenname
                                         </label>
-                                        <input
+                                        <CompanySearchSelect
                                             value={companyQuery}
-                                            onChange={(e) => {
-                                                const v = e.target.value
-                                                setCompanyQuery(v)
-                                                setSelectedCompanyId(null)
-                                                fetchCompanySuggestions(v)
-                                            }}
-                                            onKeyDown={handleKeyDown}
-                                            placeholder="Firmenname eingeben..."
-                                            className="w-full rounded-lg border border-slate-600 bg-slate-800 px-4 py-2 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                            onValueChange={setCompanyQuery}
+                                            onCompanySelect={handleCompanySelectFromDropdown}
+                                            variant="dark"
                                         />
-                                        
-                                        {companySuggestions.length > 0 && (
-                                            <div className="bg-slate-800 rounded-lg border border-slate-600 max-h-40 overflow-y-auto">
-                                                {companySuggestions.map((c, index) => (
-                                                    <div
-                                                        key={c.id}
-                                                        onClick={() => selectCompanyFromList(c)}
-                                                        className={`px-4 py-2 cursor-pointer text-sm ${
-                                                            index === highlightedIndex 
-                                                                ? 'bg-blue-700 text-white' 
-                                                                : 'hover:bg-slate-700'
-                                                        }`}
-                                                    >
-                                                        {c.name}
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        )}
                                         
                                         <Button
                                             onClick={handleCompanyCheck}
