@@ -910,53 +910,88 @@ def analyze_topic(
 
 def extract_short_kritikpunkt(text: str, max_words: int = 4) -> str:
     """
-    Extrahiert einen kurzen, sinnvollen Kritikpunkt aus einem Text (2-4 Wörter).
+    Extrahiert einen kurzen, sinnvollen Kritikpunkt aus einem negativen Text (2-4 Wörter).
+    Fokussiert auf negative Phrasen wie "schlechte Kommunikation", "keine Wertschätzung".
     """
     if not text or not isinstance(text, str):
         return ""
     
     # Clean text
     text = clean_html_text(text)
-    text = re.sub(r'\s+', ' ', text).strip()
+    text = re.sub(r'\s+', ' ', text).strip().lower()
     
-    # Nimm den ersten Satz
-    first_sentence = re.split(r'[.!?]', text)[0].strip()
+    # 1. PRIORITÄT: Suche nach typischen negativen Mustern
+    negative_patterns = [
+        # "keine/kein X" Muster
+        r'keine?\s+(\w+)',
+        # "schlechte/r/s X" Muster  
+        r'schlechte[rns]?\s+(\w+)',
+        # "fehlende X" Muster
+        r'fehlende[rns]?\s+(\w+)',
+        # "mangelnde X" Muster
+        r'mangelnde[rns]?\s+(\w+)',
+        # "wenig X" Muster
+        r'wenig\s+(\w+)',
+        # "zu wenig X" Muster
+        r'zu\s+wenig\s+(\w+)',
+        # "kaum X" Muster
+        r'kaum\s+(\w+)',
+    ]
     
-    # Deutsche Stoppwörter
-    stopwords = {
-        'und', 'oder', 'aber', 'dass', 'das', 'der', 'die', 'den', 'dem', 'des',
-        'ein', 'eine', 'einer', 'eines', 'mit', 'ohne', 'für', 'auf', 'im', 'in',
-        'am', 'an', 'zu', 'von', 'bei', 'als', 'auch', 'nicht', 'nur', 'ist', 'sind',
-        'war', 'waren', 'wird', 'werden', 'ich', 'wir', 'man', 'sehr', 'mehr',
-        'weniger', 'noch', 'kein', 'keine', 'keinen', 'über', 'unter', 'vor', 'nach',
-        'aus', 'um', 'wie', 'weil', 'es', 'gibt', 'gab', 'hat', 'haben', 'kann',
-        'können', 'muss', 'müssen', 'soll', 'sollte', 'leider', 'eigentlich',
-        'hier', 'dort', 'dann', 'wenn', 'obwohl', 'jedoch', 'trotz', 'immer',
-        'durch', 'zwischen', 'gegen', 'sowie', 'dazu', 'dabei', 'dafür', 'davon'
+    # Negative Adjektive die wir behalten wollen
+    negative_adjectives = {
+        'schlechte', 'schlechter', 'schlechtes', 'schlecht',
+        'fehlende', 'fehlender', 'fehlendes', 'fehlend',
+        'mangelnde', 'mangelnder', 'mangelndes', 'mangelnd',
+        'keine', 'kein', 'keiner', 'keines',
+        'wenig', 'kaum', 'niedrige', 'niedriger', 'niedriges',
+        'unklare', 'unklarer', 'unklares',
+        'langsame', 'langsamer', 'langsames',
+        'starre', 'starrer', 'starres',
+        'veraltete', 'veralteter', 'veraltetes',
+        'toxische', 'toxischer', 'toxisches',
     }
     
-    # Wörter die am Ende nicht stehen sollten
-    bad_endings = {'durch', 'zwischen', 'gegen', 'sowie', 'und', 'oder', 'mit', 'ohne', 'für'}
+    # Wichtige Substantive für Kritik
+    important_nouns = {
+        'kommunikation', 'führung', 'management', 'vorgesetzte', 'chef',
+        'gehalt', 'bezahlung', 'vergütung', 'wertschätzung', 'respekt',
+        'transparenz', 'feedback', 'entwicklung', 'karriere', 'weiterbildung',
+        'arbeitsatmosphäre', 'atmosphäre', 'klima', 'kultur', 'umgang',
+        'prozesse', 'strukturen', 'entscheidungen', 'hierarchie',
+        'work-life-balance', 'überstunden', 'arbeitszeit', 'druck',
+        'zusammenhalt', 'teamarbeit', 'kollegen', 'mitarbeiter',
+    }
     
-    # Extrahiere sinnvolle Wörter
-    words = first_sentence.split()
-    meaningful_words = []
+    # Suche nach Mustern
+    for pattern in negative_patterns:
+        matches = re.findall(pattern, text)
+        for match in matches:
+            if match in important_nouns or len(match) > 5:
+                # Finde das vollständige Match mit Adjektiv
+                full_match = re.search(rf'(\w+\s+{match})', text)
+                if full_match:
+                    result = full_match.group(1).strip()
+                    # Kapitalisiere
+                    return result[0].upper() + result[1:]
     
+    # 2. FALLBACK: Suche nach negativem Adjektiv + Substantiv
+    words = text.split()
+    for i, word in enumerate(words):
+        clean_word = re.sub(r'[^\wäöüß]', '', word)
+        if clean_word in negative_adjectives and i + 1 < len(words):
+            next_word = re.sub(r'[^\wäöüß]', '', words[i + 1])
+            if len(next_word) >= 4:
+                result = f"{clean_word} {next_word}"
+                return result[0].upper() + result[1:]
+    
+    # 3. LETZTER FALLBACK: Nimm wichtiges Substantiv allein
     for word in words:
-        # Entferne Satzzeichen
-        clean_word = re.sub(r'^[^\w]+|[^\w]+$', '', word, flags=re.UNICODE)
-        if clean_word and len(clean_word) >= 3 and clean_word.lower() not in stopwords:
-            meaningful_words.append(clean_word)
-        if len(meaningful_words) >= max_words:
-            break
+        clean_word = re.sub(r'[^\wäöüß]', '', word)
+        if clean_word in important_nouns:
+            return clean_word[0].upper() + clean_word[1:]
     
-    # Entferne schlechte Endungen
-    while meaningful_words and meaningful_words[-1].lower() in bad_endings:
-        meaningful_words.pop()
-    
-    if len(meaningful_words) >= 2:
-        result = ' '.join(meaningful_words)
-        return result[0].upper() + result[1:] if result else ""
+    return ""
     
     return ""
 
@@ -1010,23 +1045,33 @@ async def get_negative_kritikpunkte(company_id: int):
         # Sortiere nach Rating (niedrigste zuerst)
         negative_reviews.sort(key=lambda x: float(x.get("durchschnittsbewertung", 5)))
         
-        # Extrahiere Kritikpunkte aus "schlecht_am_arbeitgeber_finde_ich"
+        # Extrahiere Kritikpunkte NUR aus "schlecht_am_arbeitgeber_finde_ich"
         kritikpunkte = []
         seen_texts = set()
         
         for review in negative_reviews:
-            # Priorität: schlecht_am_arbeitgeber > verbesserungsvorschlaege
-            text = review.get("schlecht_am_arbeitgeber_finde_ich") or review.get("verbesserungsvorschlaege") or ""
+            # NUR aus schlecht_am_arbeitgeber - das ist garantiert negativ!
+            text = review.get("schlecht_am_arbeitgeber_finde_ich", "")
             
-            if not text:
+            if not text or not isinstance(text, str) or len(text.strip()) < 10:
                 continue
             
-            kritikpunkt = extract_short_kritikpunkt(text, max_words=4)
-            
-            # Vermeide Duplikate
-            if kritikpunkt and kritikpunkt.lower() not in seen_texts:
-                kritikpunkte.append(kritikpunkt)
-                seen_texts.add(kritikpunkt.lower())
+            # Extrahiere mehrere Sätze aus dem Text
+            sentences = re.split(r'[.!?\n]+', text)
+            for sentence in sentences:
+                sentence = sentence.strip()
+                if len(sentence) < 15:
+                    continue
+                    
+                kritikpunkt = extract_short_kritikpunkt(sentence, max_words=4)
+                
+                # Vermeide Duplikate und zu kurze Ergebnisse
+                if kritikpunkt and len(kritikpunkt) >= 8 and kritikpunkt.lower() not in seen_texts:
+                    kritikpunkte.append(kritikpunkt)
+                    seen_texts.add(kritikpunkt.lower())
+                
+                if len(kritikpunkte) >= 2:
+                    break
             
             if len(kritikpunkte) >= 2:
                 break
