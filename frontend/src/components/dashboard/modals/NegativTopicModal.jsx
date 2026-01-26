@@ -122,89 +122,30 @@ export default function NegativTopicModal({ open, onOpenChange, topic: propTopic
     if (companyId) {
       setLoading(true);
       setError(null);
-      const pickByImpact = (items, ratingKey, volumeKey) => {
-        const pool = Array.isArray(items) ? items : [];
-        if (!pool.length) return null;
 
-        const ratingOf = (t) => {
-          const r = Number(t?.[ratingKey]);
-          return Number.isFinite(r) ? r : NaN;
-        };
-        const volumeOf = (t) => {
-          const v = Number(t?.[volumeKey]);
-          return Number.isFinite(v) ? v : 0;
-        };
-        const impactOf = (t) => {
-          const v = Math.max(0, volumeOf(t));
-          const r = ratingOf(t);
-          if (!Number.isFinite(r)) return 0;
-          return v * Math.max(0, 5 - r);
-        };
-
-        return pool.reduce((best, cur) => {
-          const bi = impactOf(best);
-          const ci = impactOf(cur);
-          if (ci > bi) return cur;
-          if (ci < bi) return best;
-          // tie-breaker: lower rating, then higher volume
-          const br = ratingOf(best);
-          const cr = ratingOf(cur);
-          if (Number.isFinite(br) && Number.isFinite(cr)) {
-            if (cr < br) return cur;
-            if (cr > br) return best;
-          }
-          return volumeOf(cur) > volumeOf(best) ? cur : best;
-        }, pool[0]);
-      };
-
-      // Prefer LDA-based negative topics (has negative_share_percent, kritikpunkte, categories)
-      fetch(`${API_URL}/topics/company/${companyId}/negative-topics`)
+      // NEU: Nutze den neuen Backend-Endpoint für kurze Kritikpunkte
+      fetch(`${API_URL}/analytics/company/${companyId}/negative-kritikpunkte`)
         .then(async (res) => {
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
           return res.json();
         })
-        .then(async (data) => {
-          const list = data?.negative_topics || [];
-          if (!Array.isArray(list) || list.length === 0) {
+        .then((data) => {
+          if (!data.topic) {
             throw new Error("Keine negativen Topics vorhanden");
           }
-
-          const most = pickByImpact(list, "avg_rating", "mention_count") || list[0];
-
-          // If backend did not provide kritikpunkte, fill from topic-overview as a reliable fallback.
-          let kritikpunkte = deriveKritikpunkte(most);
-          if (!kritikpunkte.length) {
-            try {
-              const overviewRes = await fetch(`${API_URL}/analytics/company/${companyId}/topic-overview`);
-              if (overviewRes.ok) {
-                const overview = await overviewRes.json();
-                const topics = Array.isArray(overview?.topics) ? overview.topics : [];
-                const keys = [
-                  ...(Array.isArray(most?.categories) ? most.categories : []),
-                  most?.topic_label,
-                  most?.topic,
-                ]
-                  .filter(Boolean)
-                  .map((x) => String(x).toLowerCase());
-
-                const match = topics.find((t) => keys.includes(String(t?.topic || "").toLowerCase()));
-                if (match) {
-                  kritikpunkte = deriveKritikpunkte(match);
-                }
-              }
-            } catch {
-              // ignore and keep empty
-            }
-          }
-
+          
           setModal({
-            ...most,
             title: "Negative Topic",
-            kritikpunkte: kritikpunkte.slice(0, 3),
+            topic_label: data.topic,
+            topic: data.topic,
+            kritikpunkte: data.kritikpunkte || [],
+            avg_rating: data.avg_rating,
+            negative_share_percent: data.negative_share_percent,
+            categories: data.categories || [data.topic]
           });
         })
         .catch(() => {
-          // Fallback: Topic Overview (no trained model needed)
+          // Fallback: alter Ansatz mit topic-overview
           return fetch(`${API_URL}/analytics/company/${companyId}/topic-overview`)
             .then((res) => {
               if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -219,28 +160,22 @@ export default function NegativTopicModal({ open, onOpenChange, topic: propTopic
 
               const normSent = (s) => String(s || "").toLowerCase();
               const isNeg = (t) => normSent(t?.sentiment).includes("neg");
-              const isNeu = (t) => normSent(t?.sentiment).includes("neu");
-              const isPos = (t) => normSent(t?.sentiment).includes("pos");
-              const hasNoSentiment = (t) => !normSent(t?.sentiment);
-
               const negativeOnly = topics.filter(isNeg);
-              const neutralOnly = topics.filter(isNeu);
-              const noSentimentOnly = topics.filter(hasNoSentiment);
-              const basePool = negativeOnly.length
-                ? negativeOnly
-                : (neutralOnly.length ? neutralOnly : (noSentimentOnly.length ? noSentimentOnly : topics.filter((t) => !isPos(t))));
-
-              const withRatings = basePool.filter((t) => Number.isFinite(Number(t?.avgRating)));
-              const pool = withRatings.length ? withRatings : basePool;
-              const most = pickByImpact(pool, "avgRating", "frequency") || pool[0];
+              const pool = negativeOnly.length ? negativeOnly : topics;
+              
+              // Wähle das mit niedrigstem Rating
+              const sorted = pool.sort((a, b) => (a.avgRating || 5) - (b.avgRating || 5));
+              const most = sorted[0];
 
               const kritikpunkte = deriveKritikpunkte(most);
               setModal({
-                ...most,
                 title: "Negative Topic",
                 topic_label: most?.topic,
+                topic: most?.topic,
                 categories: most?.topic ? [most.topic] : [],
-                kritikpunkte: kritikpunkte.slice(0, 3),
+                kritikpunkte: kritikpunkte.slice(0, 2),
+                avgRating: most?.avgRating,
+                sentiment: most?.sentiment
               });
             });
         })
@@ -381,7 +316,7 @@ export default function NegativTopicModal({ open, onOpenChange, topic: propTopic
 
                 <div className="mt-6 flex justify-center">
                   <ul className="list-disc list-inside text-left space-y-2 text-[30px] font-extrabold text-black">
-                    {getKritikpunkte(modal).map((k, idx) => (
+                    {getKritikpunkte(modal).slice(0, 2).map((k, idx) => (
                       <li key={`${idx}-${k}`}>{k}</li>
                     ))}
                   </ul>

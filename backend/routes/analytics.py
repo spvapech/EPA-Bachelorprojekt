@@ -906,3 +906,171 @@ def analyze_topic(
     }
 
 
+def extract_short_kritikpunkt(text: str, max_words: int = 4) -> str:
+    """
+    Extrahiert einen kurzen, sinnvollen Kritikpunkt aus einem Text (2-4 Wörter).
+    """
+    if not text or not isinstance(text, str):
+        return ""
+    
+    # Clean text
+    text = clean_html_text(text)
+    text = re.sub(r'\s+', ' ', text).strip()
+    
+    # Nimm den ersten Satz
+    first_sentence = re.split(r'[.!?]', text)[0].strip()
+    
+    # Deutsche Stoppwörter
+    stopwords = {
+        'und', 'oder', 'aber', 'dass', 'das', 'der', 'die', 'den', 'dem', 'des',
+        'ein', 'eine', 'einer', 'eines', 'mit', 'ohne', 'für', 'auf', 'im', 'in',
+        'am', 'an', 'zu', 'von', 'bei', 'als', 'auch', 'nicht', 'nur', 'ist', 'sind',
+        'war', 'waren', 'wird', 'werden', 'ich', 'wir', 'man', 'sehr', 'mehr',
+        'weniger', 'noch', 'kein', 'keine', 'keinen', 'über', 'unter', 'vor', 'nach',
+        'aus', 'um', 'wie', 'weil', 'es', 'gibt', 'gab', 'hat', 'haben', 'kann',
+        'können', 'muss', 'müssen', 'soll', 'sollte', 'leider', 'eigentlich',
+        'hier', 'dort', 'dann', 'wenn', 'obwohl', 'jedoch', 'trotz', 'immer',
+        'durch', 'zwischen', 'gegen', 'sowie', 'dazu', 'dabei', 'dafür', 'davon'
+    }
+    
+    # Wörter die am Ende nicht stehen sollten
+    bad_endings = {'durch', 'zwischen', 'gegen', 'sowie', 'und', 'oder', 'mit', 'ohne', 'für'}
+    
+    # Extrahiere sinnvolle Wörter
+    words = first_sentence.split()
+    meaningful_words = []
+    
+    for word in words:
+        # Entferne Satzzeichen
+        clean_word = re.sub(r'^[^\w]+|[^\w]+$', '', word, flags=re.UNICODE)
+        if clean_word and len(clean_word) >= 3 and clean_word.lower() not in stopwords:
+            meaningful_words.append(clean_word)
+        if len(meaningful_words) >= max_words:
+            break
+    
+    # Entferne schlechte Endungen
+    while meaningful_words and meaningful_words[-1].lower() in bad_endings:
+        meaningful_words.pop()
+    
+    if len(meaningful_words) >= 2:
+        result = ' '.join(meaningful_words)
+        return result[0].upper() + result[1:] if result else ""
+    
+    return ""
+
+
+@router.get("/company/{company_id}/negative-kritikpunkte")
+async def get_negative_kritikpunkte(company_id: int):
+    """
+    Findet das negativste Topic und extrahiert 2 kurze Kritikpunkte 
+    aus den schlechtesten Bewertungen.
+    
+    Returns:
+        {
+            "topic": "Führungsqualität",
+            "kritikpunkte": ["schlechte Kommunikation", "keine Wertschätzung"],
+            "avg_rating": 1.8,
+            "negative_share_percent": 70
+        }
+    """
+    try:
+        # Hole Employee-Daten (haben meist mehr kritische Bewertungen)
+        employee_response = supabase.table("employee")\
+            .select("*")\
+            .eq("company_id", company_id)\
+            .execute()
+        
+        employee_data = employee_response.data or []
+        
+        if not employee_data:
+            return {
+                "topic": None,
+                "kritikpunkte": [],
+                "avg_rating": None,
+                "negative_share_percent": None,
+                "message": "Keine Bewertungen gefunden"
+            }
+        
+        # Finde die schlechtesten Bewertungen (Rating <= 2.5)
+        negative_reviews = [
+            r for r in employee_data 
+            if r.get("durchschnittsbewertung") and float(r["durchschnittsbewertung"]) <= 2.5
+        ]
+        
+        # Wenn nicht genug negative, nimm die schlechtesten allgemein
+        if len(negative_reviews) < 2:
+            sorted_reviews = sorted(
+                [r for r in employee_data if r.get("durchschnittsbewertung")],
+                key=lambda x: float(x["durchschnittsbewertung"])
+            )
+            negative_reviews = sorted_reviews[:5]
+        
+        # Sortiere nach Rating (niedrigste zuerst)
+        negative_reviews.sort(key=lambda x: float(x.get("durchschnittsbewertung", 5)))
+        
+        # Extrahiere Kritikpunkte aus "schlecht_am_arbeitgeber_finde_ich"
+        kritikpunkte = []
+        seen_texts = set()
+        
+        for review in negative_reviews:
+            # Priorität: schlecht_am_arbeitgeber > verbesserungsvorschlaege
+            text = review.get("schlecht_am_arbeitgeber_finde_ich") or review.get("verbesserungsvorschlaege") or ""
+            
+            if not text:
+                continue
+            
+            kritikpunkt = extract_short_kritikpunkt(text, max_words=4)
+            
+            # Vermeide Duplikate
+            if kritikpunkt and kritikpunkt.lower() not in seen_texts:
+                kritikpunkte.append(kritikpunkt)
+                seen_texts.add(kritikpunkt.lower())
+            
+            if len(kritikpunkte) >= 2:
+                break
+        
+        # Bestimme das Haupt-Topic basierend auf Keywords
+        topic_keywords = {
+            "Führungsqualität": ["führung", "vorgesetzte", "chef", "management", "leitung"],
+            "Kommunikation": ["kommunikation", "information", "transparenz", "feedback"],
+            "Gehalt & Benefits": ["gehalt", "bezahlung", "lohn", "vergütung", "benefits"],
+            "Work-Life Balance": ["work-life", "überstunden", "arbeitszeit", "balance"],
+            "Teamzusammenhalt": ["team", "kollegen", "zusammenhalt", "atmosphäre"],
+            "Karriereentwicklung": ["karriere", "weiterbildung", "entwicklung", "aufstieg"]
+        }
+        
+        # Zähle Keyword-Treffer in negativen Reviews
+        topic_scores = defaultdict(int)
+        for review in negative_reviews:
+            text_fields = [
+                review.get("schlecht_am_arbeitgeber_finde_ich", ""),
+                review.get("verbesserungsvorschlaege", ""),
+                review.get("titel", "")
+            ]
+            combined_text = " ".join(str(t) for t in text_fields if t).lower()
+            
+            for topic, keywords in topic_keywords.items():
+                for keyword in keywords:
+                    if keyword in combined_text:
+                        topic_scores[topic] += 1
+        
+        # Wähle das Topic mit den meisten Treffern
+        main_topic = max(topic_scores.items(), key=lambda x: x[1])[0] if topic_scores else "Allgemein"
+        
+        # Berechne Statistiken
+        total_reviews = len(employee_data)
+        negative_count = len([r for r in employee_data if r.get("durchschnittsbewertung") and float(r["durchschnittsbewertung"]) <= 2.5])
+        negative_share = round((negative_count / total_reviews) * 100) if total_reviews > 0 else 0
+        
+        avg_rating = sum(float(r["durchschnittsbewertung"]) for r in negative_reviews if r.get("durchschnittsbewertung")) / len(negative_reviews) if negative_reviews else None
+        
+        return {
+            "topic": main_topic,
+            "kritikpunkte": kritikpunkte[:2],
+            "avg_rating": round(avg_rating, 1) if avg_rating else None,
+            "negative_share_percent": negative_share,
+            "categories": [main_topic]
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching negative kritikpunkte: {str(e)}")
