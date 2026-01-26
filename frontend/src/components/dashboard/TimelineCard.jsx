@@ -108,10 +108,10 @@ export function TimelineCard({ companyId }) {
                     if (selectedYear) {
                         const now = new Date()
                         const yearStart = new Date(selectedYear, 0, 1)
-                        const yearEnd = new Date(selectedYear, 11, 31, 23, 59, 59)
-                        const endDate = yearEnd > now ? now : yearEnd
-                        const daysDiff = Math.ceil((endDate - yearStart) / (1000 * 60 * 60 * 24))
-                        days = daysDiff + 30 // Add buffer to ensure we get all data
+                        // Calculate days from today back to the start of the selected year
+                        const daysToYearStart = Math.ceil((now - yearStart) / (1000 * 60 * 60 * 24))
+                        // Add buffer to ensure we get all data for that year (full year + extra)
+                        days = daysToYearStart + 400
                     } else {
                         // Wait for selectedYear to be set
                         setTimelineData([])
@@ -231,10 +231,11 @@ export function TimelineCard({ companyId }) {
                 prevScore: item.prevScore
             }))
             
-            // Add bridge point: last historical also gets first forecast trend value at the same date
+            // Add bridge point: last historical also gets forecast value matching its own trend
+            // This ensures the forecast line starts exactly where the historical line ends
             if (historicalTrends.length > 0 && forecastTrendData.length > 0) {
                 const lastHistorical = historicalTrends[historicalTrends.length - 1]
-                lastHistorical.forecast = forecastTrendData[0].trend
+                lastHistorical.forecast = lastHistorical.historical
             }
             
             // Add forecast trends - start from the last historical date (skip first forecast point as it's already on the bridge point)
