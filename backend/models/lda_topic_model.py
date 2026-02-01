@@ -98,14 +98,14 @@ class LDATopicAnalyzer:
         
         return keywords
     
-    def __init__(self, num_topics: int = 5, passes: int = 15, iterations: int = 400):
+    def __init__(self, num_topics: int = 8, passes: int = 25, iterations: int = 600):
         """
         Initialize the LDA Topic Analyzer.
         
         Args:
-            num_topics: Number of topics to extract
-            passes: Number of passes through the corpus during training
-            iterations: Number of iterations for the model
+            num_topics: Number of topics to extract (optimized: 8 for better balance)
+            passes: Number of passes through the corpus during training (optimized: 25)
+            iterations: Number of iterations for the model (optimized: 600)
         """
         self.num_topics = num_topics
         self.passes = passes
@@ -518,6 +518,12 @@ class LDATopicAnalyzer:
                 weight_stats[status]['count'] += 1
         
         # Train LDA model with optimized parameters for work topics
+        # Version 2.1 Improvements (2026-02-01):
+        # - alpha='auto': Asymmetric learning for better topic balance
+        # - eta='auto': Learns optimal word-topic distribution
+        # - minimum_probability=0.005: Reduced to capture weak topic signals (was 0.01)
+        # - chunksize=100: Optimal for memory and convergence
+        # - random_state=42: Reproducibility
         self.lda_model = LdaModel(
             corpus=self.corpus,
             id2word=self.dictionary,
@@ -526,10 +532,10 @@ class LDATopicAnalyzer:
             passes=self.passes,
             iterations=self.iterations,
             per_word_topics=True,
-            alpha='auto',  # Learn document-topic distribution
-            eta='auto',    # Learn topic-word distribution
-            minimum_probability=0.01,  # Filter low probability topics
-            chunksize=100,
+            alpha='auto',  # Asymmetric learning - improves topic balance
+            eta='auto',    # Learns which words are important for which topics
+            minimum_probability=0.005,  # Lowered from 0.01 - reduces "no topic" cases
+            chunksize=100,  # Process 100 docs at once - optimal performance
             update_every=1,
             eval_every=10
         )
@@ -777,3 +783,223 @@ class LDATopicAnalyzer:
             "passes": self.passes,
             "iterations": self.iterations
         }
+    
+    def calculate_topic_similarity(self, topic_id1: int, topic_id2: int, top_n: int = 20) -> float:
+        """
+        Calculate similarity between two topics based on word overlap.
+        
+        Args:
+            topic_id1: First topic ID
+            topic_id2: Second topic ID
+            top_n: Number of top words to consider
+            
+        Returns:
+            Similarity score (0-1, higher = more similar)
+        """
+        if not self.lda_model:
+            raise ValueError("Model not trained yet")
+        
+        # Get top words for each topic
+        words1 = set([word for word, _ in self.lda_model.show_topic(topic_id1, top_n)])
+        words2 = set([word for word, _ in self.lda_model.show_topic(topic_id2, top_n)])
+        
+        # Calculate Jaccard similarity
+        intersection = len(words1 & words2)
+        union = len(words1 | words2)
+        
+        return intersection / union if union > 0 else 0.0
+    
+    def find_similar_topics(self, similarity_threshold: float = 0.3, top_n: int = 20) -> List[Tuple[int, int, float]]:
+        """
+        Find pairs of topics that are similar (high word overlap).
+        
+        Args:
+            similarity_threshold: Minimum similarity to consider topics similar (0-1)
+            top_n: Number of top words to consider for similarity
+            
+        Returns:
+            List of tuples: (topic_id1, topic_id2, similarity_score)
+        """
+        if not self.lda_model:
+            raise ValueError("Model not trained yet")
+        
+        similar_pairs = []
+        
+        # Compare all topic pairs
+        for i in range(self.num_topics):
+            for j in range(i + 1, self.num_topics):
+                similarity = self.calculate_topic_similarity(i, j, top_n)
+                if similarity >= similarity_threshold:
+                    similar_pairs.append((i, j, similarity))
+        
+        # Sort by similarity (highest first)
+        similar_pairs.sort(key=lambda x: x[2], reverse=True)
+        
+        return similar_pairs
+    
+    def merge_similar_topics(
+        self, 
+        similarity_threshold: float = 0.3,
+        max_merges: int = None,
+        verbose: bool = True
+    ) -> Dict[str, Any]:
+        """
+        Automatically merge similar topics to reduce overlap.
+        
+        This creates a mapping from old topic IDs to new merged topic IDs.
+        Similar topics are grouped together and represented by the most frequent one.
+        
+        Args:
+            similarity_threshold: Minimum similarity to merge topics (0-1)
+            max_merges: Maximum number of topic pairs to merge (None = no limit)
+            verbose: Print merge information
+            
+        Returns:
+            Dictionary with merge information and mapping
+        """
+        if not self.lda_model:
+            raise ValueError("Model not trained yet")
+        
+        # Find similar topic pairs
+        similar_pairs = self.find_similar_topics(similarity_threshold)
+        
+        if not similar_pairs:
+            return {
+                "status": "no_merges_needed",
+                "similar_pairs": [],
+                "topic_mapping": {i: i for i in range(self.num_topics)},
+                "topic_groups": {i: [i] for i in range(self.num_topics)},
+                "original_num_topics": self.num_topics,
+                "merged_num_topics": self.num_topics,
+                "reduction": 0
+            }
+        
+        # Limit number of merges if specified
+        if max_merges:
+            similar_pairs = similar_pairs[:max_merges]
+        
+        # Build topic groups using union-find approach
+        topic_groups = {}  # Representative topic -> list of topics in group
+        topic_to_group = {}  # Topic -> its representative
+        
+        for topic in range(self.num_topics):
+            topic_groups[topic] = [topic]
+            topic_to_group[topic] = topic
+        
+        # Merge similar topics
+        for topic1, topic2, similarity in similar_pairs:
+            # Find representatives
+            rep1 = topic_to_group[topic1]
+            rep2 = topic_to_group[topic2]
+            
+            if rep1 != rep2:
+                # Merge smaller group into larger group
+                if len(topic_groups[rep1]) >= len(topic_groups[rep2]):
+                    # Merge rep2 into rep1
+                    for topic in topic_groups[rep2]:
+                        topic_to_group[topic] = rep1
+                        topic_groups[rep1].append(topic)
+                    del topic_groups[rep2]
+                else:
+                    # Merge rep1 into rep2
+                    for topic in topic_groups[rep1]:
+                        topic_to_group[topic] = rep2
+                        topic_groups[rep2].append(topic)
+                    del topic_groups[rep1]
+        
+        # Create final mapping
+        topic_mapping = {topic: rep for topic, rep in topic_to_group.items()}
+        merged_num_topics = len(topic_groups)
+        
+        if verbose:
+            print(f"\n{'='*80}")
+            print(f"🔄 TOPIC MERGING RESULTS")
+            print(f"{'='*80}")
+            print(f"Original topics: {self.num_topics}")
+            print(f"Merged topics: {merged_num_topics}")
+            print(f"Reduction: {self.num_topics - merged_num_topics} topics")
+            print(f"\nMerged Groups:")
+            print("-" * 80)
+            
+            for rep, group in sorted(topic_groups.items()):
+                if len(group) > 1:
+                    print(f"\n📊 Representative Topic {rep}:")
+                    top_words = [word for word, _ in self.lda_model.show_topic(rep, 5)]
+                    print(f"   Words: {', '.join(top_words)}")
+                    print(f"   Merged with: {[t for t in group if t != rep]}")
+        
+        # Store mapping for use in predictions
+        self.topic_mapping = topic_mapping
+        self.merged_num_topics = merged_num_topics
+        
+        return {
+            "status": "success",
+            "similar_pairs": [
+                {"topic1": t1, "topic2": t2, "similarity": sim}
+                for t1, t2, sim in similar_pairs
+            ],
+            "topic_mapping": topic_mapping,
+            "topic_groups": {rep: group for rep, group in topic_groups.items()},
+            "original_num_topics": self.num_topics,
+            "merged_num_topics": merged_num_topics,
+            "reduction": self.num_topics - merged_num_topics
+        }
+    
+    def predict_topics_merged(
+        self, 
+        text: str, 
+        threshold: float = 0.1,
+        include_sentiment: bool = False,
+        sentiment_mode: str = "lexicon"
+    ) -> List[Dict[str, Any]]:
+        """
+        Predict topics for text using merged topic groups.
+        
+        If topics have been merged, this maps predictions to merged topic IDs.
+        
+        Args:
+            text: Text to analyze
+            threshold: Minimum probability threshold
+            include_sentiment: Whether to include sentiment analysis
+            sentiment_mode: Sentiment analysis mode ('lexicon' or 'transformer')
+            
+        Returns:
+            List of topics with merged IDs and probabilities
+        """
+        # Get original predictions
+        original_predictions = self.predict_topics(text, threshold, include_sentiment, sentiment_mode)
+        
+        # If no merging has been done, return original predictions
+        if not hasattr(self, 'topic_mapping'):
+            return original_predictions
+        
+        # Merge predictions with same merged topic ID
+        merged_predictions = {}
+        
+        for pred in original_predictions:
+            topic_id = pred["topic_id"]
+            merged_id = self.topic_mapping[topic_id]
+            probability = pred["probability"]
+            
+            if merged_id in merged_predictions:
+                # Add probability to existing merged topic
+                merged_predictions[merged_id]["probability"] += probability
+                merged_predictions[merged_id]["source_topics"].append(topic_id)
+            else:
+                # Create new merged topic entry
+                merged_predictions[merged_id] = {
+                    "topic_id": merged_id,
+                    "probability": probability,
+                    "source_topics": [topic_id],
+                    "is_merged": topic_id != merged_id
+                }
+                
+                # Copy sentiment if present
+                if "sentiment" in pred:
+                    merged_predictions[merged_id]["sentiment"] = pred["sentiment"]
+        
+        # Convert to list and sort by probability
+        results = list(merged_predictions.values())
+        results.sort(key=lambda x: x["probability"], reverse=True)
+        
+        return results
