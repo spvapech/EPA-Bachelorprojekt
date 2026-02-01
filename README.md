@@ -1,5 +1,13 @@
 # Gruppe P1-3 — Projekt
 
+## 🆕 Aktuelle Updates
+
+**Version 2.0 - Topic-Filterung nach Datenquellen** (1. Februar 2026)
+- ✅ Separate Topics für Bewerber (10) und Mitarbeiter (13)
+- ✅ Verbesserte UI mit Filter-Buttons
+- ✅ Neu trainierte LDA-Modelle
+- 📖 [Detaillierte Dokumentation](./CHANGELOG_TOPIC_FILTERING.md) | [Kurzübersicht](./TOPIC_FILTERING_SUMMARY.md)
+
 ## 📋 Inhaltsverzeichnis
 
 - [Requirements / Dependencies](#-requirements--dependencies)

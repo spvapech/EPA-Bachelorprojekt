@@ -534,8 +534,10 @@ async def get_topic_overview(
                 "message": "No reviews found for this company"
             }
         
-        # Define topic keywords to extract
-        topic_definitions = {
+        # Define topic keywords to extract - unterschiedlich für Bewerber und Mitarbeiter
+        
+        # Topics für Mitarbeiter (employee)
+        employee_topic_definitions = {
             "Work-Life Balance": {
                 "keywords": [
                     r'\bwork[\s-]*life[\s-]*balance\b',
@@ -550,7 +552,7 @@ async def get_topic_overview(
                 ],
                 "rating_fields": ["sternebewertung_work_life_balance"]
             },
-            "Führungsqualität": {
+            "Vorgesetztenverhalten": {
                 "keywords": [
                     r'\bführung\b',
                     r'\bmanagement\b',
@@ -564,7 +566,7 @@ async def get_topic_overview(
                 ],
                 "rating_fields": ["sternebewertung_vorgesetztenverhalten"]
             },
-            "Gehalt & Benefits": {
+            "Gehalt & Sozialleistungen": {
                 "keywords": [
                     r'\bgehalt\b',
                     r'\bbezahlung\b',
@@ -578,20 +580,18 @@ async def get_topic_overview(
                 ],
                 "rating_fields": ["sternebewertung_gehalt_sozialleistungen"]
             },
-            "Teamzusammenhalt": {
+            "Kollegenzusammenhalt": {
                 "keywords": [
                     r'\bteam\b',
                     r'\bkollegen\b',
                     r'\bzusammenhalt\b',
                     r'\bkollegenzusammenhalt\b',
-                    r'\batmosphäre\b',
-                    r'\barbeitsatmosphäre\b',
                     r'\bzusammenarbeit\b',
                     r'\bgemeinschaft\b'
                 ],
-                "rating_fields": ["sternebewertung_kollegenzusammenhalt", "sternebewertung_arbeitsatmosphaere"]
+                "rating_fields": ["sternebewertung_kollegenzusammenhalt"]
             },
-            "Karriereentwicklung": {
+            "Karriere & Weiterbildung": {
                 "keywords": [
                     r'\bkarriere\b',
                     r'\bweiterbildung\b',
@@ -627,8 +627,188 @@ async def get_topic_overview(
                     r'\binfrastruktur\b'
                 ],
                 "rating_fields": ["sternebewertung_arbeitsbedingungen"]
+            },
+            "Arbeitsatmosphäre": {
+                "keywords": [
+                    r'\batmosphäre\b',
+                    r'\barbeitsatmosphäre\b',
+                    r'\barbeitsklima\b',
+                    r'\bstimmung\b',
+                    r'\bklima\b'
+                ],
+                "rating_fields": ["sternebewertung_arbeitsatmosphaere"]
+            },
+            "Image": {
+                "keywords": [
+                    r'\bimage\b',
+                    r'\bruf\b',
+                    r'\breputation\b',
+                    r'\bansehen\b',
+                    r'\bbekanntheitsgrad\b'
+                ],
+                "rating_fields": ["sternebewertung_image"]
+            },
+            "Interessante Aufgaben": {
+                "keywords": [
+                    r'\baufgaben\b',
+                    r'\btätigkeit\b',
+                    r'\binteressant\b',
+                    r'\bherausforderung\b',
+                    r'\babwechslung\b',
+                    r'\bvielfalt\b'
+                ],
+                "rating_fields": ["sternebewertung_interessante_aufgaben"]
+            },
+            "Umwelt- & Sozialbewusstsein": {
+                "keywords": [
+                    r'\bumwelt\b',
+                    r'\bnachhaltigkeit\b',
+                    r'\bsozialbewusstsein\b',
+                    r'\bverantwortung\b',
+                    r'\böko\b',
+                    r'\bklima\b'
+                ],
+                "rating_fields": ["sternebewertung_umwelt_sozialbewusstsein"]
+            },
+            "Umgang mit älteren Kollegen": {
+                "keywords": [
+                    r'\bältere kollegen\b',
+                    r'\balter\b',
+                    r'\bsenior\b',
+                    r'\berfahrung\b',
+                    r'\bumgang\b'
+                ],
+                "rating_fields": ["sternebewertung_umgang_mit_aelteren_kollegen"]
+            },
+            "Gleichberechtigung": {
+                "keywords": [
+                    r'\bgleichberechtigung\b',
+                    r'\bdiversität\b',
+                    r'\bvielfalt\b',
+                    r'\bdiskriminierung\b',
+                    r'\bchancengleichheit\b',
+                    r'\binklusion\b'
+                ],
+                "rating_fields": ["sternebewertung_gleichberechtigung"]
             }
         }
+        
+        # Topics für Bewerber (candidates)
+        candidate_topic_definitions = {
+            "Erklärung der weiteren Schritte": {
+                "keywords": [
+                    r'\bschritte\b',
+                    r'\bweitere schritte\b',
+                    r'\bprozess\b',
+                    r'\berklärung\b',
+                    r'\binformation\b',
+                    r'\bablauf\b'
+                ],
+                "rating_fields": ["sternebewertung_erklaerung_der_weiteren_schritte"]
+            },
+            "Zufriedenstellende Reaktion": {
+                "keywords": [
+                    r'\breaktion\b',
+                    r'\brückmeldung\b',
+                    r'\bantwort\b',
+                    r'\bresponse\b',
+                    r'\bzufriedenstellend\b'
+                ],
+                "rating_fields": ["sternebewertung_zufriedenstellende_reaktion"]
+            },
+            "Vollständigkeit der Infos": {
+                "keywords": [
+                    r'\binformation\b',
+                    r'\binfos\b',
+                    r'\bvollständig\b',
+                    r'\bdetail\b',
+                    r'\bausführlich\b'
+                ],
+                "rating_fields": ["sternebewertung_vollstaendigkeit_der_infos"]
+            },
+            "Zufriedenstellende Antworten": {
+                "keywords": [
+                    r'\bantwort\b',
+                    r'\bfrage\b',
+                    r'\bzufriedenstellend\b',
+                    r'\bauskunft\b'
+                ],
+                "rating_fields": ["sternebewertung_zufriedenstellende_antworten"]
+            },
+            "Angenehme Atmosphäre": {
+                "keywords": [
+                    r'\batmosphäre\b',
+                    r'\bangenehm\b',
+                    r'\bstimmung\b',
+                    r'\bklima\b',
+                    r'\bwohlbefinden\b'
+                ],
+                "rating_fields": ["sternebewertung_angenehme_atmosphaere"]
+            },
+            "Professionalität des Gesprächs": {
+                "keywords": [
+                    r'\bprofessionalität\b',
+                    r'\bgespräch\b',
+                    r'\binterview\b',
+                    r'\bprofessionell\b',
+                    r'\bkompetent\b'
+                ],
+                "rating_fields": ["sternebewertung_professionalitaet_des_gespraechs"]
+            },
+            "Wertschätzende Behandlung": {
+                "keywords": [
+                    r'\bwertschätzung\b',
+                    r'\bbehandlung\b',
+                    r'\brespekt\b',
+                    r'\bwertschätzend\b',
+                    r'\bhöflich\b'
+                ],
+                "rating_fields": ["sternebewertung_wertschaetzende_behandlung"]
+            },
+            "Erwartbarkeit des Prozesses": {
+                "keywords": [
+                    r'\berwartbarkeit\b',
+                    r'\bprozess\b',
+                    r'\bvorhersehbar\b',
+                    r'\bstruktur\b',
+                    r'\borganisation\b'
+                ],
+                "rating_fields": ["sternebewertung_erwartbarkeit_des_prozesses"]
+            },
+            "Zeitgerechte Zu- oder Absage": {
+                "keywords": [
+                    r'\bzusage\b',
+                    r'\babsage\b',
+                    r'\bzeitgerecht\b',
+                    r'\bpünktlich\b',
+                    r'\bfrist\b',
+                    r'\btermin\b'
+                ],
+                "rating_fields": ["sternebewertung_zeitgerechte_zu_oder_absage"]
+            },
+            "Schnelle Antwort": {
+                "keywords": [
+                    r'\bschnell\b',
+                    r'\bantwort\b',
+                    r'\breaktionszeit\b',
+                    r'\bzügig\b',
+                    r'\bprompt\b'
+                ],
+                "rating_fields": ["sternebewertung_schnelle_antwort"]
+            }
+        }
+        
+        # Wähle die richtigen Topic-Definitionen basierend auf der Quelle
+        if source == "employee":
+            topic_definitions = employee_topic_definitions
+            reviews_to_analyze = employee_data
+        elif source == "candidates":
+            topic_definitions = candidate_topic_definitions
+            reviews_to_analyze = candidates_data
+        else:
+            # Wenn keine Quelle angegeben oder "alle", kombiniere beide
+            topic_definitions = {**employee_topic_definitions, **candidate_topic_definitions}
+            reviews_to_analyze = all_reviews
         
         # Analyze each topic
         topics_data = []
@@ -638,7 +818,7 @@ async def get_topic_overview(
                 topic_name=topic_name,
                 keywords=topic_config["keywords"],
                 rating_fields=topic_config["rating_fields"],
-                all_reviews=all_reviews
+                all_reviews=reviews_to_analyze
             )
             
             if topic_analysis["frequency"] > 0:  # Only include topics that were found
@@ -653,7 +833,7 @@ async def get_topic_overview(
         
         return {
             "topics": topics_data,
-            "total_reviews": len(all_reviews),
+            "total_reviews": len(reviews_to_analyze),
             "total_topics": len(topics_data)
         }
         

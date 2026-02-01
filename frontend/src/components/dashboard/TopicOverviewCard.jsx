@@ -9,6 +9,7 @@ import {
     TableRow,
 } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { useState, useEffect } from "react"
 import TopicDetailModal from "./modals/TopicDetailModal"
 import TopicTableModal from "./modals/TopicTableModal"
@@ -23,12 +24,16 @@ export function TopicOverviewCard({ companyId = 1 }) {
     const [detailModalOpen, setDetailModalOpen] = useState(false)
     const [tableModalOpen, setTableModalOpen] = useState(false)
     const [sourceFilter, setSourceFilter] = useState(null) // null = both, 'employee', 'candidates'
+    const [isModalOpen, setIsModalOpen] = useState(false) // Track if any modal is open
 
     // Daten von API laden
     useEffect(() => {
         const fetchTopics = async () => {
             try {
-                setLoading(true)
+                // Nur beim ersten Laden oder wenn kein Modal offen ist, Loading-State setzen
+                if (topicsData.length === 0) {
+                    setLoading(true)
+                }
                 setError(null)
                 
                 // Build URL with optional source filter
@@ -58,6 +63,11 @@ export function TopicOverviewCard({ companyId = 1 }) {
             fetchTopics()
         }
     }, [companyId, sourceFilter]) // Re-fetch when sourceFilter changes
+    
+    // Track modal state
+    useEffect(() => {
+        setIsModalOpen(tableModalOpen || detailModalOpen)
+    }, [tableModalOpen, detailModalOpen])
 
     const handleCardClick = () => {
         setTableModalOpen(true)
@@ -72,6 +82,48 @@ export function TopicOverviewCard({ companyId = 1 }) {
     const handleBackToTable = () => {
         setDetailModalOpen(false)
         setTableModalOpen(true)
+    }
+    
+    // Funktion zum Neuladen eines Topics mit der aktuellen Datenquelle
+    const reloadTopicWithSource = async (topicName, newSourceFilter) => {
+        try {
+            // Build URL mit neuem Source-Filter
+            let url = `${API_URL}/analytics/company/${companyId}/topic-overview`
+            if (newSourceFilter) {
+                url += `?source=${newSourceFilter}`
+            }
+            
+            const response = await fetch(url)
+            
+            if (!response.ok) {
+                throw new Error(`API Error: ${response.status}`)
+            }
+            
+            const data = await response.json()
+            
+            // Finde das spezifische Topic aus den neuen Daten
+            const updatedTopic = (data.topics || []).find(t => t.topic === topicName)
+            
+            if (updatedTopic) {
+                setSelectedTopic(updatedTopic)
+            }
+        } catch (err) {
+            console.error('Error reloading topic:', err)
+        }
+    }
+    
+    // Handler für Source-Filter-Änderung im Detail-Modal
+    const handleDetailSourceFilterChange = async (newSourceFilter) => {
+        if (selectedTopic) {
+            // Speichere den Topic-Namen vor dem Update
+            const topicName = selectedTopic.topic
+            
+            // Update den globalen Filter
+            setSourceFilter(newSourceFilter)
+            
+            // Lade das Topic mit der neuen Quelle neu
+            await reloadTopicWithSource(topicName, newSourceFilter)
+        }
     }
 
     const getSentimentBadgeVariant = (sentiment) => {
@@ -135,8 +187,7 @@ export function TopicOverviewCard({ companyId = 1 }) {
     return (
         <>
             <Card 
-                className="rounded-3xl shadow-sm cursor-pointer hover:shadow-md transition-shadow"
-                onClick={handleCardClick}
+                className="rounded-3xl shadow-sm hover:shadow-md transition-shadow"
             >
                 <CardHeader className="pb-2 pt-4">
                     <CardTitle className="text-lg font-bold text-slate-800">
@@ -144,23 +195,68 @@ export function TopicOverviewCard({ companyId = 1 }) {
                     </CardTitle>
                 </CardHeader>
                 <CardContent className="pb-4">
-                    <div className="grid grid-cols-3 gap-4">
-                        <div>
-                            <p className="text-xs text-slate-600 mb-0.5">Total Topics</p>
-                            <p className="text-2xl font-bold text-slate-900">{totalTopics}</p>
-                        </div>
-                        <div>
-                            <p className="text-xs text-slate-600 mb-0.5">Ø Rating</p>
-                            <p className="text-2xl font-bold text-slate-900">{avgRating}</p>
-                        </div>
-                        <div>
-                            <p className="text-xs text-slate-600 mb-0.5">Total Mentions</p>
-                            <p className="text-2xl font-bold text-slate-900">{totalMentions}</p>
-                        </div>
+                    {/* Datenquellen Filter */}
+                    <div className="flex gap-2 mb-4">
+                        <Button
+                            variant="outline"
+                            onClick={() => setSourceFilter(null)}
+                            size="sm"
+                            className={`flex-1 ${
+                                sourceFilter === null 
+                                    ? 'bg-blue-500 text-white hover:bg-blue-600 border-blue-500' 
+                                    : 'hover:bg-slate-100'
+                            }`}
+                        >
+                            Alle
+                        </Button>
+                        <Button
+                            variant="outline"
+                            onClick={() => setSourceFilter('employee')}
+                            size="sm"
+                            className={`flex-1 ${
+                                sourceFilter === 'employee' 
+                                    ? 'bg-blue-500 text-white hover:bg-blue-600 border-blue-500' 
+                                    : 'hover:bg-slate-100'
+                            }`}
+                        >
+                            Mitarbeiter
+                        </Button>
+                        <Button
+                            variant="outline"
+                            onClick={() => setSourceFilter('candidates')}
+                            size="sm"
+                            className={`flex-1 ${
+                                sourceFilter === 'candidates' 
+                                    ? 'bg-blue-500 text-white hover:bg-blue-600 border-blue-500' 
+                                    : 'hover:bg-slate-100'
+                            }`}
+                        >
+                            Bewerber
+                        </Button>
                     </div>
-                    <p className="text-xs text-slate-500 mt-3 text-center">
-                        Klicken Sie hier, um alle Topics anzuzeigen
-                    </p>
+                    
+                    <div 
+                        className="cursor-pointer"
+                        onClick={handleCardClick}
+                    >
+                        <div className="grid grid-cols-3 gap-4">
+                            <div>
+                                <p className="text-xs text-slate-600 mb-0.5">Total Topics</p>
+                                <p className="text-2xl font-bold text-slate-900">{totalTopics}</p>
+                            </div>
+                            <div>
+                                <p className="text-xs text-slate-600 mb-0.5">Ø Rating</p>
+                                <p className="text-2xl font-bold text-slate-900">{avgRating}</p>
+                            </div>
+                            <div>
+                                <p className="text-xs text-slate-600 mb-0.5">Total Mentions</p>
+                                <p className="text-2xl font-bold text-slate-900">{totalMentions}</p>
+                            </div>
+                        </div>
+                        <p className="text-xs text-slate-500 mt-3 text-center">
+                            Klicken Sie hier, um alle Topics anzuzeigen
+                        </p>
+                    </div>
                 </CardContent>
             </Card>
 
@@ -182,7 +278,8 @@ export function TopicOverviewCard({ companyId = 1 }) {
                     topic={selectedTopic}
                     onBackToTable={handleBackToTable}
                     sourceFilter={sourceFilter}
-                    onSourceFilterChange={setSourceFilter}
+                    onSourceFilterChange={handleDetailSourceFilterChange}
+                    companyId={companyId}
                 />
             )}
         </>
