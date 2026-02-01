@@ -480,11 +480,11 @@ export function TimelineCard({ companyId }) {
     )
 
     // Chart component (reusable for card and modal)
-    const TimelineChart = ({ height = 280 }) => (
+    const TimelineChart = ({ height = 200 }) => (
         <ResponsiveContainer width="100%" height={height === "100%" ? "100%" : height}>
             <LineChart 
                 data={chartData} 
-                margin={{ left: 0, right: 20, top: 10, bottom: 10 }}
+                margin={{ left: 0, right: 20, top: 5, bottom: 5 }}
             >
                 <CartesianGrid 
                     strokeDasharray="3 3" 
@@ -756,8 +756,8 @@ export function TimelineCard({ companyId }) {
                         Timeline
                     </CardTitle>
                 </CardHeader>
-                <CardContent>
-                    <div className="h-[280px] flex items-center justify-center">
+                <CardContent className="pb-4 pt-4">
+                    <div className="h-[200px] flex items-center justify-center">
                         <div className="flex flex-col items-center gap-2">
                             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
                             <p className="text-slate-500">Lade Timeline-Daten...</p>
@@ -777,8 +777,8 @@ export function TimelineCard({ companyId }) {
                     </CardTitle>
                     <FilterDropdowns />
                 </CardHeader>
-                <CardContent>
-                    <div className="h-[280px] flex items-center justify-center">
+                <CardContent className="pb-4 pt-4">
+                    <div className="h-[200px] flex items-center justify-center">
                         <p className="text-slate-500">
                             {error ? `Fehler: ${error}` : "Keine Daten für diesen Zeitraum verfügbar"}
                         </p>
@@ -806,15 +806,15 @@ export function TimelineCard({ companyId }) {
                     </div>
                 </CardHeader>
 
-                <CardContent className="pb-6">
-                    <div className="h-[280px] w-full">
-                        <TimelineChart height={280} />
+                <CardContent className="pb-4 pt-4">
+                    <div className="h-[200px] w-full">
+                        <TimelineChart height={200} />
                     </div>
 
                     <ChartLegend />
                     <SummaryStats />
                     
-                    <p className="text-xs text-slate-400 text-center mt-3">
+                    <p className="text-xs text-slate-400 text-center mt-2">
                         Klicken zum Vergrößern
                     </p>
                 </CardContent>

@@ -98,13 +98,13 @@ export function TopicOverviewCard({ companyId = 1 }) {
     if (loading) {
         return (
             <Card className="rounded-3xl shadow-sm">
-                <CardHeader>
-                    <CardTitle className="text-xl font-bold text-slate-800">
+                <CardHeader className="pb-2 pt-4">
+                    <CardTitle className="text-lg font-bold text-slate-800">
                         Topic Übersicht
                     </CardTitle>
                 </CardHeader>
-                <CardContent>
-                    <div className="flex items-center justify-center h-32">
+                <CardContent className="pb-4">
+                    <div className="flex items-center justify-center h-20">
                         <p className="text-slate-500">Lade Topic-Daten...</p>
                     </div>
                 </CardContent>
@@ -116,13 +116,13 @@ export function TopicOverviewCard({ companyId = 1 }) {
     if (topicsData.length === 0) {
         return (
             <Card className="rounded-3xl shadow-sm">
-                <CardHeader>
-                    <CardTitle className="text-xl font-bold text-slate-800">
+                <CardHeader className="pb-2 pt-4">
+                    <CardTitle className="text-lg font-bold text-slate-800">
                         Topic Übersicht
                     </CardTitle>
                 </CardHeader>
-                <CardContent>
-                    <div className="flex items-center justify-center h-32">
+                <CardContent className="pb-4">
+                    <div className="flex items-center justify-center h-20">
                         <p className="text-slate-500">
                             {error ? `Fehler: ${error}` : 'Keine Topics gefunden'}
                         </p>
@@ -138,27 +138,27 @@ export function TopicOverviewCard({ companyId = 1 }) {
                 className="rounded-3xl shadow-sm cursor-pointer hover:shadow-md transition-shadow"
                 onClick={handleCardClick}
             >
-                <CardHeader>
-                    <CardTitle className="text-xl font-bold text-slate-800">
+                <CardHeader className="pb-2 pt-4">
+                    <CardTitle className="text-lg font-bold text-slate-800">
                         Topic Übersicht
                     </CardTitle>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="pb-4">
                     <div className="grid grid-cols-3 gap-4">
                         <div>
-                            <p className="text-sm text-slate-600 mb-1">Total Topics</p>
-                            <p className="text-3xl font-bold text-slate-900">{totalTopics}</p>
+                            <p className="text-xs text-slate-600 mb-0.5">Total Topics</p>
+                            <p className="text-2xl font-bold text-slate-900">{totalTopics}</p>
                         </div>
                         <div>
-                            <p className="text-sm text-slate-600 mb-1">Ø Rating</p>
-                            <p className="text-3xl font-bold text-slate-900">{avgRating}</p>
+                            <p className="text-xs text-slate-600 mb-0.5">Ø Rating</p>
+                            <p className="text-2xl font-bold text-slate-900">{avgRating}</p>
                         </div>
                         <div>
-                            <p className="text-sm text-slate-600 mb-1">Total Mentions</p>
-                            <p className="text-3xl font-bold text-slate-900">{totalMentions}</p>
+                            <p className="text-xs text-slate-600 mb-0.5">Total Mentions</p>
+                            <p className="text-2xl font-bold text-slate-900">{totalMentions}</p>
                         </div>
                     </div>
-                    <p className="text-sm text-slate-500 mt-4 text-center">
+                    <p className="text-xs text-slate-500 mt-3 text-center">
                         Klicken Sie hier, um alle Topics anzuzeigen
                     </p>
                 </CardContent>

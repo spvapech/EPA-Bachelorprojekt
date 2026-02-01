@@ -798,16 +798,16 @@ export default function Dashboard() {
                     </div>
 
                     {/* KPI cards */}
-                    <div className="mt-6 grid grid-cols-1 md:grid-cols-4 gap-6">
+                    <div className="mt-4 grid grid-cols-1 md:grid-cols-4 gap-6">
                         <Card className="rounded-3xl shadow-sm" onClick={() => setOpen(true)}>
 
-                            <CardHeader className="pb-2">
-                                <CardTitle className="text-xl font-bold text-slate-800">
+                            <CardHeader className="pb-1 pt-4">
+                                <CardTitle className="text-base font-bold text-slate-800">
                                     Ø Score
                                 </CardTitle>
                             </CardHeader>
-                            <CardContent className="pt-2">
-                                <div className="text-3xl font-extrabold text-center">
+                            <CardContent className="pt-0 pb-4">
+                                <div className="text-xl font-extrabold text-center">
                                     {data && <span className={data.avg_overall > 3 ? 'text-green-500' : data.avg_overall >= 2 ? 'text-slate-800' : 'text-red-500'}>{data.avg_overall}</span>}
                                 </div>
                             </CardContent>
@@ -825,21 +825,21 @@ export default function Dashboard() {
                         </SorceModal>
 
                         <Card className="rounded-3xl shadow-sm" onClick={() => setOpenTrend(true)}>
-                            <CardHeader className="pb-2">
-                                <CardTitle className="text-xl font-bold text-slate-800">
+                            <CardHeader className="pb-1 pt-4">
+                                <CardTitle className="text-base font-bold text-slate-800">
                                     Trend
                                 </CardTitle>
                             </CardHeader>
-                            <CardContent className="pt-2 flex flex-col items-center gap-2">
+                            <CardContent className="pt-0 pb-4 flex flex-col items-center gap-0.5">
                                 {trendData?.avgDelta ? (
                                     <>
                                         <div
                                             className={
                                                 trendData.sign === 'up'
-                                                    ? 'text-green-600 text-5xl font-extrabold leading-none'
+                                                    ? 'text-green-600 text-2xl font-extrabold leading-none'
                                                     : trendData.sign === 'down'
-                                                      ? 'text-red-600 text-5xl font-extrabold leading-none'
-                                                      : 'text-slate-500 text-5xl font-extrabold leading-none'
+                                                      ? 'text-red-600 text-2xl font-extrabold leading-none'
+                                                      : 'text-slate-500 text-2xl font-extrabold leading-none'
                                             }
                                         >
                                             {trendData.sign === 'up' ? '↑' : trendData.sign === 'down' ? '↓' : '—'}
@@ -847,10 +847,10 @@ export default function Dashboard() {
                                         <div
                                             className={
                                                 parseFloat(trendData.avgDelta) > 0
-                                                    ? 'text-green-600 text-2xl font-extrabold'
+                                                    ? 'text-green-600 text-lg font-extrabold'
                                                     : parseFloat(trendData.avgDelta) < 0
-                                                      ? 'text-red-600 text-2xl font-extrabold'
-                                                      : 'text-slate-700 text-2xl font-extrabold'
+                                                      ? 'text-red-600 text-lg font-extrabold'
+                                                      : 'text-slate-700 text-lg font-extrabold'
                                             }
                                         >
                                             {parseFloat(trendData.avgDelta) > 0 ? '+' : ''}
@@ -858,7 +858,7 @@ export default function Dashboard() {
                                         </div>
                                     </>
                                 ) : (
-                                    <div className="text-slate-400 text-xl font-bold">—</div>
+                                    <div className="text-slate-400 text-base font-bold">—</div>
                                 )}
                             </CardContent>
                         </Card>
@@ -883,16 +883,16 @@ export default function Dashboard() {
                                 setOpenMostCritical(true)
                             }}
                         >
-                            <CardHeader className="pb-2">
-                                <CardTitle className="text-lg font-bold text-slate-800">
+                            <CardHeader className="pb-1 pt-4">
+                                <CardTitle className="text-sm font-bold text-slate-800">
                                     Most Critical
                                 </CardTitle>
                             </CardHeader>
-                            <CardContent className="pt-2 text-center">
-                                <div className="text-3xl font-bold text-red-600">
+                            <CardContent className="pt-0 pb-4 text-center">
+                                <div className="text-xl font-bold text-red-600">
                                     {mostCriticalData ? mostCriticalData.topicName : "-"}
                                 </div>
-                                <div className="text-xl font-bold text-red-600 mt-1">
+                                <div className="text-base font-bold text-red-600 mt-0.5">
                                     {mostCriticalData ? mostCriticalData.score : "-"}
                                 </div>
                             </CardContent>
@@ -904,13 +904,13 @@ export default function Dashboard() {
                         />
 
                         <Card className="rounded-3xl shadow-smon" onClick={() => setOpenNegative(true)}>
-                            <CardHeader className="pb-2">
-                                <CardTitle className="text-xl font-bold text-slate-800">
+                            <CardHeader className="pb-1 pt-4">
+                                <CardTitle className="text-base font-bold text-slate-800">
                                     Negative Topic
                                 </CardTitle>
                             </CardHeader>
-                            <CardContent className="pt-2">
-                                <div className="text-2xl font-extrabold text-orange-400">
+                            <CardContent className="pt-0 pb-4">
+                                <div className="text-lg font-extrabold text-orange-400">
                                     {getNegativeTopicName(negativeTopicItem)}
                                 </div>
                             </CardContent>
@@ -927,13 +927,13 @@ export default function Dashboard() {
                     </div>
 
                     {/* Charts row */}
-                    <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-6">
                         <TimelineCard companyId={selectedCompany || selectedCompanyId} />
                         <TopicRatingCard companyId={selectedCompany || selectedCompanyId} />
                     </div>
 
                     {/* Topic Overview */}
-                    <div className="mt-6">
+                    <div className="mt-4">
                         <TopicOverviewCard companyId={selectedCompany || 1} />
                     </div>
 

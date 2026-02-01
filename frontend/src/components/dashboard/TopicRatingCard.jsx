@@ -427,9 +427,9 @@ export function TopicRatingCard({ companyId }) {
     </div>
   )
 
-  const TopicChart = ({ height = 280 }) => (
+  const TopicChart = ({ height = 200 }) => (
     <ResponsiveContainer width="100%" height={height === "100%" ? "100%" : height}>
-      <LineChart data={chartData} margin={{ left: 0, right: 20, top: 10, bottom: 10 }}>
+      <LineChart data={chartData} margin={{ left: 0, right: 20, top: 5, bottom: 5 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
         <XAxis
           dataKey="periodLabel"
@@ -485,8 +485,8 @@ export function TopicRatingCard({ companyId }) {
           </div>
           <FilterDropdowns />
         </CardHeader>
-        <CardContent>
-          <div className="h-[280px] flex items-center justify-center">
+        <CardContent className="pb-4 pt-4">
+          <div className="h-[200px] flex items-center justify-center">
             <div className="flex flex-col items-center gap-2">
               {/* <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div> */}
               {/* <p className="text-slate-500">Inhalt wird geladen...</p> */}
@@ -510,8 +510,8 @@ export function TopicRatingCard({ companyId }) {
           </div>
           <FilterDropdowns />
         </CardHeader>
-        <CardContent>
-          <div className="h-[280px] flex items-center justify-center">
+        <CardContent className="pb-4 pt-4">
+          <div className="h-[200px] flex items-center justify-center">
             <p className="text-slate-500">{error ? `Fehler: ${error}` : "Keine Daten verfügbar"}</p>
           </div>
         </CardContent>
@@ -540,9 +540,9 @@ export function TopicRatingCard({ companyId }) {
           </div>
         </CardHeader>
 
-        <CardContent className="pb-6">
-          <div className="relative h-[280px] w-full border-0 outline-none">
-            <TopicChart height={280} />
+        <CardContent className="pb-4 pt-4">
+          <div className="relative h-[200px] w-full border-0 outline-none">
+            <TopicChart height={200} />
 
             {refreshing && (
               <div className="absolute inset-0 bg-white/70 flex items-center justify-center rounded-xl">
@@ -554,7 +554,7 @@ export function TopicRatingCard({ companyId }) {
             )}
           </div>
 
-          <p className="text-xs text-slate-400 text-center mt-3">Klicken zum Vergrößern</p>
+          <p className="text-xs text-slate-400 text-center mt-2">Klicken zum Vergrößern</p>
         </CardContent>
       </Card>
 
