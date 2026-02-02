@@ -25,7 +25,7 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useCallback } from "react"
 import { API_URL } from "@/config"
 
 const SOURCE_LABEL = {
@@ -44,7 +44,7 @@ function parseYear(period) {
     return Number.isFinite(y) ? y : null
 }
 
-export function TimelineCard({ companyId }) {
+export function TimelineCard({ companyId, onFiltersChange }) {
     const [timelineData, setTimelineData] = useState([])
     const [forecastData, setForecastData] = useState([])
     const [loading, setLoading] = useState(true)
@@ -307,6 +307,42 @@ export function TimelineCard({ companyId }) {
         }
         return [0, 5] // Default for "Ø Score"
     }, [timelineData, metric, trendData])
+
+    useEffect(() => {
+        if (onFiltersChange) {
+            let stats = {};
+            
+            if (timelineData.length > 0) {
+                stats.dataPoints = timelineData.length;
+                
+                if (metric === "Anzahl") {
+                    const totalCount = timelineData.reduce((sum, d) => sum + (d.count || 0), 0);
+                    stats.avgCount = (totalCount / timelineData.length).toFixed(1);
+                    stats.maxCount = Math.max(...timelineData.map(d => d.count || 0));
+                } else if (metric === "Trend" && trendData.length > 0) {
+                    const avgTrend = trendData.length > 1 
+                        ? (trendData.slice(1).reduce((sum, d) => sum + d.trend, 0) / (trendData.length - 1)).toFixed(2)
+                        : "0.00";
+                    stats.avgTrend = avgTrend;
+                    stats.maxTrend = Math.max(...trendData.map(d => d.trend)).toFixed(2);
+                    stats.minTrend = Math.min(...trendData.map(d => d.trend)).toFixed(2);
+                } else if (metric === "Ø Score") {
+                    stats.avgHistorical = (timelineData.reduce((sum, d) => sum + d.score, 0) / timelineData.length).toFixed(2);
+                    if (forecastData.length > 0) {
+                        stats.avgForecast = (forecastData.reduce((sum, d) => sum + d.score, 0) / forecastData.length).toFixed(2);
+                    }
+                }
+            }
+            
+            onFiltersChange({
+                metric,
+                source,
+                granularity,
+                selectedYear,
+                stats
+            });
+        }
+    }, [metric, source, granularity, selectedYear, timelineData, forecastData, trendData]); // onFiltersChange NICHT in Dependencies!
 
     // Custom tooltip
     const CustomTooltip = ({ active, payload, label }) => {
@@ -807,7 +843,7 @@ export function TimelineCard({ companyId }) {
                 </CardHeader>
 
                 <CardContent className="pb-4 pt-4">
-                    <div className="h-[200px] w-full">
+                    <div id="timeline-chart-export" className="h-[200px] w-full">
                         <TimelineChart height={200} />
                     </div>
 

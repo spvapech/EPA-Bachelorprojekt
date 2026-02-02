@@ -51,7 +51,7 @@ function prettifyTopicKey(key) {
   return key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
-export function TopicRatingCard({ companyId }) {
+export function TopicRatingCard({ companyId, onFiltersChange }) {
   // Defaults
   const [source, setSource] = useState("employee")
   const [granularity, setGranularity] = useState("overall")
@@ -239,6 +239,27 @@ export function TopicRatingCard({ companyId }) {
     periodLabel: granularity === "year" ? formatMonthLabel(row.period) : row.period,
     }))
   }, [rawData, granularity])
+
+  // Export Filter-State nach außen (für PDF Export)
+  useEffect(() => {
+    if (onFiltersChange && !loading) {
+      // Berechne Statistiken basierend auf visibleTopics
+      const stats = {
+        dataPoints: chartData.length,
+        topicsCount: visibleTopics.length,
+        topTopics: visibleTopics.slice(0, 3).map(t => prettifyTopicKey(t))
+      };
+
+      onFiltersChange({
+        source,
+        granularity,
+        selectedYear,
+        visibleTopics,
+        stats
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [source, granularity, selectedYear, visibleTopics, chartData, loading]);
 
   // Tooltip
   const CustomTooltip = ({ active, payload, label }) => {
@@ -541,7 +562,7 @@ export function TopicRatingCard({ companyId }) {
         </CardHeader>
 
         <CardContent className="pb-4 pt-4">
-          <div className="relative h-[200px] w-full border-0 outline-none">
+          <div id="topic-rating-chart-export" className="relative h-[200px] w-full border-0 outline-none">
             <TopicChart height={200} />
 
             {refreshing && (

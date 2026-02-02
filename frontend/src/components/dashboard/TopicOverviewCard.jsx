@@ -16,7 +16,7 @@ import TopicTableModal from "./modals/TopicTableModal"
 import { FileText } from "lucide-react"
 import { API_URL } from "@/config"
 
-export function TopicOverviewCard({ companyId = 1 }) {
+export function TopicOverviewCard({ companyId = 1, onDataChange }) {
     const [topicsData, setTopicsData] = useState([])
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState(null)
@@ -63,6 +63,28 @@ export function TopicOverviewCard({ companyId = 1 }) {
             fetchTopics()
         }
     }, [companyId, sourceFilter]) // Re-fetch when sourceFilter changes
+    
+    // Export data nach außen (für PDF Export)
+    useEffect(() => {
+        if (onDataChange && !loading) {
+            const totalTopics = topicsData.length;
+            const avgRating = totalTopics > 0 
+                ? (topicsData.reduce((sum, t) => sum + t.avgRating, 0) / totalTopics).toFixed(1)
+                : 0;
+            const totalMentions = topicsData.reduce((sum, t) => sum + t.frequency, 0);
+            
+            onDataChange({
+                topics: topicsData,
+                sourceFilter,
+                stats: {
+                    totalTopics,
+                    avgRating,
+                    totalMentions
+                }
+            });
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [topicsData, sourceFilter, loading]);
     
     // Track modal state
     useEffect(() => {

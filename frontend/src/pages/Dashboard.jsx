@@ -20,7 +20,7 @@ import { TopicRatingCard } from "@/components/dashboard/TopicRatingCard"
 import { DominantTopicsCard } from "@/components/dashboard/DominantTopicsCard"
 import { IndividualReviewsCard } from "@/components/dashboard/IndividualReviewsCard"
 import { TopicOverviewCard } from "@/components/dashboard/TopicOverviewCard"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useLocation } from "react-router-dom"
 import SorceModal from "../components/dashboard/modals/SorceModal"
 import TrendModal from "../components/dashboard/modals/TrendModal"
@@ -43,6 +43,7 @@ import { Button } from "@/components/ui/button"
 import { Check, ChevronsUpDown } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { API_URL } from "../config"
+import { exportKPIsAsPDF } from "../utils/pdfExport"
 
 
 
@@ -78,6 +79,30 @@ export default function Dashboard() {
     const [uploading, setUploading] = useState(false)
     const [error, setError] = useState("")
     const [highlightedIndex, setHighlightedIndex] = useState(-1)
+    
+    // Timeline Filter State
+    const [timelineFilters, setTimelineFilters] = useState({
+        metric: "Ø Score",
+        source: "employee",
+        granularity: "overall",
+        selectedYear: null
+    })
+    
+    // Topic Rating Filter State
+    const [topicRatingFilters, setTopicRatingFilters] = useState({
+        source: "employee",
+        granularity: "overall",
+        selectedYear: null,
+        visibleTopics: [],
+        stats: {}
+    })
+    
+    // Topic Overview Data State
+    const [topicOverviewData, setTopicOverviewData] = useState({
+        topics: [],
+        sourceFilter: null,
+        stats: {}
+    })
 
     const effectiveCompanyId = selectedCompany || selectedCompanyId || companyFromWelcome || null
     
@@ -576,6 +601,51 @@ export default function Dashboard() {
         return "-"
     }
 
+    // PDF Export Handler
+    const handleExportPDF = async () => {
+        if (!selectedCompanyName) {
+            setError("Bitte wählen Sie zuerst eine Firma aus, um den Export zu starten.");
+            setSidebarOpen(true);
+            return;
+        }
+
+        // Finde das Timeline Chart Element
+        const timelineChartElement = document.getElementById('timeline-chart-export');
+        
+        // Finde das Topic Rating Chart Element
+        const topicRatingChartElement = document.getElementById('topic-rating-chart-export');
+
+        const kpiData = {
+            companyName: selectedCompanyName,
+            avgScore: data?.avg_overall || '-',
+            trend: trendData,
+            mostCritical: mostCriticalData,
+            negativeTopic: getNegativeTopicName(negativeTopicItem),
+            timelineChartElement: timelineChartElement,
+            timelineFilters: timelineFilters,
+            topicRatingChartElement: topicRatingChartElement,
+            topicRatingFilters: topicRatingFilters,
+            topicOverviewData: topicOverviewData
+        };
+
+        await exportKPIsAsPDF(kpiData);
+    };
+    
+    // Handler für Timeline Filter Updates (mit useCallback für stabile Referenz)
+    const handleTimelineFiltersChange = useCallback((filters) => {
+        setTimelineFilters(filters);
+    }, []);
+    
+    // Handler für Topic Rating Filter Updates
+    const handleTopicRatingFiltersChange = useCallback((filters) => {
+        setTopicRatingFilters(filters);
+    }, []);
+    
+    // Handler für Topic Overview Data Updates
+    const handleTopicOverviewDataChange = useCallback((data) => {
+        setTopicOverviewData(data);
+    }, []);
+
 
     return (
         <div className="min-h-screen bg-slate-50">
@@ -726,9 +796,13 @@ export default function Dashboard() {
                         <div className="h-14 w-14 rounded-2xl bg-white/10 flex items-center justify-center border border-white/10">
                             <Home className="h-7 w-7" />
                         </div>
-                        <div className="h-14 w-14 rounded-2xl bg-white/10 flex items-center justify-center border border-white/10">
+                        <button
+                            onClick={handleExportPDF}
+                            className="h-14 w-14 rounded-2xl bg-white/10 flex items-center justify-center border border-white/10 hover:bg-white/20 transition-colors cursor-pointer"
+                            title="Export KPIs als PDF"
+                        >
                             <Download className="h-7 w-7" />
-                        </div>
+                        </button>
                     </div>
                 </aside>
 
@@ -928,13 +1002,22 @@ export default function Dashboard() {
 
                     {/* Charts row */}
                     <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        <TimelineCard companyId={selectedCompany || selectedCompanyId} />
-                        <TopicRatingCard companyId={selectedCompany || selectedCompanyId} />
+                        <TimelineCard 
+                            companyId={selectedCompany || selectedCompanyId} 
+                            onFiltersChange={handleTimelineFiltersChange}
+                        />
+                        <TopicRatingCard 
+                            companyId={selectedCompany || selectedCompanyId}
+                            onFiltersChange={handleTopicRatingFiltersChange}
+                        />
                     </div>
 
                     {/* Topic Overview */}
                     <div className="mt-4">
-                        <TopicOverviewCard companyId={selectedCompany || 1} />
+                        <TopicOverviewCard 
+                            companyId={selectedCompany || selectedCompanyId} 
+                            onDataChange={handleTopicOverviewDataChange}
+                        />
                     </div>
 
                     {/* Tables row */}
