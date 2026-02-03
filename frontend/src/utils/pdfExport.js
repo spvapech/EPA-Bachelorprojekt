@@ -15,6 +15,57 @@ import html2canvas from 'html2canvas';
  * @param {Object} kpiData.topicRatingFilters - Topic Rating Filter-Einstellungen {source, granularity, selectedYear, visibleTopics}
  * @param {Object} kpiData.topicOverviewData - Topic Overview Daten {topics, sourceFilter, stats}
  */
+
+// Helper Funktion für Seitenzahlen
+const addPageNumber = (doc, pageNum, totalPages) => {
+    doc.setFontSize(9);
+    doc.setTextColor(148, 163, 184); // slate-400
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Seite ${pageNum} von ${totalPages}`, 195, 290, { align: 'right' });
+};
+
+// Helper Funktion für konsistente Fußzeilen
+const addFooter = (doc, pageNum, totalPages) => {
+    // Trennlinie
+    doc.setDrawColor(226, 232, 240); // slate-200
+    doc.setLineWidth(0.5);
+    doc.line(20, 282, 190, 282);
+    
+    // Links: Generiert von
+    doc.setFontSize(8);
+    doc.setTextColor(100, 116, 139); // slate-500
+    doc.setFont('helvetica', 'italic');
+    doc.text('Dashboard Analytics System', 20, 287);
+    
+    // Mitte: Datum
+    const currentDate = new Date().toLocaleDateString('de-DE', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+    });
+    doc.text(currentDate, 105, 287, { align: 'center' });
+    
+    // Rechts: Seitenzahl
+    addPageNumber(doc, pageNum, totalPages);
+};
+
+// Helper Funktion für Titel-Header
+const addSectionHeader = (doc, title, yPos = 20, withUnderline = true) => {
+    doc.setFontSize(18);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(15, 23, 42); // slate-900
+    doc.text(title, 20, yPos);
+    
+    if (withUnderline) {
+        // Dekorative Linie unter dem Titel
+        doc.setDrawColor(59, 130, 246); // blue-500
+        doc.setLineWidth(1);
+        doc.line(20, yPos + 3, 50, yPos + 3);
+    }
+    
+    return yPos + 12; // Rückgabe der neuen Y-Position
+};
+
 export const exportKPIsAsPDF = async (kpiData) => {
     const {
         companyName = 'Unbekannte Firma',
@@ -32,37 +83,215 @@ export const exportKPIsAsPDF = async (kpiData) => {
     // Erstelle neues PDF-Dokument (A4-Format)
     const doc = new jsPDF();
     
-    // Hintergrundfarbe (slate-50)
-    doc.setFillColor(248, 250, 252);
-    doc.rect(0, 0, 210, 297, 'F');
+    let currentPage = 1;
+    // totalPages wird am Ende berechnet, wenn alle Seiten erstellt sind
+    let totalPages = 0;
     
-    // Header - Firmenname
-    doc.setFontSize(20);
+    // ===== TITELSEITE =====
+    // Gradient-ähnlicher Hintergrund mit mehreren Rechtecken
+    doc.setFillColor(15, 23, 42); // slate-900
+    doc.rect(0, 0, 210, 120, 'F');
+    
+    doc.setFillColor(30, 41, 59); // slate-800
+    doc.rect(0, 80, 210, 40, 'F');
+    
+    // Rest der Seite in hellem Grau
+    doc.setFillColor(248, 250, 252); // slate-50
+    doc.rect(0, 120, 210, 177, 'F');
+    
+    // Logo/Icon Bereich (verbessertes Design mit Chart-Symbol)
+    // Äußerer Kreis
+    doc.setFillColor(59, 130, 246); // blue-500
+    doc.circle(105, 50, 20, 'F');
+    
+    // Innerer weißer Kreis
+    doc.setFillColor(255, 255, 255);
+    doc.circle(105, 50, 16, 'F');
+    
+    // Chart/Analytics Symbol (stilisierte Balken)
+    doc.setFillColor(59, 130, 246); // blue-500
+    // Balken 1 (kurz)
+    doc.rect(95, 55, 4, 8, 'F');
+    // Balken 2 (mittel)
+    doc.rect(101, 50, 4, 13, 'F');
+    // Balken 3 (lang)
+    doc.rect(107, 45, 4, 18, 'F');
+    // Balken 4 (mittel)
+    doc.rect(113, 52, 4, 11, 'F');
+    
+    // Haupttitel
+    doc.setFontSize(32);
     doc.setFont('helvetica', 'bold');
-    doc.setTextColor(15, 23, 42); // slate-900
-    doc.text(companyName, 20, 20);
+    doc.setTextColor(255, 255, 255);
+    doc.text('Analytics Report', 105, 95, { align: 'center' });
     
-    // Datum
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(100, 116, 139); // slate-500
-    const currentDate = new Date().toLocaleDateString('de-DE', {
+    // Firmenname
+    doc.setFontSize(24);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(255, 255, 255);
+    doc.text(companyName, 105, 110, { align: 'center' });
+    
+    // Dekorative Linie
+    doc.setDrawColor(59, 130, 246);
+    doc.setLineWidth(1.5);
+    doc.line(70, 115, 140, 115);
+    
+    // Datum und Uhrzeit
+    const currentDate = new Date();
+    const dateStr = currentDate.toLocaleDateString('de-DE', {
+        weekday: 'long',
         year: 'numeric',
         month: 'long',
         day: 'numeric'
     });
-    doc.text(`Exportiert am: ${currentDate}`, 20, 35);
+    const timeStr = currentDate.toLocaleTimeString('de-DE', {
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+    
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(71, 85, 105); // slate-600
+    doc.text(`Erstellt am ${dateStr}`, 105, 140, { align: 'center' });
+    doc.text(`um ${timeStr} Uhr`, 105, 148, { align: 'center' });
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(71, 85, 105); // slate-600
+    doc.text(`Erstellt am ${dateStr}`, 105, 140, { align: 'center' });
+    doc.text(`um ${timeStr} Uhr`, 105, 148, { align: 'center' });
+    
+    // Executive Summary Box
+    const summaryY = 165;
+    doc.setFillColor(255, 255, 255);
+    doc.setDrawColor(226, 232, 240);
+    doc.setLineWidth(0.5);
+    doc.roundedRect(30, summaryY, 150, 70, 5, 5, 'FD');
+    
+    // Summary Titel
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(30, 41, 59);
+    doc.text('Executive Summary', 105, summaryY + 10, { align: 'center' });
+    
+    // Summary Content - Quick Stats
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(71, 85, 105);
+    
+    let summaryTextY = summaryY + 22;
+    const lineHeight = 8;
+    
+    // Durchschnittlicher Score
+    doc.setFont('helvetica', 'bold');
+    doc.text('Gesamtbewertung:', 40, summaryTextY);
+    doc.setFont('helvetica', 'normal');
+    const scoreText = avgScore !== '-' ? `${avgScore} / 5.0` : 'Keine Daten';
+    const summaryScoreColor = avgScore > 3 ? [34, 197, 94] : avgScore >= 2 ? [71, 85, 105] : [239, 68, 68];
+    doc.setTextColor(...summaryScoreColor);
+    doc.text(scoreText, 90, summaryTextY);
+    doc.setTextColor(71, 85, 105);
+    
+    summaryTextY += lineHeight;
+    
+    // Trend
+    if (trend?.avgDelta) {
+        doc.setFont('helvetica', 'bold');
+        doc.text('Entwicklung:', 40, summaryTextY);
+        doc.setFont('helvetica', 'normal');
+        const trendValue = parseFloat(trend.avgDelta);
+        const trendText = `${trendValue > 0 ? '+' : ''}${trend.avgDelta}`;
+        const trendColor = trendValue > 0.05 ? [22, 163, 74] : trendValue < -0.05 ? [220, 38, 38] : [71, 85, 105];
+        doc.setTextColor(...trendColor);
+        doc.text(trendText, 90, summaryTextY);
+        doc.setTextColor(71, 85, 105);
+        summaryTextY += lineHeight;
+    }
+    
+    // Most Critical
+    if (mostCritical && mostCritical.topicName !== '-') {
+        doc.setFont('helvetica', 'bold');
+        doc.text('Kritischer Bereich:', 40, summaryTextY);
+        doc.setFont('helvetica', 'normal');
+        const criticalText = mostCritical.topicName.length > 25 
+            ? mostCritical.topicName.substring(0, 25) + '...' 
+            : mostCritical.topicName;
+        doc.setTextColor(220, 38, 38);
+        doc.text(criticalText, 90, summaryTextY);
+        doc.setTextColor(71, 85, 105);
+        summaryTextY += lineHeight;
+    }
+    
+    // Negative Topic
+    if (negativeTopic && negativeTopic !== '-') {
+        doc.setFont('helvetica', 'bold');
+        doc.text('Verbesserungspotenzial:', 40, summaryTextY);
+        doc.setFont('helvetica', 'normal');
+        const negText = negativeTopic.length > 20 ? negativeTopic.substring(0, 20) + '...' : negativeTopic;
+        doc.setTextColor(251, 146, 60);
+        doc.text(negText, 90, summaryTextY);
+    }
+    
+    // Inhaltsverzeichnis
+    const tocY = 250;
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(30, 41, 59);
+    doc.text('Inhaltsverzeichnis', 105, tocY, { align: 'center' });
+    
+    let tocItemY = tocY + 10;
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(71, 85, 105);
+    
+    let pageCounter = 2;
+    doc.text(`1. KPI-Übersicht ............................................. Seite ${pageCounter}`, 105, tocItemY, { align: 'center' });
+    tocItemY += 6;
+    
+    if (timelineChartElement) {
+        pageCounter++;
+        doc.text(`2. Timeline-Analyse ........................................ Seite ${pageCounter}`, 105, tocItemY, { align: 'center' });
+        tocItemY += 6;
+    }
+    
+    if (topicRatingChartElement) {
+        pageCounter++;
+        doc.text(`3. Topic-Bewertungen ..................................... Seite ${pageCounter}`, 105, tocItemY, { align: 'center' });
+        tocItemY += 6;
+    }
+    
+    if (topicOverviewData) {
+        pageCounter++;
+        doc.text(`4. Topic-Übersicht .......................................... Seite ${pageCounter}`, 105, tocItemY, { align: 'center' });
+    }
+    
+    // Titelseite hat keine Fußzeile (wird am Ende hinzugefügt)
+    
+    // ===== SEITE 2: KPI DASHBOARD =====
+    doc.addPage();
+    currentPage++;
+    
+    // Hintergrundfarbe
+    doc.setFillColor(248, 250, 252);
+    doc.rect(0, 0, 210, 297, 'F');
+    
+    const startYPos = addSectionHeader(doc, 'KPI-Übersicht', 20);
+    
+    // Beschreibungstext
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(100, 116, 139);
+    doc.text('Zentrale Kennzahlen zur Bewertung des Unternehmens', 20, startYPos);
     
     // KPI Cards Grid (2x2 Layout wie im Dashboard)
     const cardWidth = 75;
     const cardHeight = 42;
     const gap = 8;
     const startX = 25;
-    const startY = 50;
+    const startY = 55;
     
-    // Helper function to draw a card (ähnlich zu den Dashboard Cards)
-    const drawCard = (x, y, title, content, contentColor = [15, 23, 42], subtitle = null, subtitleColor = null) => {
-        // Card Background (weiß mit Schatten-Effekt durch grauen Rand)
+    // Helper function to draw a card
+    const drawCard = (x, y, title, content, contentColor = [15, 23, 42], subtitle = null, subtitleColor = null, icon = null) => {
+        // Card Background mit Schatten-Effekt
         doc.setFillColor(255, 255, 255);
         doc.setDrawColor(226, 232, 240); // slate-200
         doc.setLineWidth(0.5);
@@ -122,7 +351,7 @@ export const exportKPIsAsPDF = async (kpiData) => {
         ? [30, 41, 59]     // slate-800
         : [239, 68, 68];   // red-500
     
-    drawCard(startX, startY, 'Ø Score', scoreValue, scoreColor);
+    drawCard(startX, startY, 'Ø Score', scoreValue, scoreColor, null, null, null);
     
     // 2. Trend Card (oben rechts)
     let trendContent, trendColor;
@@ -130,7 +359,7 @@ export const exportKPIsAsPDF = async (kpiData) => {
         const trendValue = parseFloat(trend.avgDelta);
         const trendText = `${trendValue > 0 ? '+' : ''}${trend.avgDelta}`;
         
-        // Farbe basiert auf dem tatsächlichen Wert (nicht dem Sign)
+        // Farbe basiert auf dem tatsächlichen Wert
         trendColor = trendValue > 0.05
             ? [22, 163, 74]    // green-600
             : trendValue < -0.05
@@ -143,7 +372,7 @@ export const exportKPIsAsPDF = async (kpiData) => {
         trendColor = [148, 163, 184]; // slate-400
     }
     
-    drawCard(startX + cardWidth + gap, startY, 'Trend', trendContent, trendColor);
+    drawCard(startX + cardWidth + gap, startY, 'Trend', trendContent, trendColor, null, null, null);
     
     // 3. Most Critical Card (unten links)
     if (mostCritical && mostCritical.topicName !== '-') {
@@ -156,10 +385,11 @@ export const exportKPIsAsPDF = async (kpiData) => {
             topicName, 
             [220, 38, 38], // red-600
             mostCritical.score,
-            [220, 38, 38]  // red-600
+            [220, 38, 38],  // red-600
+            null
         );
     } else {
-        drawCard(startX, startY + cardHeight + gap, 'Most Critical', '-', [148, 163, 184]);
+        drawCard(startX, startY + cardHeight + gap, 'Most Critical', '-', [148, 163, 184], null, null, null);
     }
     
     // 4. Negative Topic Card (unten rechts)
@@ -170,13 +400,13 @@ export const exportKPIsAsPDF = async (kpiData) => {
         startY + cardHeight + gap, 
         'Negative Topic', 
         negativeTopicText, 
-        [251, 146, 60] // orange-400
+        [251, 146, 60], // orange-400
+        null,
+        null,
+        null
     );
     
-    // Footer auf der ersten Seite
-    doc.setFontSize(8);
-    doc.setTextColor(148, 163, 184); // slate-400
-    doc.text('Generiert von Dashboard Export', 105, 287, { align: 'center' });
+    // Footer wird am Ende hinzugefügt
     
     // Timeline Chart hinzufügen (falls vorhanden)
     if (timelineChartElement) {
@@ -185,80 +415,93 @@ export const exportKPIsAsPDF = async (kpiData) => {
             
             // Neue Seite für den Timeline Chart
             doc.addPage();
+            currentPage++;
             
             // Hintergrundfarbe für neue Seite
             doc.setFillColor(248, 250, 252);
             doc.rect(0, 0, 210, 297, 'F');
             
-            // Timeline Überschrift
-            doc.setFontSize(18);
-            doc.setFont('helvetica', 'bold');
-            doc.setTextColor(15, 23, 42); // slate-900
-            doc.text('Timeline', 20, 20);
+            // Timeline Überschrift mit Section Header
+            const filterYPos = addSectionHeader(doc, 'Timeline-Analyse', 20);
+            
+            // Beschreibungstext
+            doc.setFontSize(10);
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(100, 116, 139);
+            doc.text('Entwicklung der Bewertungen über die Zeit', 20, filterYPos);
+            
+            let currentYPos = filterYPos + 8;
             
             // Filter-Informationen anzeigen (falls vorhanden)
-            let filterYPos = 28;
             if (timelineFilters) {
                 const { metric, source, granularity, selectedYear, stats } = timelineFilters;
+                
+                // Filter-Box mit Hintergrund
+                doc.setFillColor(255, 255, 255);
+                doc.setDrawColor(226, 232, 240);
+                doc.setLineWidth(0.5);
+                doc.roundedRect(20, currentYPos, 170, (stats ? 28 : 22), 3, 3, 'FD');
+                
+                currentYPos += 5;
                 
                 // Linke Spalte: Filter
                 doc.setFontSize(10);
                 doc.setFont('helvetica', 'bold');
                 doc.setTextColor(71, 85, 105); // slate-600
-                doc.text('Ausgewählte Filter:', 20, filterYPos);
+                doc.text('Filter:', 25, currentYPos);
                 
-                filterYPos += 7;
+                currentYPos += 6;
                 doc.setFontSize(9);
                 doc.setFont('helvetica', 'normal');
                 doc.setTextColor(100, 116, 139); // slate-500
                 
                 // Metrik
                 doc.setFont('helvetica', 'bold');
-                doc.text('Metrik:', 25, filterYPos);
+                doc.text('Metrik:', 30, currentYPos);
                 doc.setFont('helvetica', 'normal');
-                doc.text(metric || 'Ø Score', 45, filterYPos);
+                doc.text(metric || 'Ø Score', 50, currentYPos);
                 
                 // Quelle
-                filterYPos += 5;
+                currentYPos += 5;
                 doc.setFont('helvetica', 'bold');
-                doc.text('Quelle:', 25, filterYPos);
+                doc.text('Quelle:', 30, currentYPos);
                 doc.setFont('helvetica', 'normal');
                 const sourceLabel = source === 'employee' ? 'Mitarbeiter' : source === 'candidates' ? 'Bewerber' : source;
-                doc.text(sourceLabel, 45, filterYPos);
+                doc.text(sourceLabel, 50, currentYPos);
                 
                 // Zeitraum/Granularität
-                filterYPos += 5;
+                currentYPos += 5;
                 doc.setFont('helvetica', 'bold');
-                doc.text('Zeitraum:', 25, filterYPos);
+                doc.text('Zeitraum:', 30, currentYPos);
                 doc.setFont('helvetica', 'normal');
                 const granularityLabel = granularity === 'overall' ? 'Gesamter Zeitraum' : granularity === 'year' ? 'Jahresansicht' : granularity;
-                doc.text(granularityLabel, 45, filterYPos);
+                doc.text(granularityLabel, 50, currentYPos);
                 
                 // Jahr (falls ausgewählt)
                 if (granularity === 'year' && selectedYear) {
-                    filterYPos += 5;
+                    currentYPos += 5;
                     doc.setFont('helvetica', 'bold');
-                    doc.text('Jahr:', 25, filterYPos);
+                    doc.text('Jahr:', 30, currentYPos);
                     doc.setFont('helvetica', 'normal');
-                    doc.text(String(selectedYear), 45, filterYPos);
+                    doc.text(String(selectedYear), 50, currentYPos);
                 }
                 
                 // Rechte Spalte: Statistiken (falls vorhanden)
                 if (stats && stats.dataPoints) {
-                    const statsX = 110; // X-Position für rechte Spalte
-                    let statsYPos = 28;
+                    const statsX = 115; // X-Position für rechte Spalte
+                    let statsYPos = currentYPos - (granularity === 'year' && selectedYear ? 15 : 10);
                     
                     doc.setFontSize(10);
                     doc.setFont('helvetica', 'bold');
                     doc.setTextColor(71, 85, 105);
                     doc.text('Statistiken:', statsX, statsYPos);
                     
-                    statsYPos += 7;
+                    statsYPos += 6;
                     doc.setFontSize(9);
                     doc.setFont('helvetica', 'normal');
                     doc.setTextColor(100, 116, 139);
                     
-                    // Datenpunkte (immer vorhanden)
+                    // Datenpunkte
                     doc.setFont('helvetica', 'bold');
                     doc.text('Datenpunkte:', statsX + 5, statsYPos);
                     doc.setFont('helvetica', 'normal');
@@ -271,12 +514,6 @@ export const exportKPIsAsPDF = async (kpiData) => {
                         doc.text('Ø Anzahl:', statsX + 5, statsYPos);
                         doc.setFont('helvetica', 'normal');
                         doc.text(String(stats.avgCount || '-'), statsX + 35, statsYPos);
-                        
-                        statsYPos += 5;
-                        doc.setFont('helvetica', 'bold');
-                        doc.text('Max Anzahl:', statsX + 5, statsYPos);
-                        doc.setFont('helvetica', 'normal');
-                        doc.text(String(stats.maxCount || '-'), statsX + 35, statsYPos);
                     } else if (metric === "Trend") {
                         statsYPos += 5;
                         doc.setFont('helvetica', 'bold');
@@ -286,13 +523,6 @@ export const exportKPIsAsPDF = async (kpiData) => {
                         doc.setTextColor(avgTrend >= 0 ? 22 : 220, avgTrend >= 0 ? 163 : 38, avgTrend >= 0 ? 74 : 38);
                         doc.text((avgTrend >= 0 ? '+' : '') + stats.avgTrend, statsX + 35, statsYPos);
                         doc.setTextColor(100, 116, 139);
-                        
-                        statsYPos += 5;
-                        doc.setFont('helvetica', 'bold');
-                        doc.text('Max/Min:', statsX + 5, statsYPos);
-                        doc.setFont('helvetica', 'normal');
-                        const maxTrend = parseFloat(stats.maxTrend || 0);
-                        doc.text((maxTrend >= 0 ? '+' : '') + stats.maxTrend + ' / ' + stats.minTrend, statsX + 35, statsYPos);
                     } else {
                         // Ø Score
                         statsYPos += 5;
@@ -302,20 +532,10 @@ export const exportKPIsAsPDF = async (kpiData) => {
                         doc.setTextColor(37, 99, 235); // blue-600
                         doc.text(String(stats.avgHistorical || '-'), statsX + 35, statsYPos);
                         doc.setTextColor(100, 116, 139);
-                        
-                        if (stats.avgForecast) {
-                            statsYPos += 5;
-                            doc.setFont('helvetica', 'bold');
-                            doc.text('Ø Prognose:', statsX + 5, statsYPos);
-                            doc.setFont('helvetica', 'normal');
-                            doc.setTextColor(249, 115, 22); // orange-500
-                            doc.text(String(stats.avgForecast), statsX + 35, statsYPos);
-                            doc.setTextColor(100, 116, 139);
-                        }
                     }
                 }
                 
-                filterYPos += 8;
+                currentYPos += 10;
             }
             
             console.log('Starte html2canvas...');
@@ -409,31 +629,46 @@ export const exportKPIsAsPDF = async (kpiData) => {
             
             // Chart zentriert einfügen
             const xPos = (210 - finalWidth) / 2;
-            const yPos = filterYPos + 5; // Position nach den Filtern
+            const yPos = currentYPos + 5;
             
             doc.addImage(imgData, 'PNG', xPos, yPos, finalWidth, finalHeight);
             console.log('Bild zum PDF hinzugefügt');
             
-            // Fußzeile auf zweiter Seite
-            doc.setFontSize(8);
-            doc.setTextColor(148, 163, 184);
-            doc.setFont('helvetica', 'italic');
-            doc.text('Dashboard Analytics System', 105, 280, { align: 'center' });
+            // Fußzeile wird am Ende hinzugefügt
             
         } catch (error) {
             console.error('Fehler beim Hinzufügen des Timeline Charts:', error);
             
-            // Zeige Fehlermeldung im PDF
+            // Zeige professionelle Fehlermeldung im PDF
             doc.addPage();
+            currentPage++;
             doc.setFillColor(248, 250, 252);
             doc.rect(0, 0, 210, 297, 'F');
-            doc.setFontSize(14);
+            
+            addSectionHeader(doc, 'Timeline-Analyse', 20);
+            
+            // Fehler-Box
+            doc.setFillColor(254, 242, 242); // red-50
+            doc.setDrawColor(252, 165, 165); // red-300
+            doc.setLineWidth(1);
+            doc.roundedRect(30, 60, 150, 40, 5, 5, 'FD');
+            
+            doc.setFontSize(12);
             doc.setFont('helvetica', 'bold');
             doc.setTextColor(220, 38, 38);
-            doc.text('Timeline Chart konnte nicht geladen werden', 105, 100, { align: 'center' });
-            doc.setFontSize(10);
+            doc.text('Chart konnte nicht geladen werden', 105, 75, { align: 'center' });
+            doc.setFontSize(9);
             doc.setFont('helvetica', 'normal');
-            doc.text(error.message || 'Unbekannter Fehler', 105, 110, { align: 'center' });
+            doc.setTextColor(127, 29, 29);
+            const errorMsg = error.message || 'Unbekannter Fehler';
+            const errorLines = doc.splitTextToSize(errorMsg, 130);
+            let errorY = 85;
+            errorLines.forEach(line => {
+                doc.text(line, 105, errorY, { align: 'center' });
+                errorY += 5;
+            });
+            
+            // Fußzeile wird am Ende hinzugefügt
         }
     } else {
         console.warn('Timeline Chart Element nicht gefunden');
@@ -446,72 +681,88 @@ export const exportKPIsAsPDF = async (kpiData) => {
             
             // Neue Seite für den Topic Rating Chart
             doc.addPage();
+            currentPage++;
             
             // Hintergrundfarbe für neue Seite
             doc.setFillColor(248, 250, 252);
             doc.rect(0, 0, 210, 297, 'F');
             
-            // Topic Rating Überschrift
-            doc.setFontSize(18);
-            doc.setFont('helvetica', 'bold');
-            doc.setTextColor(15, 23, 42); // slate-900
-            doc.text('Topic Bewertungen', 20, 20, { charSpace: 0 });
+            // Topic Rating Überschrift mit Section Header
+            const headerYPos = addSectionHeader(doc, 'Topic-Bewertungen', 20);
+            
+            // Beschreibungstext
+            doc.setFontSize(10);
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(100, 116, 139);
+            doc.text('Durchschnittliche Bewertung der verschiedenen Themenbereiche', 20, headerYPos);
+            
+            let currentYPos = headerYPos + 8;
             
             // Filter-Informationen anzeigen (falls vorhanden)
-            let filterYPos = 28;
-            let maxYPos = filterYPos; // Track maximum Y position from both columns
-            
             if (topicRatingFilters) {
-                const { source, granularity, selectedYear, visibleTopics, stats } = topicRatingFilters;
+                const { source, granularity, selectedYear, stats } = topicRatingFilters;
+                
+                // Berechne die benötigte Box-Höhe basierend auf Inhalt
+                let filterLines = 2; // Quelle + Zeitraum
+                if (granularity === 'year' && selectedYear) filterLines += 1;
+                const boxHeight = 10 + (filterLines * 5) + 5; // Padding + Zeilen + Margin
+                
+                // Filter-Box mit Hintergrund
+                doc.setFillColor(255, 255, 255);
+                doc.setDrawColor(226, 232, 240);
+                doc.setLineWidth(0.5);
+                doc.roundedRect(20, currentYPos, 170, boxHeight, 3, 3, 'FD');
+                
+                const boxStartY = currentYPos;
+                currentYPos += 6;
+                const startFilterY = currentYPos;
                 
                 // Linke Spalte: Filter
                 doc.setFontSize(10);
                 doc.setFont('helvetica', 'bold');
                 doc.setTextColor(71, 85, 105); // slate-600
-                doc.text('Ausgewählte Filter:', 20, filterYPos);
+                doc.text('Filter:', 25, currentYPos);
                 
-                filterYPos += 7;
+                currentYPos += 6;
                 doc.setFontSize(9);
                 doc.setFont('helvetica', 'normal');
                 doc.setTextColor(100, 116, 139); // slate-500
                 
                 // Quelle
                 doc.setFont('helvetica', 'bold');
-                doc.text('Quelle:', 25, filterYPos);
+                doc.text('Quelle:', 30, currentYPos);
                 doc.setFont('helvetica', 'normal');
                 const sourceLabel = source === 'employee' ? 'Mitarbeiter' : source === 'candidates' ? 'Bewerber' : source;
-                doc.text(sourceLabel, 45, filterYPos);
+                doc.text(sourceLabel, 50, currentYPos);
                 
                 // Zeitraum/Granularität
-                filterYPos += 5;
+                currentYPos += 5;
                 doc.setFont('helvetica', 'bold');
-                doc.text('Zeitraum:', 25, filterYPos);
+                doc.text('Zeitraum:', 30, currentYPos);
                 doc.setFont('helvetica', 'normal');
                 const granularityLabel = granularity === 'overall' ? 'Gesamter Zeitraum' : granularity === 'year' ? 'Jahresansicht' : granularity;
-                doc.text(granularityLabel, 45, filterYPos);
+                doc.text(granularityLabel, 50, currentYPos);
                 
                 // Jahr (falls ausgewählt)
                 if (granularity === 'year' && selectedYear) {
-                    filterYPos += 5;
+                    currentYPos += 5;
                     doc.setFont('helvetica', 'bold');
-                    doc.text('Jahr:', 25, filterYPos);
+                    doc.text('Jahr:', 30, currentYPos);
                     doc.setFont('helvetica', 'normal');
-                    doc.text(String(selectedYear), 45, filterYPos);
+                    doc.text(String(selectedYear), 50, currentYPos);
                 }
-                
-                maxYPos = Math.max(maxYPos, filterYPos); // Update max Y position
                 
                 // Rechte Spalte: Statistiken (falls vorhanden)
                 if (stats) {
-                    const statsX = 110; // X-Position für rechte Spalte
-                    let statsYPos = 28;
+                    const statsX = 115; // X-Position für rechte Spalte
+                    let statsYPos = startFilterY;
                     
                     doc.setFontSize(10);
                     doc.setFont('helvetica', 'bold');
                     doc.setTextColor(71, 85, 105);
                     doc.text('Statistiken:', statsX, statsYPos);
                     
-                    statsYPos += 7;
+                    statsYPos += 6;
                     doc.setFontSize(9);
                     doc.setFont('helvetica', 'normal');
                     doc.setTextColor(100, 116, 139);
@@ -521,37 +772,21 @@ export const exportKPIsAsPDF = async (kpiData) => {
                         doc.setFont('helvetica', 'bold');
                         doc.text('Datenpunkte:', statsX + 5, statsYPos);
                         doc.setFont('helvetica', 'normal');
-                        doc.text(String(stats.dataPoints), statsX + 35, statsYPos);
+                        doc.text(String(stats.dataPoints), statsX + 30, statsYPos);
                         statsYPos += 5;
                     }
                     
                     // Anzahl sichtbarer Topics
                     if (stats.topicsCount) {
                         doc.setFont('helvetica', 'bold');
-                        doc.text('Sichtbare Topics:', statsX + 5, statsYPos);
+                        doc.text('Topics:', statsX + 5, statsYPos);
                         doc.setFont('helvetica', 'normal');
-                        doc.text(String(stats.topicsCount), statsX + 35, statsYPos);
-                        statsYPos += 5;
+                        doc.text(String(stats.topicsCount), statsX + 30, statsYPos);
                     }
-                    
-                    // Top 3 Topics anzeigen
-                    if (stats.topTopics && stats.topTopics.length > 0) {
-                        doc.setFont('helvetica', 'bold');
-                        doc.text('Top Topics:', statsX + 5, statsYPos);
-                        statsYPos += 5;
-                        
-                        doc.setFont('helvetica', 'normal');
-                        stats.topTopics.slice(0, 3).forEach((topic, idx) => {
-                            const shortTopic = topic.length > 20 ? topic.substring(0, 20) + '...' : topic;
-                            doc.text(`${idx + 1}. ${shortTopic}`, statsX + 5, statsYPos);
-                            statsYPos += 4;
-                        });
-                    }
-                    
-                    maxYPos = Math.max(maxYPos, statsYPos); // Update max Y position from stats
                 }
                 
-                filterYPos = maxYPos + 8; // Use max Y position from both columns
+                // Setze currentYPos auf das Ende der Box
+                currentYPos = boxStartY + boxHeight + 8;
             }
             
             console.log('Starte html2canvas für Topic Rating...');
@@ -640,31 +875,46 @@ export const exportKPIsAsPDF = async (kpiData) => {
             
             // Chart zentriert einfügen
             const xPos = (210 - finalWidth) / 2;
-            const yPos = filterYPos + 5; // Position nach den Filtern
+            const yPos = currentYPos + 5;
             
             doc.addImage(imgData, 'PNG', xPos, yPos, finalWidth, finalHeight);
             console.log('Topic Rating Bild zum PDF hinzugefügt');
             
-            // Fußzeile auf dritter Seite
-            doc.setFontSize(8);
-            doc.setTextColor(148, 163, 184);
-            doc.setFont('helvetica', 'italic');
-            doc.text('Dashboard Analytics System', 105, 280, { align: 'center' });
+            // Fußzeile wird am Ende hinzugefügt
             
         } catch (error) {
             console.error('Fehler beim Hinzufügen des Topic Rating Charts:', error);
             
-            // Zeige Fehlermeldung im PDF
+            // Zeige professionelle Fehlermeldung im PDF
             doc.addPage();
+            currentPage++;
             doc.setFillColor(248, 250, 252);
             doc.rect(0, 0, 210, 297, 'F');
-            doc.setFontSize(14);
+            
+            addSectionHeader(doc, 'Topic-Bewertungen', 20);
+            
+            // Fehler-Box
+            doc.setFillColor(254, 242, 242); // red-50
+            doc.setDrawColor(252, 165, 165); // red-300
+            doc.setLineWidth(1);
+            doc.roundedRect(30, 60, 150, 40, 5, 5, 'FD');
+            
+            doc.setFontSize(12);
             doc.setFont('helvetica', 'bold');
             doc.setTextColor(220, 38, 38);
-            doc.text('Topic Rating Chart konnte nicht geladen werden', 105, 100, { align: 'center' });
-            doc.setFontSize(10);
+            doc.text('Chart konnte nicht geladen werden', 105, 75, { align: 'center' });
+            doc.setFontSize(9);
             doc.setFont('helvetica', 'normal');
-            doc.text(error.message || 'Unbekannter Fehler', 105, 110, { align: 'center' });
+            doc.setTextColor(127, 29, 29);
+            const errorMsg = error.message || 'Unbekannter Fehler';
+            const errorLines = doc.splitTextToSize(errorMsg, 130);
+            let errorY = 85;
+            errorLines.forEach(line => {
+                doc.text(line, 105, errorY, { align: 'center' });
+                errorY += 5;
+            });
+            
+            // Fußzeile wird am Ende hinzugefügt
         }
     } else {
         console.warn('Topic Rating Chart Element nicht gefunden');
@@ -677,24 +927,34 @@ export const exportKPIsAsPDF = async (kpiData) => {
             
             // Neue Seite für die Topic Übersicht
             doc.addPage();
+            currentPage++;
             
             // Hintergrundfarbe
             doc.setFillColor(248, 250, 252);
             doc.rect(0, 0, 210, 297, 'F');
             
-            // Überschrift
-            doc.setFontSize(18);
-            doc.setFont('helvetica', 'bold');
-            doc.setTextColor(15, 23, 42); // slate-900
-            doc.text('Topic Übersicht', 20, 20, { charSpace: 0 });
+            // Überschrift mit Section Header
+            let yPos = addSectionHeader(doc, 'Topic-Übersicht', 20);
             
-            let yPos = 28;
+            // Beschreibungstext
+            doc.setFontSize(10);
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(100, 116, 139);
+            doc.text('Detaillierte Aufstellung aller identifizierten Themenbereiche', 20, yPos);
             
-            // Filter-Information
+            yPos += 10;
+            
+            // Filter-Information in Box
+            doc.setFillColor(255, 255, 255);
+            doc.setDrawColor(226, 232, 240);
+            doc.setLineWidth(0.5);
+            doc.roundedRect(20, yPos, 170, 20, 3, 3, 'FD');
+            
+            yPos += 6;
             doc.setFontSize(10);
             doc.setFont('helvetica', 'bold');
             doc.setTextColor(71, 85, 105); // slate-600
-            doc.text('Datenquelle:', 20, yPos);
+            doc.text('Datenquelle:', 25, yPos);
             doc.setFont('helvetica', 'normal');
             doc.setTextColor(100, 116, 139);
             const sourceLabel = topicOverviewData.sourceFilter === 'employee' 
@@ -702,77 +962,88 @@ export const exportKPIsAsPDF = async (kpiData) => {
                 : topicOverviewData.sourceFilter === 'candidates' 
                 ? 'Bewerber' 
                 : 'Alle';
-            doc.text(sourceLabel, 50, yPos);
+            doc.text(sourceLabel, 55, yPos);
             
-            yPos += 10;
-            
-            // Statistiken
+            // Statistiken auf der gleichen Zeile
             if (topicOverviewData.stats) {
                 const { totalTopics, avgRating, totalMentions } = topicOverviewData.stats;
                 
-                doc.setFontSize(9);
                 doc.setFont('helvetica', 'bold');
-                doc.text(`Total Topics: ${totalTopics}`, 20, yPos);
-                doc.text(`Ø Rating: ${avgRating}`, 70, yPos);
-                doc.text(`Total Mentions: ${totalMentions}`, 120, yPos);
+                doc.setTextColor(71, 85, 105);
+                doc.text('Total Topics:', 95, yPos);
+                doc.setFont('helvetica', 'normal');
+                doc.text(String(totalTopics), 123, yPos);
                 
-                yPos += 8;
+                doc.setFont('helvetica', 'bold');
+                doc.text('Ø Rating:', 140, yPos);
+                doc.setFont('helvetica', 'normal');
+                doc.text(String(avgRating), 158, yPos);
             }
+            
+            yPos += 18;
             
             // Tabellen-Header
             const colX = {
                 topic: 20,
-                sentiment: 90,
-                rating: 125,
-                frequency: 160
+                sentiment: 85,
+                rating: 120,
+                frequency: 150,
+                quality: 175
             };
             
             const rowHeight = 7;
             const headerY = yPos;
             
-            // Header-Hintergrund
-            doc.setFillColor(226, 232, 240); // slate-200
-            doc.rect(15, headerY - 5, 180, rowHeight + 2, 'F');
+            // Header-Hintergrund mit Farbverlauf-Effekt
+            doc.setFillColor(59, 130, 246); // blue-500
+            doc.roundedRect(15, headerY - 5, 180, rowHeight + 2, 2, 2, 'F');
             
             doc.setFontSize(9);
             doc.setFont('helvetica', 'bold');
-            doc.setTextColor(30, 41, 59); // slate-800
+            doc.setTextColor(255, 255, 255); // weiß
             doc.text('Topic', colX.topic, headerY);
             doc.text('Sentiment', colX.sentiment, headerY);
             doc.text('Rating', colX.rating, headerY);
-            doc.text('Häufigkeit', colX.frequency, headerY);
+            doc.text('Anzahl', colX.frequency, headerY);
+            doc.text('Qualität', colX.quality, headerY);
             
-            yPos = headerY + rowHeight + 2;
+            yPos = headerY + rowHeight + 4;
             
-            // Tabellen-Zeilen (limitiert auf Top 20 Topics)
-            const topics = topicOverviewData.topics.slice(0, 20);
+            // Tabellen-Zeilen (alle Topics)
+            const topics = topicOverviewData.topics;
             
             topics.forEach((topic, index) => {
                 // Prüfe ob neue Seite nötig ist
                 if (yPos > 270) {
+                    // Neue Seite ohne Fußzeile (wird am Ende hinzugefügt)
+                    
                     doc.addPage();
+                    currentPage++;
                     doc.setFillColor(248, 250, 252);
                     doc.rect(0, 0, 210, 297, 'F');
                     yPos = 20;
                     
                     // Header wiederholen
-                    doc.setFillColor(226, 232, 240);
-                    doc.rect(15, yPos - 5, 180, rowHeight + 2, 'F');
+                    doc.setFillColor(59, 130, 246);
+                    doc.roundedRect(15, yPos - 5, 180, rowHeight + 2, 2, 2, 'F');
                     doc.setFontSize(9);
                     doc.setFont('helvetica', 'bold');
-                    doc.setTextColor(30, 41, 59);
+                    doc.setTextColor(255, 255, 255);
                     doc.text('Topic', colX.topic, yPos);
                     doc.text('Sentiment', colX.sentiment, yPos);
                     doc.text('Rating', colX.rating, yPos);
-                    doc.text('Häufigkeit', colX.frequency, yPos);
-                    yPos += rowHeight + 2;
+                    doc.text('Anzahl', colX.frequency, yPos);
+                    doc.text('Qualität', colX.quality, yPos);
+                    yPos += rowHeight + 4;
                 }
                 
                 // Zeilen-Hintergrund (alternierende Farben)
                 if (index % 2 === 0) {
+                    doc.setFillColor(255, 255, 255); // weiß
+                } else {
                     doc.setFillColor(248, 250, 252); // slate-50
-                    doc.rect(15, yPos - 5, 180, rowHeight, 'F');
                 }
+                doc.rect(15, yPos - 5, 180, rowHeight, 'F');
                 
                 doc.setFontSize(8);
                 doc.setFont('helvetica', 'normal');
@@ -784,41 +1055,88 @@ export const exportKPIsAsPDF = async (kpiData) => {
                     : topic.topic;
                 doc.text(topicName, colX.topic, yPos);
                 
-                // Sentiment mit Farbe
+                // Sentiment mit Farbe und Badge-Style (korrigierte Positionierung)
                 const sentiment = topic.sentiment || 'Neutral';
-                if (sentiment === 'Positiv') {
+                // Entferne fehlerhafte Zeichen
+                const cleanSentiment = String(sentiment).replace(/[^\w\säöüÄÖÜß-]/g, '').trim();
+                
+                if (cleanSentiment === 'Positiv') {
                     doc.setTextColor(22, 163, 74); // green-600
-                } else if (sentiment === 'Negativ') {
+                    // Verwende gefüllten Kreis statt Unicode
+                    doc.setFillColor(22, 163, 74);
+                    doc.circle(colX.sentiment - 2, yPos - 2, 1.5, 'F');
+                    doc.setFontSize(8);
+                    doc.text(cleanSentiment, colX.sentiment + 2, yPos);
+                } else if (cleanSentiment === 'Negativ') {
                     doc.setTextColor(220, 38, 38); // red-600
+                    doc.setFillColor(220, 38, 38);
+                    doc.circle(colX.sentiment - 2, yPos - 2, 1.5, 'F');
+                    doc.setFontSize(8);
+                    doc.text(cleanSentiment, colX.sentiment + 2, yPos);
                 } else {
                     doc.setTextColor(100, 116, 139); // slate-500
+                    doc.setFillColor(100, 116, 139);
+                    doc.circle(colX.sentiment - 2, yPos - 2, 1.5, 'F');
+                    doc.setFontSize(8);
+                    doc.text(cleanSentiment || 'Neutral', colX.sentiment + 2, yPos);
                 }
-                doc.text(sentiment, colX.sentiment, yPos);
                 
-                // Rating
+                // Rating mit farblicher Hervorhebung
                 doc.setTextColor(51, 65, 85);
-                doc.text(topic.avgRating ? topic.avgRating.toFixed(1) : '-', colX.rating, yPos);
+                const rating = topic.avgRating ? topic.avgRating.toFixed(1) : '-';
+                if (topic.avgRating) {
+                    if (topic.avgRating >= 4) {
+                        doc.setTextColor(22, 163, 74); // green-600
+                    } else if (topic.avgRating < 3) {
+                        doc.setTextColor(220, 38, 38); // red-600
+                    }
+                }
+                doc.text(rating, colX.rating, yPos);
                 
-                // Frequency
+                // Frequency (Anzahl)
+                doc.setTextColor(51, 65, 85);
                 doc.text(String(topic.frequency || 0), colX.frequency, yPos);
+                
+                // Data Quality (Datenqualität) - basierend auf statistical_meta.risk_level
+                const riskLevel = topic.statistical_meta?.risk_level;
+                
+                if (riskLevel) {
+                    doc.setFontSize(8);
+                    let qualityText = '';
+                    let qualityColor = [51, 65, 85]; // default slate-700
+                    
+                    switch (riskLevel) {
+                        case 'limited':
+                            qualityText = 'Begrenzt';
+                            qualityColor = [220, 38, 38]; // red-600
+                            break;
+                        case 'constrained':
+                            qualityText = 'Eingeschränkt';
+                            qualityColor = [251, 146, 60]; // orange-400
+                            break;
+                        case 'acceptable':
+                            qualityText = 'Akzeptabel';
+                            qualityColor = [234, 179, 8]; // yellow-600
+                            break;
+                        case 'solid':
+                            qualityText = 'Solide';
+                            qualityColor = [22, 163, 74]; // green-600
+                            break;
+                        default:
+                            qualityText = 'N/A';
+                            qualityColor = [100, 116, 139]; // slate-500
+                    }
+                    
+                    doc.setTextColor(...qualityColor);
+                    doc.text(qualityText, colX.quality, yPos);
+                } else {
+                    // Fallback wenn keine statistical_meta vorhanden
+                    doc.setTextColor(100, 116, 139); // slate-500
+                    doc.text('N/A', colX.quality, yPos);
+                }
                 
                 yPos += rowHeight;
             });
-            
-            // Hinweis falls mehr als 20 Topics
-            if (topicOverviewData.topics.length > 20) {
-                yPos += 5;
-                doc.setFontSize(8);
-                doc.setFont('helvetica', 'italic');
-                doc.setTextColor(100, 116, 139);
-                doc.text(`Hinweis: Es werden nur die ersten 20 von ${topicOverviewData.topics.length} Topics angezeigt`, 105, yPos, { align: 'center' });
-            }
-            
-            // Fußzeile
-            doc.setFontSize(8);
-            doc.setTextColor(148, 163, 184);
-            doc.setFont('helvetica', 'italic');
-            doc.text('Dashboard Analytics System', 105, 280, { align: 'center' });
             
             console.log('Topic Overview zur PDF hinzugefügt');
             
@@ -827,6 +1145,15 @@ export const exportKPIsAsPDF = async (kpiData) => {
         }
     } else {
         console.warn('Topic Overview Daten nicht verfügbar');
+    }
+    
+    // Berechne die tatsächliche Anzahl der Seiten
+    totalPages = doc.internal.pages.length - 1; // -1 weil die erste Seite leer ist (jsPDF intern)
+    
+    // Füge Fußzeilen auf allen Seiten hinzu (außer der ersten Titelseite)
+    for (let i = 2; i <= totalPages; i++) {
+        doc.setPage(i);
+        addFooter(doc, i, totalPages);
     }
     
     // Speichere das PDF

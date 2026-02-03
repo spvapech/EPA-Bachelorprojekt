@@ -609,26 +609,38 @@ export default function Dashboard() {
             return;
         }
 
-        // Finde das Timeline Chart Element
-        const timelineChartElement = document.getElementById('timeline-chart-export');
-        
-        // Finde das Topic Rating Chart Element
-        const topicRatingChartElement = document.getElementById('topic-rating-chart-export');
+        try {
+            // Zeige Lade-Zustand (optional mit einem Loading-State)
+            setError(null);
+            
+            // Finde das Timeline Chart Element
+            const timelineChartElement = document.getElementById('timeline-chart-export');
+            
+            // Finde das Topic Rating Chart Element
+            const topicRatingChartElement = document.getElementById('topic-rating-chart-export');
 
-        const kpiData = {
-            companyName: selectedCompanyName,
-            avgScore: data?.avg_overall || '-',
-            trend: trendData,
-            mostCritical: mostCriticalData,
-            negativeTopic: getNegativeTopicName(negativeTopicItem),
-            timelineChartElement: timelineChartElement,
-            timelineFilters: timelineFilters,
-            topicRatingChartElement: topicRatingChartElement,
-            topicRatingFilters: topicRatingFilters,
-            topicOverviewData: topicOverviewData
-        };
+            const kpiData = {
+                companyName: selectedCompanyName,
+                avgScore: data?.avg_overall || '-',
+                trend: trendData,
+                mostCritical: mostCriticalData,
+                negativeTopic: getNegativeTopicName(negativeTopicItem),
+                timelineChartElement: timelineChartElement,
+                timelineFilters: timelineFilters,
+                topicRatingChartElement: topicRatingChartElement,
+                topicRatingFilters: topicRatingFilters,
+                topicOverviewData: topicOverviewData
+            };
 
-        await exportKPIsAsPDF(kpiData);
+            await exportKPIsAsPDF(kpiData);
+            
+            // Erfolgs-Feedback (optional: Toast notification)
+            console.log('✅ PDF erfolgreich erstellt und heruntergeladen!');
+            
+        } catch (error) {
+            console.error('Fehler beim PDF-Export:', error);
+            setError(`PDF-Export fehlgeschlagen: ${error.message || 'Unbekannter Fehler'}`);
+        }
     };
     
     // Handler für Timeline Filter Updates (mit useCallback für stabile Referenz)
@@ -798,10 +810,14 @@ export default function Dashboard() {
                         </div>
                         <button
                             onClick={handleExportPDF}
-                            className="h-14 w-14 rounded-2xl bg-white/10 flex items-center justify-center border border-white/10 hover:bg-white/20 transition-colors cursor-pointer"
-                            title="Export KPIs als PDF"
+                            className="group relative h-14 w-14 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 flex items-center justify-center border border-blue-400 hover:border-blue-300 transition-all duration-200 shadow-lg hover:shadow-xl cursor-pointer transform hover:scale-105"
+                            title="KPIs als PDF exportieren"
                         >
-                            <Download className="h-7 w-7" />
+                            <Download className="h-7 w-7 text-white group-hover:animate-bounce" />
+                            <span className="absolute -right-1 -top-1 flex h-3 w-3">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-3 w-3 bg-blue-500"></span>
+                            </span>
                         </button>
                     </div>
                 </aside>
