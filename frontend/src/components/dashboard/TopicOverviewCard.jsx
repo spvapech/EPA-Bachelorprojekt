@@ -257,6 +257,24 @@ export function TopicOverviewCard({ companyId = 1, onDataChange }) {
                         </Button>
                     </div>
                     
+                    {/* Statistical Warning Banner */}
+                    {topicsData.some(t => t.statistical_meta?.risk_level === 'limited') && (
+                        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                            <div className="flex items-start gap-2">
+                                <span className="text-red-600 text-lg">⚠️</span>
+                                <div className="flex-1">
+                                    <p className="text-sm font-semibold text-red-800">
+                                        Achtung: Einige Topics haben begrenzte Datenbasis
+                                    </p>
+                                    <p className="text-xs text-red-700 mt-1">
+                                        {topicsData.filter(t => t.statistical_meta?.risk_level === 'limited').length} Topic(s) 
+                                        mit weniger als 30 Reviews - Ergebnisse mit Vorsicht interpretieren
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                    
                     <div 
                         className="cursor-pointer"
                         onClick={handleCardClick}

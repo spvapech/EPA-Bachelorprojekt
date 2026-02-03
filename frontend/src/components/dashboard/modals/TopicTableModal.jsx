@@ -35,6 +35,47 @@ export default function TopicTableModal({ open, onOpenChange, topics, onTopicSel
         }
     }
 
+    const getRiskLevelBadge = (statistical_meta) => {
+        if (!statistical_meta) {
+            return { variant: "outline", text: "N/A", icon: "" }
+        }
+
+        const { risk_level } = statistical_meta
+
+        switch (risk_level) {
+            case "limited":
+                return { 
+                    variant: "destructive", 
+                    text: "Begrenzt", 
+                    icon: "⚠️",
+                    className: "bg-red-100 text-red-800 border-red-300 hover:bg-red-200"
+                }
+            case "constrained":
+                return { 
+                    variant: "warning", 
+                    text: "Eingeschränkt", 
+                    icon: "⚡",
+                    className: "bg-orange-100 text-orange-800 border-orange-300 hover:bg-orange-200"
+                }
+            case "acceptable":
+                return { 
+                    variant: "secondary", 
+                    text: "Akzeptabel", 
+                    icon: "✓",
+                    className: "bg-yellow-100 text-yellow-800 border-yellow-300 hover:bg-yellow-200"
+                }
+            case "solid":
+                return { 
+                    variant: "success", 
+                    text: "Solide", 
+                    icon: "✓✓",
+                    className: "bg-green-100 text-green-800 border-green-300 hover:bg-green-200"
+                }
+            default:
+                return { variant: "outline", text: "N/A", icon: "", className: "" }
+        }
+    }
+
     // Filter topics basierend auf Suchbegriff
     const filteredTopics = topics.filter(topic =>
         topic.topic.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -107,40 +148,63 @@ export default function TopicTableModal({ open, onOpenChange, topics, onTopicSel
                                 <TableHead className="font-semibold text-base text-center">Frequency</TableHead>
                                 <TableHead className="font-semibold text-base text-center">Ø Rating</TableHead>
                                 <TableHead className="font-semibold text-base text-center">Sentiment</TableHead>
+                                <TableHead className="font-semibold text-base text-center">Datenqualität</TableHead>
                                 <TableHead className="font-semibold text-base">Example</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
                             {filteredTopics.length === 0 ? (
                                 <TableRow>
-                                    <TableCell colSpan={5} className="text-center py-12 text-slate-500 text-lg">
+                                    <TableCell colSpan={6} className="text-center py-12 text-slate-500 text-lg">
                                         Keine Topics gefunden
                                     </TableCell>
                                 </TableRow>
                             ) : (
-                                filteredTopics.map((topic) => (
-                                    <TableRow
-                                        key={topic.id}
-                                        className="cursor-pointer hover:bg-slate-50 transition-colors h-16"
-                                        onClick={() => onTopicSelect(topic)}
-                                    >
-                                        <TableCell className="font-medium text-base">{topic.topic}</TableCell>
-                                        <TableCell className="text-center text-base">{topic.frequency}</TableCell>
-                                        <TableCell className="text-center font-semibold text-base">
-                                            {topic.avgRating.toFixed(1)}
-                                        </TableCell>
-                                        <TableCell className="text-center">
-                                            <Badge variant={getSentimentBadgeVariant(topic.sentiment)} className="text-sm px-3 py-1">
-                                                {topic.sentiment}
-                                            </Badge>
-                                        </TableCell>
-                                        <TableCell className="text-base text-slate-600">
-                                            <div className="line-clamp-2">
-                                                {topic.example}
-                                            </div>
-                                        </TableCell>
-                                    </TableRow>
-                                ))
+                                filteredTopics.map((topic) => {
+                                    const riskBadge = getRiskLevelBadge(topic.statistical_meta)
+                                    const isRisky = topic.statistical_meta?.risk_level === 'limited'
+                                    
+                                    return (
+                                        <TableRow
+                                            key={topic.id}
+                                            className={`cursor-pointer hover:bg-slate-50 transition-colors h-16 ${
+                                                isRisky ? 'bg-red-50 hover:bg-red-100 border-l-4 border-l-red-500' : ''
+                                            }`}
+                                            onClick={() => onTopicSelect(topic)}
+                                        >
+                                            <TableCell className="font-medium text-base">
+                                                {isRisky && <span className="mr-2">⚠️</span>}
+                                                {topic.topic}
+                                            </TableCell>
+                                            <TableCell className="text-center text-base">
+                                                {topic.frequency}
+                                            </TableCell>
+                                            <TableCell className="text-center font-semibold text-base">
+                                                {topic.avgRating.toFixed(1)}
+                                            </TableCell>
+                                            <TableCell className="text-center">
+                                                <Badge variant={getSentimentBadgeVariant(topic.sentiment)} className="text-sm px-3 py-1">
+                                                    {topic.sentiment}
+                                                </Badge>
+                                            </TableCell>
+                                            <TableCell className="text-center">
+                                                <Badge className={`text-xs px-2 py-1 ${riskBadge.className}`}>
+                                                    {riskBadge.icon} {riskBadge.text}
+                                                </Badge>
+                                                {isRisky && topic.statistical_meta?.warning && (
+                                                    <div className="text-xs text-red-600 mt-1">
+                                                        {topic.statistical_meta.warning}
+                                                    </div>
+                                                )}
+                                            </TableCell>
+                                            <TableCell className="text-base text-slate-600">
+                                                <div className="line-clamp-2">
+                                                    {topic.example}
+                                                </div>
+                                            </TableCell>
+                                        </TableRow>
+                                    )
+                                })
                             )}
                         </TableBody>
                     </Table>

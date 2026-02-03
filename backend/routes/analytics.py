@@ -6,6 +6,12 @@ from fastapi import APIRouter, HTTPException, Query
 from database.supabase_client import get_supabase_client
 from typing import Optional, List, Dict, Any, Literal
 from services.topic_average_rating_service import get_topic_rating_timeseries
+from services.statistical_validator import StatisticalValidator
+from services.statistical_enrichment import (
+    enrich_with_statistical_metadata,
+    enrich_topic_analysis_with_metadata,
+    enrich_comparison_with_metadata
+)
 from datetime import datetime, timedelta
 from collections import defaultdict, Counter
 import re
@@ -831,11 +837,25 @@ async def get_topic_overview(
         for idx, topic in enumerate(topics_data, start=1):
             topic["id"] = idx
         
-        return {
-            "topics": topics_data,
-            "total_reviews": len(reviews_to_analyze),
-            "total_topics": len(topics_data)
+        # STATISTICAL ENRICHMENT: Add statistical metadata to each topic
+        total_reviews = len(reviews_to_analyze)
+        enriched_topics = enrich_topic_analysis_with_metadata(topics_data, total_reviews)
+        
+        # Add overall statistical assessment
+        result = {
+            "topics": enriched_topics,
+            "total_reviews": total_reviews,
+            "total_topics": len(enriched_topics)
         }
+        
+        # Add overall statistical metadata
+        result = enrich_with_statistical_metadata(
+            result,
+            sample_size=total_reviews,
+            analysis_type="anova"
+        )
+        
+        return result
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error generating topic overview: {str(e)}")
@@ -1300,4 +1320,172 @@ async def get_negative_kritikpunkte(company_id: int):
         }
         
     except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# STATISTICAL VALIDATION ENDPOINTS
+# ============================================================================
+
+@router.get("/statistical/validate-sample-size")
+async def validate_sample_size(
+    n: int = Query(..., description="Sample size to validate", ge=1)
+) -> Dict[str, Any]:
+    """
+    Validate sample size adequacy for statistical analysis.
+    
+    Returns comprehensive assessment including:
+    - Risk level (limited/constrained/acceptable/solid)
+    - CLT approximation quality
+    - Power considerations
+    - Confidence interval width estimate
+    - Methodological recommendations
+    
+    Based on established literature:
+    - Rice (2006): CLT heuristic n≈30
+    - Cohen (1988): Power analysis n≈64 for d=0.5
+    - Maxwell et al. (2008): AIPE approach n≈100 for MoE≤±0.20
+    """
+    try:
+        validator = StatisticalValidator()
+        assessment = validator.assess_sample_size(n)
+        return assessment.to_dict()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/statistical/validate-comparison")
+async def validate_comparison(
+    n1: int = Query(..., description="Size of group 1 (or total n for ANOVA)", ge=1),
+    n2: int = Query(..., description="Size of group 2 (or k groups for ANOVA)", ge=1),
+    comparison_type: Literal["two_group", "anova"] = Query(
+        "two_group", 
+        description="Type of comparison: two_group (t-test) or anova"
+    )
+) -> Dict[str, Any]:
+    """
+    Validate sample sizes for group comparisons.
+    
+    For two_group (t-test):
+    - n1, n2 = sizes of the two groups
+    - Returns assessment for both groups
+    
+    For anova:
+    - n1 = total sample size
+    - n2 = number of groups (k)
+    - Returns assessment based on average group size
+    """
+    try:
+        validator = StatisticalValidator()
+        assessment = validator.assess_comparison(n1, n2, comparison_type)
+        return assessment
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/statistical/validate-correlation")
+async def validate_correlation(
+    n: int = Query(..., description="Sample size for correlation analysis", ge=1)
+) -> Dict[str, Any]:
+    """
+    Validate sample size for correlation analysis.
+    
+    Based on Schönbrodt & Perugini (2013): 
+    Correlations stabilize around n≈250
+    """
+    try:
+        validator = StatisticalValidator()
+        assessment = validator.validate_correlation_stability(n)
+        return assessment
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/company/{company_id}/statistical-assessment")
+async def get_company_statistical_assessment(company_id: int) -> Dict[str, Any]:
+    """
+    Get comprehensive statistical assessment for company's review data.
+    
+    Includes:
+    - Sample size validation for employee and candidate reviews
+    - Topic-wise sample size assessment (ANOVA context)
+    - Recommendations for statistical analysis
+    """
+    try:
+        validator = StatisticalValidator()
+        
+        # Get employee reviews count
+        employee_response = supabase.table("employee")\
+            .select("id", count="exact")\
+            .eq("company_id", company_id)\
+            .execute()
+        
+        # Get candidate reviews count
+        candidate_response = supabase.table("candidates")\
+            .select("id", count="exact")\
+            .eq("company_id", company_id)\
+            .execute()
+        
+        employee_count = employee_response.count or 0
+        candidate_count = candidate_response.count or 0
+        total_count = employee_count + candidate_count
+        
+        # Overall assessment
+        overall_assessment = validator.assess_sample_size(total_count)
+        
+        # Employee-specific assessment
+        employee_assessment = validator.assess_sample_size(employee_count)
+        
+        # Candidate-specific assessment
+        candidate_assessment = validator.assess_sample_size(candidate_count)
+        
+        # Comparison assessment (employee vs candidate)
+        comparison_assessment = validator.assess_comparison(
+            employee_count, 
+            candidate_count, 
+            "two_group"
+        ) if employee_count > 0 and candidate_count > 0 else None
+        
+        # Topic analysis considerations (for ANOVA)
+        # Assuming 13 topics as per methodology document
+        k_topics = 13
+        topic_assessment = validator.assess_comparison(
+            total_count,
+            k_topics,
+            "anova"
+        ) if total_count > 0 else None
+        
+        return {
+            "company_id": company_id,
+            "sample_sizes": {
+                "total": total_count,
+                "employee": employee_count,
+                "candidate": candidate_count
+            },
+            "overall_assessment": overall_assessment.to_dict(),
+            "employee_assessment": employee_assessment.to_dict(),
+            "candidate_assessment": candidate_assessment.to_dict(),
+            "comparison_assessment": comparison_assessment,
+            "topic_anova_assessment": topic_assessment,
+            "summary": {
+                "data_quality": overall_assessment.risk_level.value,
+                "can_compare_employee_candidate": employee_count >= 30 and candidate_count >= 30,
+                "can_perform_topic_analysis": total_count >= (k_topics * 30),
+                "primary_limitation": (
+                    "Sample size below CLT heuristic - prefer non-parametric tests"
+                    if total_count < validator.HEURISTIC_CLT
+                    else "Power may be insufficient for small effects"
+                    if total_count < validator.HEURISTIC_POWER
+                    else "Confidence intervals may be wide"
+                    if total_count < validator.HEURISTIC_PRECISION
+                    else "Sample size adequate for robust analysis"
+                )
+            }
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
         raise HTTPException(status_code=500, detail=f"Error fetching negative kritikpunkte: {str(e)}")
