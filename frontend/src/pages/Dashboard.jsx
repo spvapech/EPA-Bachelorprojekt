@@ -21,7 +21,7 @@ import { DominantTopicsCard } from "@/components/dashboard/DominantTopicsCard"
 import { IndividualReviewsCard } from "@/components/dashboard/IndividualReviewsCard"
 import { TopicOverviewCard } from "@/components/dashboard/TopicOverviewCard"
 import { useState, useEffect, useCallback } from "react"
-import { useLocation } from "react-router-dom"
+import { useLocation, useNavigate } from "react-router-dom"
 import SorceModal from "../components/dashboard/modals/SorceModal"
 import TrendModal from "../components/dashboard/modals/TrendModal"
 import NegativTopicModal from "../components/dashboard/modals/NegativTopicModal"
@@ -52,6 +52,7 @@ import { exportKPIsAsPDF } from "../utils/pdfExport"
 
 export default function Dashboard() {
     const location = useLocation()
+    const navigate = useNavigate()
     const companyFromWelcome = location.state?.companyId
     const companyNameFromWelcome = location.state?.companyName
     
@@ -152,6 +153,13 @@ export default function Dashboard() {
             setSelectedCompanyId(null)
             setSelectedCompanyName("")
         }
+    }
+
+    // Handler for creating new company
+    const handleCreateNewCompany = (companyName) => {
+        setCompanyQuery(companyName)
+        setNeedsUpload(true)
+        setError("")
     }
     
     const handleKeyDown = (e) => {
@@ -255,6 +263,8 @@ export default function Dashboard() {
         setUploading(true)
         setError("")
         
+        let createdCompanyId = null
+        
         try {
             // First create the company if it doesn't exist
             let companyId = selectedCompanyId
@@ -268,11 +278,13 @@ export default function Dashboard() {
                 })
                 
                 if (!createRes.ok) {
-                    throw new Error("Fehler beim Erstellen der Firma")
+                    const errorData = await createRes.json().catch(() => ({}))
+                    throw new Error(errorData.detail || "Fehler beim Erstellen der Firma")
                 }
                 
                 const newCompany = await createRes.json()
                 companyId = newCompany.id
+                createdCompanyId = companyId // Track for rollback
                 setSelectedCompanyId(companyId)
                 setSelectedCompanyName(newCompany.name)
             }
@@ -288,7 +300,10 @@ export default function Dashboard() {
             })
             
             if (!response.ok) {
-                throw new Error("Upload fehlgeschlagen")
+                // Get detailed error message from backend
+                const errorData = await response.json().catch(() => ({}))
+                const errorMessage = errorData.detail || "Upload fehlgeschlagen"
+                throw new Error(errorMessage)
             }
             
             const result = await response.json()
@@ -301,6 +316,21 @@ export default function Dashboard() {
             await getCompanies()
             getCompanyData(companyId)
         } catch (err) {
+            // Rollback: Delete the company if it was just created and upload failed
+            if (createdCompanyId) {
+                try {
+                    await fetch(`${API_URL}/companies/${createdCompanyId}`, {
+                        method: "DELETE",
+                    })
+                    console.log("Rollback: Firma wurde gelöscht aufgrund fehlgeschlagenem Upload")
+                    setSelectedCompanyId(null)
+                    setSelectedCompanyName("")
+                } catch (deleteErr) {
+                    console.error("Fehler beim Rollback:", deleteErr)
+                }
+            }
+            
+            // Show detailed error message
             setError(err.message || "Fehler beim Hochladen der Datei")
         } finally {
             setUploading(false)
@@ -696,6 +726,7 @@ export default function Dashboard() {
                                             value={companyQuery}
                                             onValueChange={setCompanyQuery}
                                             onCompanySelect={handleCompanySelectFromDropdown}
+                                            onCreateNew={handleCreateNewCompany}
                                             variant="dark"
                                         />
                                         
@@ -805,9 +836,13 @@ export default function Dashboard() {
                     )}
 
                     <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex flex-col gap-4">
-                        <div className="h-14 w-14 rounded-2xl bg-white/10 flex items-center justify-center border border-white/10">
-                            <Home className="h-7 w-7" />
-                        </div>
+                        <button
+                            onClick={() => navigate("/welcome")}
+                            className="group relative h-14 w-14 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 flex items-center justify-center border border-blue-400 hover:border-blue-300 transition-all duration-200 shadow-lg hover:shadow-xl cursor-pointer transform hover:scale-105"
+                            title="Zur Startseite"
+                        >
+                            <Home className="h-7 w-7 text-white group-hover:animate-bounce" />
+                        </button>
                         <button
                             onClick={handleExportPDF}
                             className="group relative h-14 w-14 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 flex items-center justify-center border border-blue-400 hover:border-blue-300 transition-all duration-200 shadow-lg hover:shadow-xl cursor-pointer transform hover:scale-105"

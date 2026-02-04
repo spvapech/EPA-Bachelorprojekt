@@ -21,6 +21,7 @@ export function CompanySearchSelect({
     value, 
     onValueChange, 
     onCompanySelect,
+    onCreateNew,
     variant = "light" // "light" or "dark"
 }) {
     const [open, setOpen] = useState(false)
@@ -140,13 +141,21 @@ export function CompanySearchSelect({
                                     <p className={isDark ? "text-slate-400" : "text-slate-500"}>
                                         Keine Firma gefunden.
                                     </p>
-                                    {inputValue && (
-                                        <p className={cn(
-                                            "text-xs",
-                                            isDark ? "text-slate-500" : "text-slate-400"
-                                        )}>
-                                            "{inputValue}" wird als neue Firma erstellt.
-                                        </p>
+                                    {inputValue && onCreateNew && (
+                                        <button
+                                            onClick={() => {
+                                                onCreateNew(inputValue)
+                                                setOpen(false)
+                                            }}
+                                            className={cn(
+                                                "mt-2 px-4 py-2 rounded-lg font-medium text-sm transition-colors",
+                                                isDark 
+                                                    ? "bg-blue-600 hover:bg-blue-700 text-white" 
+                                                    : "bg-blue-500 hover:bg-blue-600 text-white"
+                                            )}
+                                        >
+                                            + Neue Firma analysieren?
+                                        </button>
                                     )}
                                 </div>
                             </CommandEmpty>

@@ -437,3 +437,34 @@ def create_company(company: CompanyCreate):
     
     return result.data[0]
 
+
+@router.delete("/companies/{company_id}")
+def delete_company(company_id: int):
+    """
+    Deletes a company from the database.
+    This is used for rollback when file upload fails.
+    """
+    try:
+        # First, check if company has any data (employees or candidates)
+        employees = supabase.table("employee").select("id").eq("company_id", company_id).limit(1).execute()
+        candidates = supabase.table("candidates").select("id").eq("company_id", company_id).limit(1).execute()
+        
+        # Only allow deletion if no data exists
+        if employees.data or candidates.data:
+            raise HTTPException(
+                status_code=400, 
+                detail="Cannot delete company with existing data"
+            )
+        
+        # Delete the company
+        result = supabase.table("companies").delete().eq("id", company_id).execute()
+        
+        if not result.data:
+            raise HTTPException(status_code=404, detail="Company not found")
+        
+        return {"message": "Company deleted successfully", "id": company_id}
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete company: {str(e)}")
