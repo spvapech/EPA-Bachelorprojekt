@@ -468,3 +468,32 @@ def delete_company(company_id: int):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to delete company: {str(e)}")
+
+@router.delete("/companies/{company_id}/data")
+def delete_company_data(company_id: int):
+    """
+    Deletes all data (employees and candidates) for a company.
+    The company itself remains in the database.
+    Used when user wants to replace existing data with new uploads.
+    """
+    try:
+        # Delete all employees for this company
+        employees_result = supabase.table("employee").delete().eq("company_id", company_id).execute()
+        
+        # Delete all candidates for this company
+        candidates_result = supabase.table("candidates").delete().eq("company_id", company_id).execute()
+        
+        employees_count = len(employees_result.data) if employees_result.data else 0
+        candidates_count = len(candidates_result.data) if candidates_result.data else 0
+        
+        return {
+            "message": "Company data deleted successfully",
+            "company_id": company_id,
+            "deleted": {
+                "employees": employees_count,
+                "candidates": candidates_count
+            }
+        }
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to delete company data: {str(e)}")
