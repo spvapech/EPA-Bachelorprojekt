@@ -2,6 +2,12 @@
 
 ## 🆕 Aktuelle Updates
 
+**Version 2.1 - Performance & Struktur-Optimierungen** (5. Februar 2026)
+- ⚡ **Dashboard Performance**: ~50% schnellere Ladezeiten durch parallele API-Calls
+- 🗂️ **Projekt-Struktur**: Tests und Docs neu organisiert für bessere Übersicht
+- 🚀 **Optimierungen**: Caching, Debouncing, React.memo für flüssigeres UI
+- 📖 [Performance-Verbesserungen](./DASHBOARD_PERFORMANCE_IMPROVEMENTS.md)
+
 **Version 2.0 - Topic-Filterung nach Datenquellen** (1. Februar 2026)
 - ✅ Separate Topics für Bewerber (10) und Mitarbeiter (13)
 - ✅ Verbesserte UI mit Filter-Buttons
@@ -141,6 +147,12 @@ API_PORT=8000
 * Cache löschen: `find . -type d -name "__pycache__" -exec rm -rf {} +`
 * Alte Modelle löschen: `cd backend/models && rm -f lda_model_*.* 2>/dev/null`
 
+### Performance-Tipps (Version 2.1):
+* **Dashboard lädt langsam?** → Hard-Reload (Cmd+Shift+R / Ctrl+Shift+F5)
+* **API-Calls prüfen**: Browser DevTools → Network Tab → Filter "Fetch/XHR"
+* **Re-Renders analysieren**: React DevTools → Profiler Tab
+* **Caching aktiviert**: CompanySearchSelect cached automatisch nach erstem Load
+
 ### Topic Detail Modal Features:
 * **Einklappbare Ansicht-Steuerung:** Klicke auf "Ansicht anpassen", um Elemente ein-/auszublenden
 * **Intelligentes Layout:** Charts werden automatisch größer, wenn andere ausgeblendet werden
@@ -162,39 +174,64 @@ gruppe-P1-3/
 │   ├── config.py                # Konfiguration
 │   ├── pyproject.toml           # Python Dependencies (uv)
 │   ├── requirements.txt         # Python Dependencies (pip)
+│   │
 │   ├── database/                # Datenbankverbindungen (Supabase)
 │   │   └── supabase_client.py
+│   │
 │   ├── migrations/              # SQL-Migrationen
 │   │   ├── 001_create_candidates_table.sql
 │   │   ├── 002_create_employee_table.sql
 │   │   ├── 003_create_companies_table.sql
 │   │   └── 004_add_company_references.sql
+│   │
 │   ├── models/                  # Machine Learning Modelle
 │   │   ├── lda_topic_model.py  # LDA Topic Modeling
-│   │   └── sentiment_analyzer.py # Sentiment-Analyse
+│   │   ├── sentiment_analyzer.py # Sentiment-Analyse
+│   │   └── saved_models/       # Trainierte Modelle
+│   │
 │   ├── services/                # Business Logic Services
 │   │   ├── excel_service.py    # Excel Import/Export
 │   │   ├── topic_model_service.py # Topic Modeling DB Service
-│   │   └── topic_rating_service.py # Topic-Rating-Analyse
+│   │   ├── topic_rating_service.py # Topic-Rating-Analyse
+│   │   └── statistical_*.py    # Statistische Services
+│   │
 │   ├── routes/                  # API Endpoints
-│   │   ├── companies.py
+│   │   ├── analytics.py        # Analytics API
+│   │   ├── companies.py        # Company Management
 │   │   ├── topics.py           # Topic Modeling API
-│   │   └── upload.py
-│   ├── docs/                    # Dokumentation
-│   │   ├── TOPIC_MODELING_API.md
-│   │   └── TOPIC_RATING_ANALYSIS.md
+│   │   └── upload.py           # File Upload
+│   │
+│   ├── scripts/                 # 🆕 Utility Scripts
+│   │   ├── train_models.py     # Model Training
+│   │   └── fix_html_entities.py # Text Cleanup
+│   │
+│   ├── tests/                   # 🆕 Organisierte Tests
+│   │   ├── topic_modeling/     # Topic Modeling Tests
+│   │   ├── sentiment_analysis/ # Sentiment Tests
+│   │   ├── statistical/        # Statistical Tests
+│   │   └── results/            # Test-Ergebnisse
+│   │
+│   ├── docs/                    # 🆕 Strukturierte Dokumentation
+│   │   ├── architecture/       # System-Design
+│   │   ├── implementation/     # Code-Details
+│   │   ├── evaluations/        # Test-Ergebnisse
+│   │   ├── improvements/       # Performance & Features
+│   │   ├── Analyse_Pipeline/   # Pipeline Docs
+│   │   ├── LDA_Topic_Modeling/ # LDA Docs
+│   │   └── Sentiment_Analysis/ # Sentiment Docs
+│   │
 │   └── examples/                # Beispiele & Demos
 │       ├── topic_modeling_examples.py
-│       └── topic_rating_examples.py
+│       ├── topic_rating_examples.py
+│       └── examples_statistical_usage.py
 ├── frontend/                    # React/Vite Frontend
 │   ├── src/                    # Quellcode
 │   │   ├── components/         # React Komponenten
+│   │   │   ├── CompanySearchSelect.jsx  # 🆕 Optimiert mit Caching
 │   │   │   ├── dashboard/     # Dashboard Components
-│   │   │   │   ├── CategoryRatingCard.jsx
-│   │   │   │   ├── DominantTopicsCard.jsx
-│   │   │   │   ├── IndividualReviewsCard.jsx
-│   │   │   │   ├── TimelineCard.jsx
-│   │   │   │   ├── TopicOverviewCard.jsx  # Topic Übersicht (NEU)
+│   │   │   │   ├── TimelineCard.jsx         # 🆕 React.memo optimiert
+│   │   │   │   ├── TopicRatingCard.jsx      # 🆕 React.memo optimiert
+│   │   │   │   ├── TopicOverviewCard.jsx    # 🆕 React.memo optimiert
 │   │   │   │   └── modals/
 │   │   │   │       ├── MostCriticalModal.jsx
 │   │   │   │       ├── NegativTopicModal.jsx
@@ -250,15 +287,21 @@ gruppe-P1-3/
 * **Linting:** ESLint
 
 ### Dashboard Features
+* **Performance-Optimierungen (Version 2.1):**
+  - ⚡ **Paralleles Laden**: Alle KPI-Daten laden gleichzeitig (~50% schneller)
+  - 💾 **Caching**: Firmenliste wird gecacht (~80% schneller ab 2. Öffnung)
+  - ⏱️ **Debouncing**: Intelligente Suche mit 300ms Verzögerung
+  - 🎯 **React.memo**: Optimierte Re-Renders für große Komponenten
+  - 🔄 **Bessere Error Handling**: Explizites Logging für einfacheres Debugging
+
 * **Topic Übersicht:**
   - Interaktive Topic-Tabelle mit Suchfunktion
   - Detailansicht mit Line Chart (Rating über Zeit)
   - Gauge Chart für Sentiment-Visualisierung
   - Typische Aussagen und Beispiel-Reviews
   - Zweistufige Modal-Interaktion (Tabelle → Details)
-  - **Ansicht anpassen (NEU):** Ein-/ausblendbare Elemente mit intelligenter Layout-Anpassung
+  - **Ansicht anpassen:** Ein-/ausblendbare Elemente mit intelligenter Layout-Anpassung
   - **Responsive Charts:** Charts passen sich automatisch an und werden größer, wenn andere ausgeblendet werden
-  - Verwendet aktuell Dummy-Daten zur Demonstration
 
 ### Datenbank Schema
 * **Tables:** `candidates`, `employee`, `companies`
@@ -367,48 +410,80 @@ gruppe-P1-3/
 │   │       ├── lda_model_*.bigram
 │   │       ├── lda_model_*.trigram
 │   │       └── lda_model_*.meta
+│   │
 │   ├── services/
 │   │   ├── topic_model_service.py      # Datenbankservice für Topic Modeling
 │   │   └── topic_rating_service.py     # Topic-Rating-Analyse
+│   │
 │   ├── routes/
 │   │   └── topics.py                   # API-Endpunkte (12 Endpoints)
+│   │
+│   ├── scripts/                         # 🆕 Utility Scripts
+│   │   └── train_models.py             # Model Training Script
+│   │
+│   ├── tests/                           # 🆕 Organisierte Tests
+│   │   ├── topic_modeling/             # Topic Modeling Tests
+│   │   │   ├── test_lda_topic_modeling.py
+│   │   │   ├── test_topic_modeling.py
+│   │   │   ├── test_topic_merging.py
+│   │   │   └── ...
+│   │   ├── sentiment_analysis/         # Sentiment Tests
+│   │   ├── statistical/                # Statistical Tests
+│   │   └── results/                    # Test-Ergebnisse
+│   │
 │   ├── examples/
 │   │   ├── topic_modeling_examples.py  # Basic LDA Beispiele
 │   │   └── topic_rating_examples.py    # Topic-Rating Beispiele
-│   ├── docs/
-│   │   ├── QUICKSTART_LDA.md           # LDA Schnellstart-Anleitung
-│   │   ├── TOPIC_OVERVIEW_GUIDE.md     # Topic-Analyse Guide
-│   │   ├── TOPIC_ANALYSIS_EXPLANATION.md # Detaillierte Analyse-Logik
-│   │   ├── TOPIC_MODELING_API.md       # LDA API-Dokumentation
-│   │   ├── TOPIC_OVERVIEW_API.md       # Topic Overview API
-│   │   ├── TOPIC_RATING_ANALYSIS.md    # Topic-Rating Feature-Doku
-│   │   ├── TOPIC_MODELING_README.md    # Feature-Übersicht
-│   │   └── README.md                   # Dokumentations-Index
-│   └── test_topic_modeling.py          # Installationstest
+│   │
+│   └── docs/                           # 🆕 Strukturierte Dokumentation
+│       ├── architecture/               # System-Design
+│       ├── implementation/             # Code-Details
+│       ├── evaluations/               # Test-Ergebnisse
+│       ├── improvements/              # Performance & Features
+│       │   └── DASHBOARD_PERFORMANCE_IMPROVEMENTS.md
+│       ├── LDA_Topic_Modeling/        # LDA-spezifische Docs
+│       │   ├── QUICKSTART_LDA.md
+│       │   ├── TOPIC_OVERVIEW_GUIDE.md
+│       │   └── ...
+│       └── Sentiment_Analysis/        # Sentiment-spezifische Docs
 │
 ├── frontend/
 │   └── src/
-│       └── components/
-│           ├── dashboard/
-│           │   ├── TopicOverviewCard.jsx       # Topic-Übersicht Hauptkarte
-│           │   └── modals/
-│           │       ├── TopicTableModal.jsx     # Alle Topics Tabelle mit Suche
-│           │       ├── TopicDetailModal.jsx    # Topic-Details mit Charts
-│           │       │   # Features:
-│           │       │   # - Einklappbare Ansicht-Steuerung
-│           │       │   # - Line Chart (Rating über Zeit mit Zeitfilter)
-│           │       │   # - Gauge Chart (Sentiment-Visualisierung)
-│           │       │   # - Typische Aussagen (Top 3)
-│           │       │   # - Beispiel-Review mit Navigation
-│           │       │   # - Responsive Layout (Charts passen sich an)
-│           │       └── ReviewDetailModal.jsx   # Vollständige Review-Ansicht
-│           └── ui/
-│               ├── checkbox.jsx                # Für Ansicht-Anpassen
-│               ├── label.jsx                   # Für Ansicht-Anpassen
-│               ├── dialog.jsx                  # Für Modals
-│               ├── select.jsx                  # Für Zeitfilter
-│               ├── badge.jsx                   # Für Sentiment-Tags
-│               └── card.jsx                    # Für Layout-Struktur
+│       ├── components/
+│       │   ├── CompanySearchSelect.jsx         # 🆕 Optimiert mit Caching
+│       │   ├── dashboard/
+│       │   │   ├── TimelineCard.jsx           # 🆕 React.memo optimiert
+│       │   │   ├── TopicRatingCard.jsx        # 🆕 React.memo optimiert
+│       │   │   ├── TopicOverviewCard.jsx      # 🆕 React.memo optimiert
+│       │   │   └── modals/
+│       │   │       ├── TopicTableModal.jsx     # Alle Topics Tabelle mit Suche
+│       │   │       ├── TopicDetailModal.jsx    # Topic-Details mit Charts
+│       │   │       │   # Features:
+│       │   │       │   # - Einklappbare Ansicht-Steuerung
+│       │   │       │   # - Line Chart (Rating über Zeit mit Zeitfilter)
+│       │   │       │   # - Gauge Chart (Sentiment-Visualisierung)
+│       │   │       │   # - Typische Aussagen (Top 3)
+│       │   │       │   # - Beispiel-Review mit Navigation
+│       │   │       │   # - Responsive Layout (Charts passen sich an)
+│       │   │       └── ReviewDetailModal.jsx   # Vollständige Review-Ansicht
+│       │   └── ui/
+│       │       ├── checkbox.jsx                # Für Ansicht-Anpassen
+│       │       ├── label.jsx                   # Für Ansicht-Anpassen
+│       │       ├── dialog.jsx                  # Für Modals
+│       │       ├── select.jsx                  # Für Zeitfilter
+│       │       ├── badge.jsx                   # Für Sentiment-Tags
+│       │       └── card.jsx                    # Für Layout-Struktur
+│       │
+│       ├── pages/
+│       │   ├── Dashboard.jsx                   # 🆕 Performance-optimiert
+│       │   │   # - Paralleles Laden der KPI-Daten
+│       │   │   # - Debounced Company Search
+│       │   │   # - Optimierte State Management
+│       │   └── Welcome.jsx
+│       │
+│       └── utils/
+│           ├── pdfExport.js                    # PDF Export Utilities
+│           └── chartValidator.js               # Chart Validation
 ```
 
 ### Workflow
@@ -511,6 +586,20 @@ npm run dev
 npm install @radix-ui/react-checkbox @radix-ui/react-label
 ```
 
+### Dashboard lädt langsam (Version 2.1 sollte das beheben!)
+```bash
+# 1. Hard-Reload im Browser
+# Chrome/Edge: Cmd+Shift+R (Mac) oder Ctrl+Shift+F5 (Windows)
+# Firefox: Cmd+Shift+R (Mac) oder Ctrl+F5 (Windows)
+
+# 2. Browser Cache löschen
+# DevTools → Application → Clear Storage
+
+# 3. Prüfe Network Tab
+# DevTools → Network → Prüfe ob KPI-Calls parallel laufen
+# Sollten jetzt ~50% schneller sein!
+```
+
 ### "Model not trained" Error
 ```bash
 # Trainiere zuerst ein Modell
@@ -532,13 +621,30 @@ cd backend/models
 rm -f lda_model_*.* 2>/dev/null
 ```
 
+### Tests finden nach Reorganisation
+```bash
+# Tests sind jetzt organisiert in backend/tests/
+pytest backend/tests/                    # Alle Tests
+pytest backend/tests/topic_modeling/     # Nur Topic Modeling
+pytest backend/tests/sentiment_analysis/ # Nur Sentiment
+pytest backend/tests/statistical/        # Nur Statistical
+```
+
 ## 📚 Weitere Ressourcen
 
+### Projekt-Dokumentation
+- **Performance-Verbesserungen**: [DASHBOARD_PERFORMANCE_IMPROVEMENTS.md](./DASHBOARD_PERFORMANCE_IMPROVEMENTS.md)
+- **Topic-Filterung**: [CHANGELOG_TOPIC_FILTERING.md](./CHANGELOG_TOPIC_FILTERING.md)
+- **Backend Docs**: [backend/docs/](./backend/docs/) (strukturiert nach Kategorien)
+- **Test-Dokumentation**: [backend/tests/](./backend/tests/)
+
+### API & Tools
 - **API Dokumentation**: http://localhost:8000/docs (Swagger UI)
 - **Supabase**: https://supabase.com/docs
 - **FastAPI**: https://fastapi.tiangolo.com
 - **React**: https://react.dev
 - **Gensim**: https://radimrehurek.com/gensim/
+- **Recharts**: https://recharts.org/
 
 ## 👥 Team
 
