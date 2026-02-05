@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Check, ChevronsUpDown, Building2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -28,13 +28,17 @@ export function CompanySearchSelect({
     const [companies, setCompanies] = useState([])
     const [loading, setLoading] = useState(false)
     const [inputValue, setInputValue] = useState("")
+    const companiesCache = useRef(null) // Cache für Firmen-Liste
 
     const isDark = variant === "dark"
 
-    // Fetch all companies when the popover opens
+    // Fetch all companies only once (cached)
     useEffect(() => {
-        if (open) {
+        if (open && !companiesCache.current) {
             fetchAllCompanies()
+        } else if (open && companiesCache.current) {
+            // Benutze Cache
+            setCompanies(companiesCache.current)
         }
     }, [open])
 
@@ -47,11 +51,14 @@ export function CompanySearchSelect({
         setLoading(true)
         try {
             const res = await fetch(`${API_URL}/companies`)
-            if (!res.ok) return
+            if (!res.ok) throw new Error('Failed to fetch companies')
             const data = await res.json()
-            setCompanies(Array.isArray(data) ? data : [])
-        } catch {
-            // Handle error silently
+            const companiesList = Array.isArray(data) ? data : []
+            setCompanies(companiesList)
+            companiesCache.current = companiesList // Cache speichern
+        } catch (error) {
+            console.error('Error fetching companies:', error)
+            setCompanies([])
         } finally {
             setLoading(false)
         }

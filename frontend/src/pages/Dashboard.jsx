@@ -138,23 +138,35 @@ export default function Dashboard() {
         }
     }
     
-    const fetchCompanySuggestions = async (q) => {
+    // Debounced fetch für Company Suggestions (300ms delay)
+    const debounceTimeoutRef = useRef(null)
+    
+    const fetchCompanySuggestions = useCallback((q) => {
+        // Clear vorheriger Timeout
+        if (debounceTimeoutRef.current) {
+            clearTimeout(debounceTimeoutRef.current)
+        }
+        
         const query = q.trim()
         if (!query) {
             setCompanySuggestions([])
             setHighlightedIndex(-1)
             return
         }
-        try {
-            const res = await fetch(`${API_URL}/companies/search?q=${encodeURIComponent(query)}`)
-            if (!res.ok) return
-            const data = await res.json()
-            setCompanySuggestions(Array.isArray(data) ? data : [])
-            setHighlightedIndex(-1)
-        } catch {
-            // optional: ignorieren
-        }
-    }
+        
+        // Debounce: Warte 300ms bevor API-Call
+        debounceTimeoutRef.current = setTimeout(async () => {
+            try {
+                const res = await fetch(`${API_URL}/companies/search?q=${encodeURIComponent(query)}`)
+                if (!res.ok) return
+                const data = await res.json()
+                setCompanySuggestions(Array.isArray(data) ? data : [])
+                setHighlightedIndex(-1)
+            } catch (error) {
+                console.error('Error fetching company suggestions:', error)
+            }
+        }, 300)
+    }, [])
     
     const selectCompanyFromList = (company) => {
         setCompanyQuery(company.name)
@@ -365,6 +377,13 @@ export default function Dashboard() {
             setSelectedCompany(companyFromWelcome)
             getCompanyData(companyFromWelcome)
         }
+        
+        // Cleanup: Clear debounce timeout on unmount
+        return () => {
+            if (debounceTimeoutRef.current) {
+                clearTimeout(debounceTimeoutRef.current)
+            }
+        }
     }, [])
 
     function getCompanyData(id) {
@@ -395,11 +414,34 @@ export default function Dashboard() {
 
     }
 
+    // Optimierte KPI-Daten-Ladung: Alle Requests parallel starten
     useEffect(() => {
-        getAvg()
-        getTrend()
-        getMostCritical()
-        getNegativeTopic()
+        if (!effectiveCompanyId) {
+            setData(null)
+            setTrendData(null)
+            setMostCriticalData(null)
+            setNegativeTopicItem(null)
+            return
+        }
+        
+        // Parallel-Loading aller KPI-Daten mit Promise.allSettled
+        const loadAllKPIs = async () => {
+            const results = await Promise.allSettled([
+                getAvg(),
+                getTrend(),
+                getMostCritical(),
+                getNegativeTopic()
+            ])
+            
+            // Log Fehler, aber blockiere nicht das UI
+            results.forEach((result, index) => {
+                if (result.status === 'rejected') {
+                    console.warn(`KPI ${index} failed:`, result.reason)
+                }
+            })
+        }
+        
+        loadAllKPIs()
     }, [effectiveCompanyId])
     
     // Überprüfe ob KPI-Daten fertig geladen sind
@@ -423,15 +465,12 @@ export default function Dashboard() {
         }
         try {
             const res = await fetch(`${API_URL}/companies/${companyId}/ratings`)
-            if (!res.ok) return
+            if (!res.ok) throw new Error('Failed to fetch ratings')
             setData(await res.json())
-
-        } catch {
-            // optional: ignorieren
-
-
+        } catch (error) {
+            console.error('Error fetching average ratings:', error)
+            setData(null)
         }
-
     }
 
     async function getTrend() {
@@ -446,10 +485,9 @@ export default function Dashboard() {
             const res = await fetch(
                 `${API_URL}/companies/${companyId}/ratings/trend?mode=stable_months&months=12`
             );
-            if (!res.ok) return;
+            if (!res.ok) throw new Error('Failed to fetch trend');
 
             const json = await res.json();
-            console.log('Trend response:', json);
             const deltaPointsRaw = json.overall?.deltaPoints ?? json.overall?.avgDelta;
             const deltaPoints = typeof deltaPointsRaw === 'number' ? deltaPointsRaw : parseFloat(deltaPointsRaw);
 
@@ -464,8 +502,9 @@ export default function Dashboard() {
             else if (rounded < -0.05) sign = 'down';
 
             setTrendData({ avgDelta: rounded.toFixed(1), sign });
-        } catch {
-            // optional ignorieren
+        } catch (error) {
+            console.error('Error fetching trend:', error);
+            setTrendData(null);
         }
     }
 
@@ -478,7 +517,7 @@ export default function Dashboard() {
 
         try {
             const res = await fetch(`${API_URL}/companies/${companyId}/ratings/avg`);
-            if (!res.ok) return;
+            if (!res.ok) throw new Error('Failed to fetch critical data');
 
             const json = await res.json();
 
@@ -518,7 +557,8 @@ export default function Dashboard() {
 
             const min = entries.reduce((best, cur) => (cur.score < best.score ? cur : best), entries[0]);
             setMostCriticalData({ topicName: min.title, score: min.score.toFixed(2) });
-        } catch {
+        } catch (error) {
+            console.error('Error fetching most critical:', error);
             setMostCriticalData(null);
         }
     }
@@ -644,7 +684,8 @@ export default function Dashboard() {
                 topic_label: chosen?.topic,
                 categories: chosen?.topic ? [chosen.topic] : chosen?.categories,
             })
-        } catch {
+        } catch (error) {
+            console.error('Error fetching negative topic:', error)
             setNegativeTopicItem(null)
         }
     }

@@ -25,7 +25,7 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { useState, useEffect, useMemo, useCallback } from "react"
+import { useState, useEffect, useMemo, useCallback, memo } from "react"
 import { API_URL } from "@/config"
 
 const SOURCE_LABEL = {
@@ -44,7 +44,8 @@ function parseYear(period) {
     return Number.isFinite(y) ? y : null
 }
 
-export function TimelineCard({ companyId, onFiltersChange, onLoadingChange }) {
+// Memoized TimelineCard für bessere Performance
+export const TimelineCard = memo(function TimelineCard({ companyId, onFiltersChange, onLoadingChange }) {
     const [timelineData, setTimelineData] = useState([])
     const [forecastData, setForecastData] = useState([])
     const [loading, setLoading] = useState(true)
@@ -1001,4 +1002,4 @@ export function TimelineCard({ companyId, onFiltersChange, onLoadingChange }) {
             </Dialog>
         </>
     )
-}
+})

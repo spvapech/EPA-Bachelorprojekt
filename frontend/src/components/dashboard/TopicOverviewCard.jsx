@@ -10,13 +10,14 @@ import {
 } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { useState, useEffect } from "react"
+import { useState, useEffect, memo } from "react"
 import TopicDetailModal from "./modals/TopicDetailModal"
 import TopicTableModal from "./modals/TopicTableModal"
 import { FileText } from "lucide-react"
 import { API_URL } from "@/config"
 
-export function TopicOverviewCard({ companyId = 1, onDataChange, onLoadingChange }) {
+// Memoized TopicOverviewCard für bessere Performance
+export const TopicOverviewCard = memo(function TopicOverviewCard({ companyId = 1, onDataChange, onLoadingChange }) {
     const [topicsData, setTopicsData] = useState([])
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState(null)
@@ -331,4 +332,4 @@ export function TopicOverviewCard({ companyId = 1, onDataChange, onLoadingChange
             )}
         </>
     )
-}
+})

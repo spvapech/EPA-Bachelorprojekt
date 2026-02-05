@@ -19,7 +19,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useState, memo } from "react"
 import { API_URL } from "@/config"
 
 const SOURCE_LABEL = {
@@ -51,7 +51,8 @@ function prettifyTopicKey(key) {
   return key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
-export function TopicRatingCard({ companyId, onFiltersChange, onLoadingChange }) {
+// Memoized TopicRatingCard für bessere Performance
+export const TopicRatingCard = memo(function TopicRatingCard({ companyId, onFiltersChange, onLoadingChange }) {
   // Defaults
   const [source, setSource] = useState("employee")
   const [granularity, setGranularity] = useState("overall")
@@ -635,4 +636,4 @@ export function TopicRatingCard({ companyId, onFiltersChange, onLoadingChange })
       </Dialog>
     </>
   )
-}
+})
