@@ -44,7 +44,7 @@ function parseYear(period) {
     return Number.isFinite(y) ? y : null
 }
 
-export function TimelineCard({ companyId, onFiltersChange }) {
+export function TimelineCard({ companyId, onFiltersChange, onLoadingChange }) {
     const [timelineData, setTimelineData] = useState([])
     const [forecastData, setForecastData] = useState([])
     const [loading, setLoading] = useState(true)
@@ -55,6 +55,13 @@ export function TimelineCard({ companyId, onFiltersChange }) {
     const [selectedYear, setSelectedYear] = useState(null)
     const [years, setYears] = useState([])
     const [modalOpen, setModalOpen] = useState(false)
+    
+    // Kommuniziere Loading-State nach außen
+    useEffect(() => {
+        if (onLoadingChange) {
+            onLoadingChange(loading);
+        }
+    }, [loading, onLoadingChange]);
 
     // Fetch available years from timeline data
     useEffect(() => {

@@ -51,7 +51,7 @@ function prettifyTopicKey(key) {
   return key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
-export function TopicRatingCard({ companyId, onFiltersChange }) {
+export function TopicRatingCard({ companyId, onFiltersChange, onLoadingChange }) {
   // Defaults
   const [source, setSource] = useState("employee")
   const [granularity, setGranularity] = useState("overall")
@@ -73,6 +73,13 @@ export function TopicRatingCard({ companyId, onFiltersChange }) {
 
   // Topics ein/ausblenden
   const [hiddenTopics, setHiddenTopics] = useState(() => new Set())
+  
+  // Kommuniziere Loading-State nach außen
+  useEffect(() => {
+    if (onLoadingChange) {
+      onLoadingChange(loading);
+    }
+  }, [loading, onLoadingChange]);
 
   // Farbpalette
   const palette = [

@@ -20,7 +20,7 @@ import { TopicRatingCard } from "@/components/dashboard/TopicRatingCard"
 import { DominantTopicsCard } from "@/components/dashboard/DominantTopicsCard"
 import { IndividualReviewsCard } from "@/components/dashboard/IndividualReviewsCard"
 import { TopicOverviewCard } from "@/components/dashboard/TopicOverviewCard"
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { useLocation, useNavigate } from "react-router-dom"
 import SorceModal from "../components/dashboard/modals/SorceModal"
 import TrendModal from "../components/dashboard/modals/TrendModal"
@@ -44,6 +44,7 @@ import { Check, ChevronsUpDown } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { API_URL } from "../config"
 import { exportKPIsAsPDF } from "../utils/pdfExport"
+import { waitForMultipleCharts, validateChart, waitForImagesInElement } from "../utils/chartValidator"
 
 
 
@@ -104,6 +105,25 @@ export default function Dashboard() {
         sourceFilter: null,
         stats: {}
     })
+    
+    // Loading States für alle Dashboard-Komponenten
+    const [dashboardLoadingStates, setDashboardLoadingStates] = useState({
+        timelineChart: true,
+        topicRatingChart: true,
+        topicOverview: true,
+        kpiCards: true
+    })
+    
+    // Ref für aktuellen Loading State (für Closures)
+    const loadingStatesRef = useRef(dashboardLoadingStates)
+    
+    // Aktualisiere Ref bei State-Änderungen
+    useEffect(() => {
+        loadingStatesRef.current = dashboardLoadingStates
+    }, [dashboardLoadingStates])
+    
+    // State für PDF Export Loading
+    const [exportingPDF, setExportingPDF] = useState(false)
 
     const effectiveCompanyId = selectedCompany || selectedCompanyId || companyFromWelcome || null
     
@@ -381,6 +401,20 @@ export default function Dashboard() {
         getMostCritical()
         getNegativeTopic()
     }, [effectiveCompanyId])
+    
+    // Überprüfe ob KPI-Daten fertig geladen sind
+    useEffect(() => {
+        const kpiDataReady = data !== undefined && 
+                            trendData !== null && 
+                            mostCriticalData !== null && 
+                            negativeTopicItem !== null
+        
+        setDashboardLoadingStates(prev => ({
+            ...prev,
+            kpiCards: !kpiDataReady
+        }))
+    }, [data, trendData, mostCriticalData, negativeTopicItem])
+    
     async function getAvg() {
         const companyId = selectedCompany || selectedCompanyId || companyFromWelcome
         if (!companyId) {
@@ -640,15 +674,104 @@ export default function Dashboard() {
         }
 
         try {
-            // Zeige Lade-Zustand (optional mit einem Loading-State)
+            setExportingPDF(true);
             setError(null);
             
-            // Finde das Timeline Chart Element
-            const timelineChartElement = document.getElementById('timeline-chart-export');
+            console.log('📊 Starte PDF-Export-Prozess...');
             
-            // Finde das Topic Rating Chart Element
+            // Schritt 1: Prüfe ob alle Dashboard-Komponenten fertig geladen sind
+            const checkIfReady = () => {
+                const states = loadingStatesRef.current
+                return !states.timelineChart && 
+                       !states.topicRatingChart && 
+                       !states.topicOverview && 
+                       !states.kpiCards
+            }
+            
+            if (!checkIfReady()) {
+                console.log('⏳ Warte auf Dashboard-Laden...', loadingStatesRef.current);
+                
+                // Warte bis alle Komponenten geladen sind (max 45 Sekunden)
+                const maxWaitTime = 45000; // 45 Sekunden
+                const checkInterval = 300; // Alle 300ms prüfen
+                const startTime = Date.now();
+                
+                await new Promise((resolve, reject) => {
+                    const checkLoading = setInterval(() => {
+                        const elapsed = Date.now() - startTime;
+                        
+                        // Timeout check
+                        if (elapsed > maxWaitTime) {
+                            clearInterval(checkLoading);
+                            reject(new Error('Timeout: Dashboard konnte nicht vollständig geladen werden'));
+                            return;
+                        }
+                        
+                        // Prüfe aktuellen Loading-Status mit Ref
+                        if (checkIfReady()) {
+                            clearInterval(checkLoading);
+                            console.log('✅ Dashboard vollständig geladen nach', elapsed, 'ms');
+                            resolve();
+                        }
+                    }, checkInterval);
+                });
+            } else {
+                console.log('✅ Dashboard bereits vollständig geladen');
+            }
+            
+            // Schritt 2: Warte auf vollständiges Chart-Rendering mit Validierung
+            console.log('⏳ Warte auf Chart-Rendering und -Validierung...');
+            
+            const chartIds = ['timeline-chart-export', 'topic-rating-chart-export'];
+            const chartResults = await waitForMultipleCharts(chartIds, 15000);
+            
+            if (!chartResults.allReady) {
+                // Zeige welche Charts problematisch sind
+                const failedCharts = chartResults.results
+                    .filter(r => !r.success)
+                    .map(r => r.element?.id || 'unknown')
+                    .join(', ');
+                    
+                console.warn('⚠️ Einige Charts sind nicht vollständig bereit:', failedCharts);
+                
+                // Versuche trotzdem fortzufahren, aber mit Warnung
+                console.log('⏳ Versuche dennoch mit zusätzlicher Wartezeit...');
+                await new Promise(resolve => setTimeout(resolve, 3000));
+            } else {
+                console.log('✅ Alle Charts validiert und bereit');
+            }
+            
+            // Schritt 3: Finde und validiere Chart-Elemente nochmal
+            console.log('🔍 Finale Chart-Validierung...');
+            const timelineChartElement = document.getElementById('timeline-chart-export');
             const topicRatingChartElement = document.getElementById('topic-rating-chart-export');
-
+            
+            // Detaillierte Validierung mit Fehlerausgabe
+            const timelineValidation = validateChart(timelineChartElement, 'Timeline-Chart');
+            const topicRatingValidation = validateChart(topicRatingChartElement, 'Topic-Rating-Chart');
+            
+            console.log('Timeline Validierung:', timelineValidation);
+            console.log('Topic Rating Validierung:', topicRatingValidation);
+            
+            if (!timelineValidation.isValid || !topicRatingValidation.isValid) {
+                const errors = [];
+                if (!timelineValidation.isValid) errors.push(timelineValidation.message);
+                if (!topicRatingValidation.isValid) errors.push(topicRatingValidation.message);
+                
+                throw new Error('Charts nicht vollständig geladen:\n' + errors.join('\n'));
+            }
+            
+            // Schritt 4: Warte auf alle Bilder in den Charts
+            console.log('🖼️ Warte auf Bilder in den Charts...');
+            await waitForImagesInElement(timelineChartElement, 3000);
+            await waitForImagesInElement(topicRatingChartElement, 3000);
+            
+            // Schritt 5: Finale Wartezeit für Browser-Rendering und Animations
+            console.log('⏳ Finale Wartezeit für Browser-Rendering (1.5 Sekunden)...');
+            await new Promise(resolve => setTimeout(resolve, 1500));
+            
+            // Schritt 6: Sammle alle Daten für PDF
+            console.log('📦 Sammle Daten für PDF...');
             const kpiData = {
                 companyName: selectedCompanyName,
                 avgScore: data?.avg_overall || '-',
@@ -662,14 +785,18 @@ export default function Dashboard() {
                 topicOverviewData: topicOverviewData
             };
 
+            // Schritt 7: Generiere PDF
+            console.log('📄 Generiere PDF...');
             await exportKPIsAsPDF(kpiData);
             
-            // Erfolgs-Feedback (optional: Toast notification)
+            // Erfolgs-Feedback
             console.log('✅ PDF erfolgreich erstellt und heruntergeladen!');
             
         } catch (error) {
-            console.error('Fehler beim PDF-Export:', error);
+            console.error('❌ Fehler beim PDF-Export:', error);
             setError(`PDF-Export fehlgeschlagen: ${error.message || 'Unbekannter Fehler'}`);
+        } finally {
+            setExportingPDF(false);
         }
     };
     
@@ -678,14 +805,38 @@ export default function Dashboard() {
         setTimelineFilters(filters);
     }, []);
     
+    // Handler für Timeline Loading State
+    const handleTimelineLoadingChange = useCallback((isLoading) => {
+        setDashboardLoadingStates(prev => ({
+            ...prev,
+            timelineChart: isLoading
+        }));
+    }, []);
+    
     // Handler für Topic Rating Filter Updates
     const handleTopicRatingFiltersChange = useCallback((filters) => {
         setTopicRatingFilters(filters);
     }, []);
     
+    // Handler für Topic Rating Loading State
+    const handleTopicRatingLoadingChange = useCallback((isLoading) => {
+        setDashboardLoadingStates(prev => ({
+            ...prev,
+            topicRatingChart: isLoading
+        }));
+    }, []);
+    
     // Handler für Topic Overview Data Updates
     const handleTopicOverviewDataChange = useCallback((data) => {
         setTopicOverviewData(data);
+    }, []);
+    
+    // Handler für Topic Overview Loading State
+    const handleTopicOverviewLoadingChange = useCallback((isLoading) => {
+        setDashboardLoadingStates(prev => ({
+            ...prev,
+            topicOverview: isLoading
+        }));
     }, []);
 
 
@@ -845,14 +996,25 @@ export default function Dashboard() {
                         </button>
                         <button
                             onClick={handleExportPDF}
-                            className="group relative h-14 w-14 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 flex items-center justify-center border border-blue-400 hover:border-blue-300 transition-all duration-200 shadow-lg hover:shadow-xl cursor-pointer transform hover:scale-105"
-                            title="KPIs als PDF exportieren"
+                            disabled={exportingPDF}
+                            className={`group relative h-14 w-14 rounded-2xl flex items-center justify-center border transition-all duration-200 shadow-lg cursor-pointer ${
+                                exportingPDF 
+                                    ? 'bg-gray-400 border-gray-300 cursor-not-allowed' 
+                                    : 'bg-gradient-to-br from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 border-blue-400 hover:border-blue-300 hover:shadow-xl transform hover:scale-105'
+                            }`}
+                            title={exportingPDF ? "PDF wird erstellt..." : "KPIs als PDF exportieren"}
                         >
-                            <Download className="h-7 w-7 text-white group-hover:animate-bounce" />
-                            <span className="absolute -right-1 -top-1 flex h-3 w-3">
-                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-                                <span className="relative inline-flex rounded-full h-3 w-3 bg-blue-500"></span>
-                            </span>
+                            {exportingPDF ? (
+                                <Loader2 className="h-7 w-7 text-white animate-spin" />
+                            ) : (
+                                <>
+                                    <Download className="h-7 w-7 text-white group-hover:animate-bounce" />
+                                    <span className="absolute -right-1 -top-1 flex h-3 w-3">
+                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                                        <span className="relative inline-flex rounded-full h-3 w-3 bg-blue-500"></span>
+                                    </span>
+                                </>
+                            )}
                         </button>
                     </div>
                 </aside>
@@ -1056,10 +1218,12 @@ export default function Dashboard() {
                         <TimelineCard 
                             companyId={selectedCompany || selectedCompanyId} 
                             onFiltersChange={handleTimelineFiltersChange}
+                            onLoadingChange={handleTimelineLoadingChange}
                         />
                         <TopicRatingCard 
                             companyId={selectedCompany || selectedCompanyId}
                             onFiltersChange={handleTopicRatingFiltersChange}
+                            onLoadingChange={handleTopicRatingLoadingChange}
                         />
                     </div>
 
@@ -1068,6 +1232,7 @@ export default function Dashboard() {
                         <TopicOverviewCard 
                             companyId={selectedCompany || selectedCompanyId} 
                             onDataChange={handleTopicOverviewDataChange}
+                            onLoadingChange={handleTopicOverviewLoadingChange}
                         />
                     </div>
 

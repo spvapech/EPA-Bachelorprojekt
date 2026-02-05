@@ -16,7 +16,7 @@ import TopicTableModal from "./modals/TopicTableModal"
 import { FileText } from "lucide-react"
 import { API_URL } from "@/config"
 
-export function TopicOverviewCard({ companyId = 1, onDataChange }) {
+export function TopicOverviewCard({ companyId = 1, onDataChange, onLoadingChange }) {
     const [topicsData, setTopicsData] = useState([])
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState(null)
@@ -25,6 +25,13 @@ export function TopicOverviewCard({ companyId = 1, onDataChange }) {
     const [tableModalOpen, setTableModalOpen] = useState(false)
     const [sourceFilter, setSourceFilter] = useState(null) // null = both, 'employee', 'candidates'
     const [isModalOpen, setIsModalOpen] = useState(false) // Track if any modal is open
+    
+    // Kommuniziere Loading-State nach außen
+    useEffect(() => {
+        if (onLoadingChange) {
+            onLoadingChange(loading);
+        }
+    }, [loading, onLoadingChange]);
 
     // Daten von API laden
     useEffect(() => {

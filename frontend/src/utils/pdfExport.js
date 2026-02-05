@@ -538,22 +538,39 @@ export const exportKPIsAsPDF = async (kpiData) => {
                 currentYPos += 10;
             }
             
-            console.log('Starte html2canvas...');
+            console.log('Starte html2canvas für Timeline...');
+            console.log('Timeline Element Größe:', timelineChartElement.offsetWidth, 'x', timelineChartElement.offsetHeight);
             
-            // Chart als Bild rendern mit vollständiger oklch-Bereinigung
+            // Chart als Bild rendern mit verbesserter Konfiguration
             const canvas = await html2canvas(timelineChartElement, {
-                scale: 2,
+                scale: 3, // Erhöhte Auflösung für bessere Qualität
                 backgroundColor: '#ffffff',
-                logging: false,
+                logging: true, // Aktiviere Logging für Debug
                 useCORS: true,
                 allowTaint: true,
                 foreignObjectRendering: false,
+                imageTimeout: 15000, // 15 Sekunden Timeout für Bilder
+                removeContainer: false,
                 width: timelineChartElement.offsetWidth,
                 height: timelineChartElement.offsetHeight,
+                windowWidth: timelineChartElement.scrollWidth,
+                windowHeight: timelineChartElement.scrollHeight,
+                scrollX: 0,
+                scrollY: 0,
                 onclone: (clonedDoc) => {
                     // Finde das geklonte Chart-Element
                     const clonedChart = clonedDoc.getElementById('timeline-chart-export');
-                    if (!clonedChart) return;
+                    if (!clonedChart) {
+                        console.warn('Geklontes Chart-Element nicht gefunden');
+                        return;
+                    }
+                    
+                    console.log('Klone Chart für Rendering...');
+                    
+                    // Stelle sicher, dass das Element sichtbar und vollständig ist
+                    clonedChart.style.visibility = 'visible';
+                    clonedChart.style.display = 'block';
+                    clonedChart.style.opacity = '1';
                     
                     // Entferne alle oklch-Styles rekursiv und aggressiver
                     const removeOklch = (element) => {
@@ -790,21 +807,38 @@ export const exportKPIsAsPDF = async (kpiData) => {
             }
             
             console.log('Starte html2canvas für Topic Rating...');
+            console.log('Topic Rating Element Größe:', topicRatingChartElement.offsetWidth, 'x', topicRatingChartElement.offsetHeight);
             
-            // Chart als Bild rendern mit vollständiger oklch-Bereinigung
+            // Chart als Bild rendern mit verbesserter Konfiguration
             const canvas = await html2canvas(topicRatingChartElement, {
-                scale: 2,
+                scale: 3, // Erhöhte Auflösung für bessere Qualität
                 backgroundColor: '#ffffff',
-                logging: false,
+                logging: true, // Aktiviere Logging für Debug
                 useCORS: true,
                 allowTaint: true,
                 foreignObjectRendering: false,
+                imageTimeout: 15000, // 15 Sekunden Timeout für Bilder
+                removeContainer: false,
                 width: topicRatingChartElement.offsetWidth,
                 height: topicRatingChartElement.offsetHeight,
+                windowWidth: topicRatingChartElement.scrollWidth,
+                windowHeight: topicRatingChartElement.scrollHeight,
+                scrollX: 0,
+                scrollY: 0,
                 onclone: (clonedDoc) => {
                     // Finde das geklonte Chart-Element
                     const clonedChart = clonedDoc.getElementById('topic-rating-chart-export');
-                    if (!clonedChart) return;
+                    if (!clonedChart) {
+                        console.warn('Geklontes Topic Rating Chart nicht gefunden');
+                        return;
+                    }
+                    
+                    console.log('Klone Topic Rating Chart für Rendering...');
+                    
+                    // Stelle sicher, dass das Element sichtbar und vollständig ist
+                    clonedChart.style.visibility = 'visible';
+                    clonedChart.style.display = 'block';
+                    clonedChart.style.opacity = '1';
                     
                     // Entferne alle oklch-Styles rekursiv
                     const removeOklch = (element) => {
