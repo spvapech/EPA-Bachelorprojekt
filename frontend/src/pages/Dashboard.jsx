@@ -10,6 +10,7 @@ import {
     FileSpreadsheet,
     Loader2,
     Menu,
+    GitCompareArrows,
 } from "lucide-react"
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -1034,6 +1035,19 @@ export default function Dashboard() {
                             title="Zur Startseite"
                         >
                             <Home className="h-7 w-7 text-white group-hover:animate-bounce" />
+                        </button>
+                        <button
+                            onClick={() => {
+                                const companies = []
+                                if (selectedCompanyId && selectedCompanyName) {
+                                    companies.push({ id: selectedCompanyId, name: selectedCompanyName })
+                                }
+                                navigate("/compare", { state: { companies } })
+                            }}
+                            className="group relative h-14 w-14 rounded-2xl bg-gradient-to-br from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 flex items-center justify-center border border-purple-400 hover:border-purple-300 transition-all duration-200 shadow-lg hover:shadow-xl cursor-pointer transform hover:scale-105"
+                            title="Firmenvergleich"
+                        >
+                            <GitCompareArrows className="h-7 w-7 text-white group-hover:animate-bounce" />
                         </button>
                         <button
                             onClick={handleExportPDF}

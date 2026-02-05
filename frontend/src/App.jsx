@@ -1,6 +1,7 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom"
 import Welcome from "./pages/Welcome"
 import Dashboard from "./pages/Dashboard"
+import ComparePage from "./pages/Compare"
 
 export default function App() {
   return (
@@ -9,7 +10,9 @@ export default function App() {
         <Route path="/" element={<Navigate to="/welcome" replace />} />
         <Route path="/welcome" element={<Welcome />} />
         <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/compare" element={<ComparePage />} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      
       </Routes>
     </Router>
   )

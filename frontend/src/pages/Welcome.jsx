@@ -556,7 +556,9 @@ export default function Welcome() {
                                 <Button
                                     onClick={() => {
                                         // TODO: Navigate to analysis with multiple companies
-                                        alert(`✅ ${activeCompanies.length} bestehende Firma(en) ausgewählt!\n\nWeiterleitung zur Analyse wird später implementiert.`)
+                                        //alert(`✅ ${activeCompanies.length} bestehende Firma(en) ausgewählt!\n\nWeiterleitung zur Analyse wird später implementiert.`)
+
+                                        navigate("/compare", { state: { companies: activeCompanies } })
                                     }}
                                     className="w-full h-14 rounded-full text-lg font-semibold cursor-pointer bg-green-600 hover:bg-green-700"
                                     size="lg"
