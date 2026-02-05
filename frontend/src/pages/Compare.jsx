@@ -17,7 +17,7 @@ import {
     PolarAngleAxis,
     PolarRadiusAxis,
 } from "recharts"
-import { Building2, Plus, X, ArrowLeft, Loader2, TrendingUp, TrendingDown, Minus } from "lucide-react"
+import { Building2, Plus, X, ArrowLeft, Loader2, TrendingUp, TrendingDown, Minus, AlertTriangle, ThumbsDown } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { CompanySearchSelect } from "@/components/CompanySearchSelect"
@@ -124,7 +124,7 @@ const ComparePage = () => {
         setLoadingIds((prev) => new Set(prev).add(companyId))
 
         try {
-            const [ratingsRes, avgRes, trendRes, timelineRes, overviewRes] =
+            const [ratingsRes, avgRes, trendRes, timelineRes, overviewRes, negTopicsRes] =
                 await Promise.allSettled([
                     fetch(`${API_URL}/companies/${companyId}/ratings`),
                     fetch(`${API_URL}/companies/${companyId}/ratings/avg`),
@@ -136,6 +136,9 @@ const ComparePage = () => {
                     ),
                     fetch(
                         `${API_URL}/analytics/company/${companyId}/overview`
+                    ),
+                    fetch(
+                        `${API_URL}/topics/company/${companyId}/negative-topics`
                     ),
                 ])
 
@@ -159,6 +162,10 @@ const ComparePage = () => {
                 overviewRes.status === "fulfilled" && overviewRes.value.ok
                     ? await overviewRes.value.json()
                     : null
+            const negTopicsJson =
+                negTopicsRes.status === "fulfilled" && negTopicsRes.value.ok
+                    ? await negTopicsRes.value.json()
+                    : null
 
             // Parse trend
             let trend = null
@@ -178,12 +185,110 @@ const ComparePage = () => {
                 }
             }
 
+            // Parse most critical category (lowest rated)
+            let mostCritical = null
+            if (avg && typeof avg === "object") {
+                const entries = Object.entries(avg)
+                    .map(([key, value]) => ({
+                        key,
+                        title: CATEGORY_LABELS[key] ?? key,
+                        score: Number(value),
+                    }))
+                    .filter((x) => CATEGORY_LABELS[x.key] && Number.isFinite(x.score))
+                if (entries.length) {
+                    const min = entries.reduce((best, cur) =>
+                        cur.score < best.score ? cur : best, entries[0]
+                    )
+                    mostCritical = { topicName: min.title, score: min.score.toFixed(2) }
+                }
+            }
+
+            // Parse negative topic (highest impact = mentions × (5 - rating))
+            let negativeTopic = null
+            const negList = negTopicsJson?.negative_topics || []
+            if (Array.isArray(negList) && negList.length) {
+                const mentionsOf = (t) => { const n = Number(t?.mention_count); return Number.isFinite(n) ? n : 0 }
+                const ratingOf = (t) => { const r = Number(t?.avg_rating); return Number.isFinite(r) ? r : NaN }
+                const impactOf = (t) => { const r = ratingOf(t); return Number.isFinite(r) ? Math.max(0, mentionsOf(t)) * Math.max(0, 5 - r) : 0 }
+                const chosen = negList.reduce((best, cur) => {
+                    const bi = impactOf(best), ci = impactOf(cur)
+                    if (ci > bi) return cur
+                    if (ci < bi) return best
+                    const br = ratingOf(best), cr = ratingOf(cur)
+                    if (Number.isFinite(br) && Number.isFinite(cr)) {
+                        if (cr < br) return cur
+                        if (cr > br) return best
+                    }
+                    return mentionsOf(cur) > mentionsOf(best) ? cur : best
+                }, negList[0])
+                negativeTopic = {
+                    ...chosen,
+                    topic_label: chosen?.topic_label || chosen?.topic || chosen?.topic_text,
+                }
+            }
+
+            // Fallback: use topic-overview if negative-topics returned nothing
+            if (!negativeTopic) {
+                try {
+                    const fallbackRes = await fetch(`${API_URL}/analytics/company/${companyId}/topic-overview`)
+                    if (fallbackRes.ok) {
+                        const fallbackJson = await fallbackRes.json()
+                        const topics = Array.isArray(fallbackJson?.topics) ? fallbackJson.topics : []
+                        if (topics.length) {
+                            const normSent = (s) => String(s || "").toLowerCase()
+                            const isNeg = (t) => normSent(t?.sentiment).includes("neg")
+                            const isNeu = (t) => normSent(t?.sentiment).includes("neu")
+                            const isPos = (t) => normSent(t?.sentiment).includes("pos")
+                            const hasNoSentiment = (t) => !normSent(t?.sentiment)
+                            const ratingOf = (t) => { const r = Number(t?.avgRating); return Number.isFinite(r) ? r : NaN }
+                            const freqOf = (t) => { const f = Number(t?.frequency); return Number.isFinite(f) ? f : 0 }
+
+                            const negativeOnly = topics.filter(isNeg)
+                            const neutralOnly = topics.filter(isNeu)
+                            const noSentimentOnly = topics.filter(hasNoSentiment)
+                            const basePool = negativeOnly.length
+                                ? negativeOnly
+                                : (neutralOnly.length ? neutralOnly : (noSentimentOnly.length ? noSentimentOnly : topics.filter((t) => !isPos(t))))
+
+                            const withRating = basePool.filter((t) => Number.isFinite(ratingOf(t)))
+                            const ratingPool = withRating.length ? withRating : basePool
+
+                            if (ratingPool.length) {
+                                const impactOf = (t) => {
+                                    const f = Math.max(0, freqOf(t))
+                                    const r = ratingOf(t)
+                                    if (!Number.isFinite(r)) return 0
+                                    return f * Math.max(0, 5 - r)
+                                }
+                                const chosen = ratingPool.reduce((best, cur) => {
+                                    const bi = impactOf(best), ci = impactOf(cur)
+                                    if (ci > bi) return cur
+                                    if (ci < bi) return best
+                                    const br = ratingOf(best), cr = ratingOf(cur)
+                                    if (Number.isFinite(br) && Number.isFinite(cr)) {
+                                        if (cr < br) return cur
+                                        if (cr > br) return best
+                                    }
+                                    return freqOf(cur) > freqOf(best) ? cur : best
+                                }, ratingPool[0])
+                                negativeTopic = {
+                                    ...chosen,
+                                    topic_label: chosen?.topic || chosen?.topic_label,
+                                }
+                            }
+                        }
+                    }
+                } catch (_) { /* ignore fallback errors */ }
+            }
+
             setCompanyData((prev) => ({
                 ...prev,
                 [companyId]: {
                     ratings,
                     categoryRatings: avg,
                     trend,
+                    mostCritical,
+                    negativeTopic,
                     timeline: timelineJson?.timeline ?? [],
                     overview: overviewJson,
                 },
@@ -243,6 +348,16 @@ const ComparePage = () => {
     }
 
     const timelineOverlay = buildTimelineOverlay()
+
+    const getNegativeTopicName = (t) => {
+        if (!t) return "–"
+        if (t.topic_label) return String(t.topic_label)
+        if (t.topic_text) return String(t.topic_text)
+        if (t.topic) return String(t.topic)
+        if (Array.isArray(t.topic_words) && t.topic_words.length) return String(t.topic_words[0])
+        if (Array.isArray(t.categories) && t.categories.length) return String(t.categories[0])
+        return "–"
+    }
 
     return (
         <div className="min-h-screen bg-slate-50">
@@ -353,7 +468,7 @@ const ComparePage = () => {
                 ) : (
                     <>
                         {/* KPI Cards comparison */}
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                             {/* Ø Score comparison */}
                             <Card className="rounded-2xl shadow-sm">
                                 <CardHeader className="pb-2">
@@ -405,7 +520,7 @@ const ComparePage = () => {
                             <Card className="rounded-2xl shadow-sm">
                                 <CardHeader className="pb-2">
                                     <CardTitle className="text-base font-bold text-slate-800">
-                                        Trend (12 Monate)
+                                        Trend
                                     </CardTitle>
                                 </CardHeader>
                                 <CardContent className="space-y-3">
@@ -463,40 +578,78 @@ const ComparePage = () => {
                                 </CardContent>
                             </Card>
 
-                            {/* Review count comparison */}
+                            {/* Most Critical comparison */}
                             <Card className="rounded-2xl shadow-sm">
                                 <CardHeader className="pb-2">
-                                    <CardTitle className="text-base font-bold text-slate-800">
-                                        Anzahl Bewertungen
+                                    <CardTitle className="text-sm font-bold text-slate-800">
+                                        Most Critical
                                     </CardTitle>
                                 </CardHeader>
                                 <CardContent className="space-y-3">
                                     {activeSlots.map((slot, i) => {
-                                        const overview = companyData[slot.id]?.overview
-                                        const count =
-                                            overview?.total_reviews ??
-                                            overview?.total_count ??
-                                            (((overview?.employee_count ?? 0) +
-                                                (overview?.candidate_count ?? 0)) || null)
+                                        const mc = companyData[slot.id]?.mostCritical
                                         return (
                                             <div
                                                 key={slot.id}
-                                                className="flex items-center justify-between"
+                                                className="flex items-center justify-between gap-2"
                                             >
-                                                <div className="flex items-center gap-2">
+                                                <div className="flex items-center gap-2 min-w-0">
                                                     <div
-                                                        className="w-2.5 h-2.5 rounded-full"
+                                                        className="w-2.5 h-2.5 rounded-full shrink-0"
                                                         style={{
                                                             backgroundColor:
                                                                 COMPANY_COLORS[i],
                                                         }}
                                                     />
-                                                    <span className="text-sm font-medium text-slate-700 truncate max-w-[120px]">
+                                                    <span className="text-sm font-medium text-slate-700 truncate max-w-[80px]">
                                                         {slot.name}
                                                     </span>
                                                 </div>
-                                                <span className="text-xl font-extrabold text-slate-800">
-                                                    {count || "–"}
+                                                <div className="text-right min-w-0">
+                                                    <div className="text-sm font-bold text-red-600 truncate">
+                                                        {mc ? mc.topicName : "–"}
+                                                    </div>
+                                                    {mc && (
+                                                        <div className="text-xs font-semibold text-red-500">
+                                                            {mc.score}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )
+                                    })}
+                                </CardContent>
+                            </Card>
+
+                            {/* Negative Topic comparison */}
+                            <Card className="rounded-2xl shadow-sm">
+                                <CardHeader className="pb-2">
+                                    <CardTitle className="text-base font-bold text-slate-800">
+                                        Negative Topic
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent className="space-y-3">
+                                    {activeSlots.map((slot, i) => {
+                                        const nt = companyData[slot.id]?.negativeTopic
+                                        return (
+                                            <div
+                                                key={slot.id}
+                                                className="flex items-center justify-between gap-2"
+                                            >
+                                                <div className="flex items-center gap-2 min-w-0">
+                                                    <div
+                                                        className="w-2.5 h-2.5 rounded-full shrink-0"
+                                                        style={{
+                                                            backgroundColor:
+                                                                COMPANY_COLORS[i],
+                                                        }}
+                                                    />
+                                                    <span className="text-sm font-medium text-slate-700 truncate max-w-[80px]">
+                                                        {slot.name}
+                                                    </span>
+                                                </div>
+                                                <span className="text-lg font-extrabold text-orange-400 truncate max-w-[130px] text-right">
+                                                    {getNegativeTopicName(nt)}
                                                 </span>
                                             </div>
                                         )
