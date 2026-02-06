@@ -33,13 +33,33 @@ export default function Welcome() {
         })
     }
 
+    const removeFile = (companyIndex, fileIndex) => {
+        const company = companies[companyIndex]
+        const updatedFiles = company.files.filter((_, idx) => idx !== fileIndex)
+        updateCompany(companyIndex, { files: updatedFiles })
+    }
+
+    const handleCreateNewCompany = (companyIndex, companyName) => {
+        // Direkt als neue Firma markieren und Upload-Bereich öffnen
+        updateCompany(companyIndex, {
+            companyQuery: companyName,
+            existsInDB: false,
+            isChecked: true,
+            selectedCompany: null,
+            companyId: null
+        })
+    }
+
     const handleFileChange = (companyIndex, e) => {
         const selectedFiles = Array.from(e.target.files || [])
         
         if (selectedFiles.length === 0) return
         
+        const existingFiles = companies[companyIndex].files
+        const combinedFiles = [...existingFiles, ...selectedFiles]
+        
         // Max 2 files
-        if (selectedFiles.length > 2) {
+        if (combinedFiles.length > 2) {
             setError("Maximal 2 Dateien pro Firma erlaubt")
             return
         }
@@ -57,7 +77,7 @@ export default function Welcome() {
             }
         }
         
-        updateCompany(companyIndex, { files: selectedFiles })
+        updateCompany(companyIndex, { files: combinedFiles })
         setError("")
     }
     
@@ -78,9 +98,11 @@ export default function Welcome() {
         
         if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
             const droppedFiles = Array.from(e.dataTransfer.files)
+            const existingFiles = companies[companyIndex].files
+            const combinedFiles = [...existingFiles, ...droppedFiles]
             
             // Max 2 files
-            if (droppedFiles.length > 2) {
+            if (combinedFiles.length > 2) {
                 setError("Maximal 2 Dateien pro Firma erlaubt")
                 return
             }
@@ -97,7 +119,7 @@ export default function Welcome() {
                 }
             }
             
-            updateCompany(companyIndex, { files: droppedFiles })
+            updateCompany(companyIndex, { files: combinedFiles })
             setError("")
         }
     }
@@ -301,7 +323,7 @@ export default function Welcome() {
     }
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-slate-700 via-slate-800 to-slate-700 flex items-center justify-center p-4 py-12">
+        <div className="min-h-screen flex items-center justify-center p-4 py-12" style={{backgroundColor: '#05223e'}}>
             <div className="w-full max-w-6xl">
                 {/* Welcome Header */}
                 <div className="text-center mb-8">
@@ -315,16 +337,16 @@ export default function Welcome() {
 
                 {/* Mode Selection */}
                 <div className="mb-8">
-                    <p className="text-center text-white mb-4 text-lg font-medium">
+                    <p className="text-center mb-4 text-lg font-medium" style={{color: '#00aded'}}>
                         Wie viele Firmen möchten Sie analysieren?
                     </p>
                     <div className="flex justify-center gap-4">
                         <button
                             onClick={() => setMode(1)}
-                            className={`px-8 py-4 rounded-2xl font-bold text-lg transition-all transform hover:scale-105 ${
+                            className={`px-8 py-4 rounded-2xl font-bold text-lg transition-all transform hover:scale-105 border-2 ${
                                 mode === 1
-                                    ? 'bg-white text-blue-600 shadow-xl'
-                                    : 'bg-white/20 text-white hover:bg-white/30'
+                                    ? 'bg-white text-[#026fb6] shadow-xl border-[#026fb6]'
+                                    : 'bg-white/20 text-white hover:bg-white/30 border-[#026fb6]'
                             }`}
                         >
                             <Building2 className="h-6 w-6 mx-auto mb-2" />
@@ -332,10 +354,10 @@ export default function Welcome() {
                         </button>
                         <button
                             onClick={() => setMode(2)}
-                            className={`px-8 py-4 rounded-2xl font-bold text-lg transition-all transform hover:scale-105 ${
+                            className={`px-8 py-4 rounded-2xl font-bold text-lg transition-all transform hover:scale-105 border-2 ${
                                 mode === 2
-                                    ? 'bg-white text-blue-600 shadow-xl'
-                                    : 'bg-white/20 text-white hover:bg-white/30'
+                                    ? 'bg-white text-[#026fb6] shadow-xl border-[#026fb6]'
+                                    : 'bg-white/20 text-white hover:bg-white/30 border-[#026fb6]'
                             }`}
                         >
                             <div className="flex gap-1 justify-center mb-2">
@@ -346,10 +368,10 @@ export default function Welcome() {
                         </button>
                         <button
                             onClick={() => setMode(3)}
-                            className={`px-8 py-4 rounded-2xl font-bold text-lg transition-all transform hover:scale-105 ${
+                            className={`px-8 py-4 rounded-2xl font-bold text-lg transition-all transform hover:scale-105 border-2 ${
                                 mode === 3
-                                    ? 'bg-white text-blue-600 shadow-xl'
-                                    : 'bg-white/20 text-white hover:bg-white/30'
+                                    ? 'bg-white text-[#026fb6] shadow-xl border-[#026fb6]'
+                                    : 'bg-white/20 text-white hover:bg-white/30 border-[#026fb6]'
                             }`}
                         >
                             <div className="flex gap-1 justify-center mb-2">
@@ -365,9 +387,9 @@ export default function Welcome() {
                 {/* Company Upload Cards */}
                 <div className={`grid gap-6 mb-6 ${mode === 1 ? 'grid-cols-1 max-w-2xl mx-auto' : mode === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
                     {companies.slice(0, mode).map((company, index) => (
-                        <Card key={index} className="rounded-3xl shadow-xl border-2 border-slate-200">
+                        <Card key={index} className="rounded-3xl shadow-xl border-2 bg-slate-800" style={{borderColor: '#026fb6'}}>
                             <CardHeader className="text-center pb-4">
-                                <CardTitle className="text-xl font-bold text-slate-800">
+                                <CardTitle className="text-xl font-bold text-white">
                                     Firma {index + 1}
                                 </CardTitle>
                                 
@@ -376,13 +398,15 @@ export default function Welcome() {
                             <CardContent className="space-y-4">
                                 {/* Company Name Input */}
                                 <div className="space-y-2">
-                                    <label className="text-sm font-medium text-slate-700">
-                                        Firmenname <span className="text-red-600">*</span>
+                                    <label className="text-sm font-medium text-slate-300">
+                                        Firmenname <span className="text-red-400">*</span>
                                     </label>
                                     <CompanySearchSelect
                                         value={company.companyQuery}
                                         onValueChange={(value) => updateCompany(index, { companyQuery: value, isChecked: false })}
                                         onCompanySelect={(comp) => handleCompanySelect(index, comp)}
+                                        onCreateNew={(companyName) => handleCreateNewCompany(index, companyName)}
+                                        variant="dark"
                                     />
                                 </div>
 
@@ -407,8 +431,8 @@ export default function Welcome() {
                                 {/* Status after check */}
                                 {company.isChecked && (
                                     <>
-                                        <div className={`p-3 rounded-lg ${company.existsInDB ? 'bg-green-50 border border-green-200' : 'bg-blue-50 border border-blue-200'}`}>
-                                            <p className={`text-sm font-medium ${company.existsInDB ? 'text-green-700' : 'text-blue-700'}`}>
+                                        <div className={`p-3 rounded-lg ${company.existsInDB ? 'bg-green-900/30 border border-green-700' : 'bg-blue-900/30 border border-blue-700'}`}>
+                                            <p className={`text-sm font-medium ${company.existsInDB ? 'text-green-300' : 'text-blue-300'}`}>
                                                 {company.existsInDB 
                                                     ? `✓ Firma "${company.companyQuery}" existiert bereits` 
                                                     : `Neue Firma "${company.companyQuery}" - Dateien hochladen`}    
@@ -438,8 +462,8 @@ export default function Welcome() {
                                                 ) : (
                                                     <span
                                                     className="
-                                                        text-blue-600 underline underline-offset-4
-                                                        hover:text-blue-700
+                                                        text-blue-400 underline underline-offset-4
+                                                        hover:text-blue-300
                                                         cursor-pointer
                                                         disabled:cursor-not-allowed
                                                     "
@@ -459,8 +483,8 @@ export default function Welcome() {
                                     <div 
                                         className={`border-2 border-dashed rounded-xl p-6 text-center transition-colors ${
                                             dragActive === index
-                                                ? 'border-blue-500 bg-blue-50' 
-                                                : 'border-slate-300 hover:border-blue-400'
+                                                ? 'border-blue-400 bg-blue-900/20' 
+                                                : 'border-slate-600 hover:border-blue-500'
                                         }`}
                                         onDragEnter={(e) => handleDrag(e, index)}
                                         onDragLeave={(e) => handleDrag(e, index)}
@@ -479,23 +503,23 @@ export default function Welcome() {
                                             htmlFor={`file-upload-${index}`}
                                             className="cursor-pointer flex flex-col items-center gap-3"
                                         >
-                                            <div className="h-16 w-16 rounded-full bg-blue-100 flex items-center justify-center">
-                                                <FileSpreadsheet className="h-8 w-8 text-blue-600" />
+                                            <div className="h-16 w-16 rounded-full bg-blue-900 flex items-center justify-center">
+                                                <FileSpreadsheet className="h-8 w-8 text-blue-400" />
                                             </div>
                                             <div>
-                                                <p className="text-base font-semibold text-slate-700 mb-1">
+                                                <p className="text-base font-semibold text-white mb-1">
                                                     {company.files.length > 0 
                                                         ? `${company.files.length} Datei(en) ausgewählt` 
                                                         : "Excel-Dateien auswählen"}
                                                 </p>
-                                                <p className="text-sm text-slate-500 font-medium">
+                                                <p className="text-sm text-slate-300 font-medium">
                                                     Genau 2 Dateien erforderlich (.xlsx oder .xls)
                                                 </p>
                                                 <p className="text-xs text-slate-400 mt-1">
                                                     Oder per Drag & Drop hier ablegen
                                                 </p>
                                                 {company.files.length === 1 && (
-                                                    <p className="text-xs text-orange-600 mt-2 font-medium">
+                                                    <p className="text-xs text-orange-400 mt-2 font-medium">
                                                         ⚠️ Bitte wählen Sie noch eine 2. Datei aus
                                                     </p>
                                                 )}
@@ -506,20 +530,20 @@ export default function Welcome() {
                                         {company.files.length > 0 && (
                                             <div className="mt-4 space-y-2">
                                                 {company.files.map((file, fileIdx) => (
-                                                    <div key={fileIdx} className="bg-green-50 border border-green-200 rounded-lg p-3 flex items-center gap-2">
-                                                        <FileSpreadsheet className="h-4 w-4 text-green-600 flex-shrink-0" />
+                                                    <div key={fileIdx} className="bg-green-900/30 border border-green-700 rounded-lg p-3 flex items-center gap-2">
+                                                        <FileSpreadsheet className="h-4 w-4 text-green-400 flex-shrink-0" />
                                                         <div className="flex-1 text-left">
-                                                            <p className="text-sm font-semibold text-green-800 truncate">{file.name}</p>
-                                                            <p className="text-xs text-green-600">
+                                                            <p className="text-sm font-semibold text-green-300 truncate">{file.name}</p>
+                                                            <p className="text-xs text-green-400">
                                                                 {(file.size / 1024).toFixed(2)} KB
                                                             </p>
                                                         </div>
                                                         <button
                                                             onClick={() => removeFile(index, fileIdx)}
-                                                            className="p-1 hover:bg-red-100 rounded transition-colors group"
+                                                            className="p-1 hover:bg-red-900/30 rounded transition-colors group"
                                                             title="Datei entfernen"
                                                         >
-                                                            <X className="h-4 w-4 text-green-600 group-hover:text-red-600" />
+                                                            <X className="h-4 w-4 text-green-400 group-hover:text-red-400" />
                                                         </button>
                                                     </div>
                                                 ))}
@@ -534,7 +558,7 @@ export default function Welcome() {
 
                 {/* Error Message */}
                 {error && (
-                    <div className="max-w-2xl mx-auto mb-6 bg-red-100 border-2 border-red-300 rounded-2xl p-4 text-red-700 text-sm">
+                    <div className="max-w-2xl mx-auto mb-6 bg-red-900/30 border-2 border-red-700 rounded-2xl p-4 text-red-300 text-sm">
                         {error}
                     </div>
                 )}

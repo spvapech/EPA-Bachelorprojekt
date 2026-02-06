@@ -900,7 +900,7 @@ export default function Dashboard() {
                         <div className="px-6 py-4">
                             {/* Greeting Section */}
                             <div className="mb-6 pb-4 border-b border-slate-700">
-                                <h1 className="text-2xl font-bold mb-2">Willkommen!</h1>
+                                <h1 className="text-2xl font-bold mb-2">AGB-Analysis</h1>
                                 <p className="text-sm text-slate-300">
                                     Wählen Sie eine Firma aus, um die Analyse zu starten.
                                 </p>

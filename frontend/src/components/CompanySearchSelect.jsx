@@ -95,14 +95,17 @@ export function CompanySearchSelect({
                             ? "rounded-lg border-slate-600 bg-slate-800 px-4 py-2 text-white placeholder-slate-400 hover:bg-slate-700 focus:ring-2 focus:ring-blue-400" 
                             : "rounded-xl border-slate-300 bg-white px-4 py-3 hover:bg-slate-50"
                     )}
-                >
+                >  
                     <span className={cn(
                         "truncate",
-                        !value && (isDark ? "text-slate-400" : "text-slate-400")
+                        value ? "text-white" : (isDark ? "text-slate-400" : "text-slate-400")
                     )}>
                         {value || "Firmenname eingeben oder auswählen..."}
                     </span>
-                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    <ChevronsUpDown className={cn(
+                        "ml-2 h-4 w-4 shrink-0",
+                        isDark ? "text-white opacity-70" : "opacity-50"
+                    )} />
                 </Button>
             </PopoverTrigger>
             <PopoverContent 
@@ -114,7 +117,9 @@ export function CompanySearchSelect({
             >
                 <Command 
                     shouldFilter={false}
-                    className={cn(isDark && "bg-slate-800")}
+                    className={cn(
+                        isDark && "bg-slate-800 [&_[cmdk-input-wrapper]_svg]:text-white [&_[cmdk-input]]:text-white"
+                    )}
                 >
                     <CommandInput
                         placeholder="Firma suchen..."
@@ -155,13 +160,13 @@ export function CompanySearchSelect({
                                                 setOpen(false)
                                             }}
                                             className={cn(
-                                                "mt-2 px-4 py-2 rounded-lg font-medium text-sm transition-colors",
+                                                "mt-2 px-4 py-2 rounded-lg font-medium text-sm transition-all cursor-pointer active:scale-95",
                                                 isDark 
                                                     ? "bg-blue-600 hover:bg-blue-700 text-white" 
                                                     : "bg-blue-500 hover:bg-blue-600 text-white"
                                             )}
                                         >
-                                            + Neue Firma analysieren?
+                                            + Neue Firma analysieren
                                         </button>
                                     )}
                                 </div>
