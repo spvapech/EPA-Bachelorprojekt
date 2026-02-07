@@ -17,10 +17,11 @@ import {
     PolarAngleAxis,
     PolarRadiusAxis,
 } from "recharts"
-import { Building2, Plus, X, ArrowLeft, Loader2, TrendingUp, TrendingDown, Minus, AlertTriangle, ThumbsDown } from "lucide-react"
+import { Building2, Plus, X, ArrowLeft, Loader2, TrendingUp, TrendingDown, Minus, AlertTriangle, ThumbsDown, Download } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { CompanySearchSelect } from "@/components/CompanySearchSelect"
+import { exportCompareAsPDF } from "@/utils/pdfExport"
 import { API_URL } from "../config"
 
 // Colors for up to 3 companies
@@ -359,6 +360,42 @@ const ComparePage = () => {
         return "–"
     }
 
+    const [exporting, setExporting] = useState(false)
+
+    const handleExportPDF = async () => {
+        if (activeSlots.length < 2) return
+        setExporting(true)
+        try {
+            // Kurz warten damit Charts stabil sind
+            await new Promise(r => setTimeout(r, 300))
+
+            const companies = activeSlots.map((slot, i) => {
+                const data = companyData[slot.id]
+                return {
+                    name: slot.name,
+                    id: slot.id,
+                    score: data?.ratings?.avg_overall ?? null,
+                    trend: data?.trend ?? null,
+                    mostCritical: data?.mostCritical ?? null,
+                    negativeTopic: data?.negativeTopic ?? null,
+                    categoryRatings: data?.categoryRatings ?? {},
+                }
+            })
+
+            await exportCompareAsPDF({
+                companies,
+                radarChartElement: document.getElementById('compare-radar-chart-export'),
+                barChartElement: document.getElementById('compare-bar-chart-export'),
+                timelineChartElement: document.getElementById('compare-timeline-chart-export'),
+                categoryData: radarData,
+            })
+        } catch (err) {
+            console.error('PDF-Export fehlgeschlagen:', err)
+        } finally {
+            setExporting(false)
+        }
+    }
+
     return (
         <div className="min-h-screen bg-slate-50">
             {/* Header */}
@@ -371,7 +408,7 @@ const ComparePage = () => {
                 >
                     <ArrowLeft className="h-5 w-5" />
                 </Button>
-                <div>
+                <div className="flex-1">
                     <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">
                         Firmenvergleich
                     </h1>
@@ -379,6 +416,22 @@ const ComparePage = () => {
                         Vergleichen Sie bis zu {MAX_COMPANIES} Firmen nebeneinander
                     </p>
                 </div>
+                {activeSlots.length >= 2 && (
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleExportPDF}
+                        disabled={exporting}
+                        className="shrink-0 gap-2"
+                    >
+                        {exporting ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                            <Download className="h-4 w-4" />
+                        )}
+                        {exporting ? 'Exportiert...' : 'PDF Export'}
+                    </Button>
+                )}
             </div>
 
             <div className="px-6 py-6 max-w-[1400px] mx-auto space-y-6">
@@ -668,8 +721,8 @@ const ComparePage = () => {
                                     </CardTitle>
                                 </CardHeader>
                                 <CardContent>
-                                    <ResponsiveContainer width="100%" height={400}>
-                                        <RadarChart
+                                    <div id="compare-radar-chart-export">
+                                    <ResponsiveContainer width="100%" height={400}>    <RadarChart
                                             data={radarData}
                                             cx="50%"
                                             cy="50%"
@@ -699,6 +752,7 @@ const ComparePage = () => {
                                             <Tooltip />
                                         </RadarChart>
                                     </ResponsiveContainer>
+                                    </div>
                                 </CardContent>
                             </Card>
 
@@ -710,6 +764,7 @@ const ComparePage = () => {
                                     </CardTitle>
                                 </CardHeader>
                                 <CardContent>
+                                    <div id="compare-bar-chart-export">
                                     <ResponsiveContainer width="100%" height={400}>
                                         <BarChart
                                             data={barData}
@@ -749,6 +804,7 @@ const ComparePage = () => {
                                             ))}
                                         </BarChart>
                                     </ResponsiveContainer>
+                                    </div>
                                 </CardContent>
                             </Card>
                         </div>
@@ -762,6 +818,7 @@ const ComparePage = () => {
                                     </CardTitle>
                                 </CardHeader>
                                 <CardContent>
+                                    <div id="compare-timeline-chart-export">
                                     <ResponsiveContainer width="100%" height={350}>
                                         <LineChart
                                             data={timelineOverlay}
@@ -801,6 +858,7 @@ const ComparePage = () => {
                                             ))}
                                         </LineChart>
                                     </ResponsiveContainer>
+                                    </div>
                                 </CardContent>
                             </Card>
                         )}
