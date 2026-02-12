@@ -38,6 +38,34 @@ function parseYear(period) {
   return Number.isFinite(y) ? y : null
 }
 
+function parseYearMonth(period) {
+  if (!period) return null
+  const [y, m] = String(period).split("-").map(Number)
+  if (!y || !m) return null
+  return { year: y, month: m }
+}
+
+function periodToIndex(period, granularity) {
+  if (!period) return null
+  if (granularity === "year") {
+    const parsed = parseYearMonth(period)
+    if (!parsed) return null
+    return parsed.year * 12 + (parsed.month - 1)
+  }
+  const year = parseYear(period)
+  return year != null ? year : null
+}
+
+function formatGapRange(fromPeriod, toPeriod, granularity) {
+  if (!fromPeriod || !toPeriod) return ""
+  if (granularity === "year") {
+    const fromLabel = formatMonthLabel(fromPeriod)
+    const toLabel = formatMonthLabel(toPeriod)
+    return `${fromLabel} - ${toLabel}`
+  }
+  return `${fromPeriod} - ${toPeriod}`
+}
+
 function formatMonthLabel(period) {
   if (!period) return ""
   const [y, m] = String(period).split("-").map(Number)
@@ -242,11 +270,53 @@ export const TopicRatingCard = memo(function TopicRatingCard({ companyId, onFilt
 
   // Chart Daten: nur periodLabel setzen (kein Slider)
   const chartData = useMemo(() => {
-    return (rawData || []).map((row) => ({
+    const rows = Array.isArray(rawData) ? [...rawData] : []
+    const sorted = rows
+      .map((row) => ({ row, idx: periodToIndex(row?.period, granularity) }))
+      .filter((item) => item.idx != null)
+      .sort((a, b) => a.idx - b.idx)
+      .map((item) => item.row)
+
+    const gapRow = (fromPeriod, toPeriod) => {
+      const empty = {
+        period: `gap-${fromPeriod}-${toPeriod}`,
+        periodLabel: "gab",
+        _isGap: true,
+        _gapInfo: formatGapRange(fromPeriod, toPeriod, granularity),
+        _gapMarker: 0,
+      }
+      for (const t of topics || []) {
+        empty[t] = null
+      }
+      return empty
+    }
+
+    const withGaps = []
+    for (let i = 0; i < sorted.length; i += 1) {
+      const current = sorted[i]
+      if (i > 0) {
+        const prev = sorted[i - 1]
+        const prevIdx = periodToIndex(prev?.period, granularity)
+        const curIdx = periodToIndex(current?.period, granularity)
+        if (prevIdx != null && curIdx != null && curIdx - prevIdx > 1) {
+          withGaps.push(gapRow(prev?.period, current?.period))
+        }
+      }
+      withGaps.push(current)
+    }
+
+    return withGaps.map((row) => ({
       ...row,
-    periodLabel: granularity === "year" ? formatMonthLabel(row.period) : row.period,
+      periodLabel: row.periodLabel || (granularity === "year" ? formatMonthLabel(row.period) : row.period),
     }))
-  }, [rawData, granularity])
+  }, [rawData, granularity, topics])
+
+  const gapNotes = useMemo(() => {
+    const notes = (chartData || [])
+      .filter((row) => row?._isGap && row?._gapInfo)
+      .map((row) => row._gapInfo)
+    return Array.from(new Set(notes))
+  }, [chartData])
 
   // Export Filter-State nach außen (für PDF Export)
   useEffect(() => {
@@ -273,8 +343,19 @@ export const TopicRatingCard = memo(function TopicRatingCard({ companyId, onFilt
   const CustomTooltip = ({ active, payload, label }) => {
     if (!active || !payload?.length) return null
 
+    const gapInfo = payload?.[0]?.payload?._isGap ? payload?.[0]?.payload?._gapInfo : null
+
+    if (gapInfo) {
+      return (
+        <div className="bg-white border border-slate-200 rounded-lg shadow-lg p-3 max-w-[300px]">
+          <p className="font-semibold text-slate-800 mb-1">gab</p>
+          <p className="text-xs text-slate-600">Keine Bewertungen zwischen {gapInfo}.</p>
+        </div>
+      )
+    }
+
     const items = payload
-      .filter((p) => p.value !== null && p.value !== undefined)
+      .filter((p) => p.dataKey !== "_gapMarker" && p.value !== null && p.value !== undefined)
       .sort((a, b) => (b.value ?? 0) - (a.value ?? 0))
 
     return (
@@ -489,13 +570,25 @@ export const TopicRatingCard = memo(function TopicRatingCard({ companyId, onFilt
               dataKey={topic}
               stroke={topicColor(Math.max(colorIdx, 0))}
               strokeWidth={2.5}
-              dot={{ r: 3, strokeWidth: 0 }}
-              activeDot={{ r: 5 }}
+              dot={{ r: 4, strokeWidth: 0, fill: topicColor(Math.max(colorIdx, 0)) }}
+              activeDot={{ r: 6, strokeWidth: 0 }}
               connectNulls={false}
               name={prettifyTopicKey(topic)}
             />
           )
         })}
+
+        <Line
+          type="monotone"
+          dataKey="_gapMarker"
+          stroke="transparent"
+          strokeWidth={0}
+          dot={false}
+          activeDot={false}
+          connectNulls={false}
+          legendType="none"
+          isAnimationActive={false}
+        />
 
       </LineChart>
     </ResponsiveContainer>
@@ -583,6 +676,11 @@ export const TopicRatingCard = memo(function TopicRatingCard({ companyId, onFilt
             )}
           </div>
 
+          {gapNotes.length > 0 && (
+            <p className="text-xs text-slate-500 text-center mt-2 italic">
+              Gab: Für diesen Zeitraum liegen keine Bewertungen vor ({gapNotes.join(", ")}).
+            </p>
+          )}
           <p className="text-xs text-slate-400 text-center mt-2">Klicken zum Vergrößern</p>
         </CardContent>
       </Card>
@@ -624,13 +722,24 @@ export const TopicRatingCard = memo(function TopicRatingCard({ companyId, onFilt
                 className="text-xs text-slate-600 hover:text-slate-900 underline"
               >
                 Top 5 anzeigen
-              </button>
+              </button> 
+              <p>
+                {gapNotes.length > 0 && (
+                <p className="flex items-center justify-center min-h-[30px] gap-1 text-xs text-slate-500 italic">
+                  <span>ℹ️</span>
+                  <span>
+                    Gap: Für diesen Zeitraum liegen keine Bewertungen vor ({gapNotes.join(", ")}).
+                  </span>
+                </p>
+              )}
+              </p>
 
               <p className="text-xs text-slate-400">
                 {SOURCE_LABEL[source]} · {GRANULARITY_LABEL[granularity]}
                 {granularity === "year" && selectedYear ? ` · ${selectedYear}` : ""}
               </p>
             </div>
+            
           </div>
         </DialogContent>
       </Dialog>

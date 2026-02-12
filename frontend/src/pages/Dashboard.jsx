@@ -6,8 +6,6 @@ import {
     Home,
     Download,
     X,
-    Upload,
-    FileSpreadsheet,
     Loader2,
     Menu,
     GitCompareArrows,
@@ -77,9 +75,6 @@ export default function Dashboard() {
     const [selectedCompanyId, setSelectedCompanyId] = useState(companyFromWelcome || null)
     const [selectedCompanyName, setSelectedCompanyName] = useState(companyNameFromWelcome || "")
     const [checking, setChecking] = useState(false)
-    const [needsUpload, setNeedsUpload] = useState(false)
-    const [file, setFile] = useState(null)
-    const [uploading, setUploading] = useState(false)
     const [error, setError] = useState("")
     const [highlightedIndex, setHighlightedIndex] = useState(-1)
     
@@ -190,9 +185,13 @@ export default function Dashboard() {
 
     // Handler for creating new company
     const handleCreateNewCompany = (companyName) => {
-        setCompanyQuery(companyName)
-        setNeedsUpload(true)
+        const trimmedName = companyName.trim()
         setError("")
+        if (trimmedName) {
+            navigate("/welcome", { state: { prefillCompanyName: trimmedName } })
+        } else {
+            navigate("/welcome")
+        }
     }
     
     const handleKeyDown = (e) => {
@@ -233,7 +232,6 @@ export default function Dashboard() {
             if (selectedCompanyId) {
                 setSelectedCompany(selectedCompanyId)
                 setSidebarOpen(false)
-                setNeedsUpload(false)
                 getCompanyData(selectedCompanyId)
                 return
             }
@@ -256,117 +254,21 @@ export default function Dashboard() {
                 setSelectedCompanyName(match.name)
                 setSelectedCompany(match.id)
                 setSidebarOpen(false)
-                setNeedsUpload(false)
                 getCompanyData(match.id)
             } else {
-                // Company does not exist, needs upload
-                setNeedsUpload(true)
-                setError("Firma nicht gefunden. Bitte laden Sie eine Excel-Datei hoch.")
+                // Company does not exist -> continue in Welcome for upload flow
+                const trimmedName = companyQuery.trim()
+                setError("")
+                if (trimmedName) {
+                    navigate("/welcome", { state: { prefillCompanyName: trimmedName } })
+                } else {
+                    navigate("/welcome")
+                }
             }
         } catch (err) {
             setError("Fehler bei der Überprüfung der Firma")
         } finally {
             setChecking(false)
-        }
-    }
-    
-    const handleFileChange = (e) => {
-        const selectedFile = e.target.files?.[0]
-        if (selectedFile) {
-            const validTypes = [
-                'application/vnd.ms-excel',
-                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-            ]
-            if (validTypes.includes(selectedFile.type) || selectedFile.name.endsWith('.xlsx') || selectedFile.name.endsWith('.xls')) {
-                setFile(selectedFile)
-                setError("")
-            } else {
-                setError("Bitte wählen Sie eine Excel-Datei (.xlsx oder .xls)")
-                setFile(null)
-            }
-        }
-    }
-    
-    const handleUpload = async () => {
-        if (!file) {
-            setError("Bitte wählen Sie zuerst eine Datei aus")
-            return
-        }
-        
-        setUploading(true)
-        setError("")
-        
-        let createdCompanyId = null
-        
-        try {
-            // First create the company if it doesn't exist
-            let companyId = selectedCompanyId
-            
-            if (!companyId) {
-                // Create new company
-                const createRes = await fetch(`${API_URL}/companies/`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ name: companyQuery.trim() })
-                })
-                
-                if (!createRes.ok) {
-                    const errorData = await createRes.json().catch(() => ({}))
-                    throw new Error(errorData.detail || "Fehler beim Erstellen der Firma")
-                }
-                
-                const newCompany = await createRes.json()
-                companyId = newCompany.id
-                createdCompanyId = companyId // Track for rollback
-                setSelectedCompanyId(companyId)
-                setSelectedCompanyName(newCompany.name)
-            }
-            
-            // Upload the file
-            const formData = new FormData()
-            formData.append("file", file)
-            formData.append("company_id", String(companyId))
-            
-            const response = await fetch(`${API_URL}/upload-excel`, {
-                method: "POST",
-                body: formData,
-            })
-            
-            if (!response.ok) {
-                // Get detailed error message from backend
-                const errorData = await response.json().catch(() => ({}))
-                const errorMessage = errorData.detail || "Upload fehlgeschlagen"
-                throw new Error(errorMessage)
-            }
-            
-            const result = await response.json()
-            console.log("Upload erfolgreich:", result)
-            
-            // Close sidebar and show company
-            setSelectedCompany(companyId)
-            setSidebarOpen(false)
-            setNeedsUpload(false)
-            await getCompanies()
-            getCompanyData(companyId)
-        } catch (err) {
-            // Rollback: Delete the company if it was just created and upload failed
-            if (createdCompanyId) {
-                try {
-                    await fetch(`${API_URL}/companies/${createdCompanyId}`, {
-                        method: "DELETE",
-                    })
-                    console.log("Rollback: Firma wurde gelöscht aufgrund fehlgeschlagenem Upload")
-                    setSelectedCompanyId(null)
-                    setSelectedCompanyName("")
-                } catch (deleteErr) {
-                    console.error("Fehler beim Rollback:", deleteErr)
-                }
-            }
-            
-            // Show detailed error message
-            setError(err.message || "Fehler beim Hochladen der Datei")
-        } finally {
-            setUploading(false)
         }
     }
     
@@ -401,11 +303,9 @@ export default function Dashboard() {
             return
         }
         
-        // Beim Schließen: Reset alle Upload-States zum Neutral-Zustand
+        // Beim Schließen: Reset alle Sidebar-States zum Neutral-Zustand
         if (sidebarOpen) {
-            setNeedsUpload(false)
             setCompanyQuery("")
-            setFile(null)
             setError("")
             setCompanySuggestions([])
             setHighlightedIndex(-1)
@@ -908,116 +808,33 @@ export default function Dashboard() {
                             
                             <h2 className="text-xl font-bold mb-4">Firma auswählen</h2>
                             
-                            {!needsUpload ? (
-                                <>
-                                    {/* Company Input with Searchable Dropdown */}
-                                    <div className="space-y-3">
-                                        <label className="text-sm font-medium">
-                                            Firmenname
-                                        </label>
-                                        <CompanySearchSelect
-                                            value={companyQuery}
-                                            onValueChange={setCompanyQuery}
-                                            onCompanySelect={handleCompanySelectFromDropdown}
-                                            onCreateNew={handleCreateNewCompany}
-                                            variant="dark"
-                                        />
-                                        
-                                        <Button
-                                            onClick={handleCompanyCheck}
-                                            disabled={checking || !companyQuery.trim()}
-                                            className="w-full bg-blue-600 hover:bg-blue-700 text-white"
-                                        >
-                                            {checking ? (
-                                                <>
-                                                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                                                    Prüfe...
-                                                </>
-                                            ) : (
-                                                "Firma auswählen"
-                                            )}
-                                        </Button>
-                                    </div>
-                                </>
-                            ) : (
-                                <>
-                                    {/* Upload Section */}
-                                    <div className="space-y-4">
-                                        <p className="text-sm text-slate-300">
-                                            Firma "<strong>{companyQuery}</strong>" wurde nicht gefunden.
-                                        </p>
-                                        
-                                        {/* File Input */}
-                                        <div className="border-2 border-dashed border-slate-600 rounded-lg p-4 text-center hover:border-blue-400 transition-colors">
-                                            <input
-                                                type="file"
-                                                id="file-upload-dashboard"
-                                                accept=".xlsx,.xls"
-                                                onChange={handleFileChange}
-                                                className="hidden"
-                                            />
-                                            <label
-                                                htmlFor="file-upload-dashboard"
-                                                className="cursor-pointer flex flex-col items-center gap-3"
-                                            >
-                                                <div className="h-12 w-12 rounded-full bg-blue-900 flex items-center justify-center">
-                                                    <FileSpreadsheet className="h-6 w-6 text-blue-400" />
-                                                </div>
-                                                <div>
-                                                    <p className="text-sm font-semibold text-white">
-                                                        {file ? file.name : "Excel-Datei auswählen"}
-                                                    </p>
-                                                    <p className="text-xs text-slate-400 mt-1">
-                                                        .xlsx oder .xls
-                                                    </p>
-                                                </div>
-                                            </label>
-                                        </div>
-                                        
-                                        {file && !error && (
-                                            <div className="bg-green-900/30 border border-green-700 rounded-lg p-3 flex items-center gap-2">
-                                                <FileSpreadsheet className="h-4 w-4 text-green-400" />
-                                                <div className="flex-1">
-                                                    <p className="text-sm font-semibold text-green-300">{file.name}</p>
-                                                    <p className="text-xs text-green-400">
-                                                        {(file.size / 1024).toFixed(2)} KB
-                                                    </p>
-                                                </div>
-                                            </div>
-                                        )}
-                                        
-                                        <Button
-                                            onClick={handleUpload}
-                                            disabled={!file || uploading}
-                                            className="w-full bg-green-600 hover:bg-green-700 text-white"
-                                        >
-                                            {uploading ? (
-                                                <>
-                                                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                                                    Wird hochgeladen...
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <Upload className="h-4 w-4 mr-2" />
-                                                    Hochladen
-                                                </>
-                                            )}
-                                        </Button>
-                                        
-                                        <Button
-                                            onClick={() => {
-                                                setNeedsUpload(false)
-                                                setFile(null)
-                                                setError("")
-                                            }}
-                                            variant="outline"
-                                            className="w-full border-slate-600 text-slate-300 hover:bg-slate-700"
-                                        >
-                                            Zurück
-                                        </Button>
-                                    </div>
-                                </>
-                            )}
+                            <div className="space-y-3">
+                                <label className="text-sm font-medium">
+                                    Firmenname
+                                </label>
+                                <CompanySearchSelect
+                                    value={companyQuery}
+                                    onValueChange={setCompanyQuery}
+                                    onCompanySelect={handleCompanySelectFromDropdown}
+                                    onCreateNew={handleCreateNewCompany}
+                                    variant="dark"
+                                />
+                                
+                                <Button
+                                    onClick={handleCompanyCheck}
+                                    disabled={checking || !companyQuery.trim()}
+                                    className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                                >
+                                    {checking ? (
+                                        <>
+                                            <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                            Prüfe...
+                                        </>
+                                    ) : (
+                                        "Firma auswählen"
+                                    )}
+                                </Button>
+                            </div>
                             
                             {/* Error Message */}
                             {error && (

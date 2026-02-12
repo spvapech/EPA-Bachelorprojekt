@@ -1,5 +1,5 @@
-import { useState } from "react"
-import { useNavigate } from "react-router-dom"
+import { useEffect, useState } from "react"
+import { useLocation, useNavigate } from "react-router-dom"
 import { FileSpreadsheet, ArrowRight, Building2, Upload as UploadIcon, Loader2, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
@@ -20,9 +20,65 @@ export default function Welcome() {
     const [uploading, setUploading] = useState(false)
     const [checking, setChecking] = useState(null) // Index of company being checked
     const [deletingData, setDeletingData] = useState(null) // Index of company whose data is being deleted
+    const [deletingCompany, setDeletingCompany] = useState(null) // Index of company being deleted
     const [error, setError] = useState("")
     const [dragActive, setDragActive] = useState(null) // Index of active drag zone
     const navigate = useNavigate()
+    const location = useLocation()
+
+    useEffect(() => {
+        const prefillName = location.state?.prefillCompanyName
+        if (!prefillName) return
+
+        const trimmedName = String(prefillName).trim()
+        if (!trimmedName) return
+
+        setMode(1)
+        setCompanies((prev) => {
+            const next = [...prev]
+            next[0] = {
+                ...next[0],
+                companyQuery: trimmedName,
+                companyId: null,
+                selectedCompany: null,
+                existsInDB: false,
+                isChecked: false,
+                files: [],
+            }
+            return next
+        })
+    }, [location.state])
+
+    const getCompanyName = (company) => {
+        return (company.companyQuery || company.selectedCompany?.name || "").trim()
+    }
+
+    const buildSelectedCompanies = (list) => {
+        return list
+            .map((company) => {
+                const id = company.companyId
+                const name = getCompanyName(company)
+                if (!id || !name) return null
+                return { id, name }
+            })
+            .filter(Boolean)
+    }
+
+    const navigateToAnalysis = (selectedCompanies) => {
+        if (selectedCompanies.length === 1) {
+            navigate("/dashboard", {
+                state: {
+                    companyId: selectedCompanies[0].id,
+                    companyName: selectedCompanies[0].name,
+                },
+            })
+            return
+        }
+
+        if (selectedCompanies.length >= 2) {
+            navigate("/compare", { state: { companies: selectedCompanies } })
+        }
+    }
 
     // Update company state helper
     const updateCompany = (index, updates) => {
@@ -217,6 +273,60 @@ export default function Welcome() {
             setDeletingData(null)
         }
     }
+
+    const handleDeleteCompany = async (companyIndex) => {
+        const company = companies[companyIndex]
+
+        if (!company.companyId) {
+            setError("Keine Firma-ID gefunden")
+            return
+        }
+
+        const companyName = getCompanyName(company) || company.companyQuery
+        const confirmed = window.confirm(
+            `Möchten Sie wirklich die Firma "${companyName}" löschen?\n\nAlle Daten werden permanent gelöscht und können nicht wiederhergestellt werden.`
+        )
+
+        if (!confirmed) return
+
+        setDeletingCompany(companyIndex)
+        setError("")
+
+        try {
+            const dataResponse = await fetch(`${API_URL}/companies/${company.companyId}/data`, {
+                method: "DELETE",
+            })
+
+            if (!dataResponse.ok) {
+                const errorData = await dataResponse.json().catch(() => ({}))
+                throw new Error(errorData.detail || "Fehler beim Löschen der Firmendaten")
+            }
+
+            const companyResponse = await fetch(`${API_URL}/companies/${company.companyId}`, {
+                method: "DELETE",
+            })
+
+            if (!companyResponse.ok) {
+                const errorData = await companyResponse.json().catch(() => ({}))
+                throw new Error(errorData.detail || "Fehler beim Löschen der Firma")
+            }
+
+            updateCompany(companyIndex, {
+                companyQuery: "",
+                companyId: null,
+                selectedCompany: null,
+                files: [],
+                isChecked: false,
+                existsInDB: false,
+            })
+
+            setError("")
+        } catch (err) {
+            setError(err.message || "Fehler beim Löschen der Firma")
+        } finally {
+            setDeletingCompany(null)
+        }
+    }
     const handleUpload = async () => {
         // Validate that all active companies are checked
         const activeCompanies = companies.slice(0, mode)
@@ -239,16 +349,19 @@ export default function Welcome() {
 
         const createdCompanyIds = []
         const existingCompanyIds = []
+        const resolvedCompanies = []
 
         try {
             // Process each company
             for (let i = 0; i < activeCompanies.length; i++) {
                 const company = activeCompanies[i]
                 let finalCompanyId = company.companyId
+                const companyName = getCompanyName(company)
                 
                 // If company exists in DB, just track it
                 if (company.existsInDB) {
-                    existingCompanyIds.push({ id: finalCompanyId, name: company.companyQuery.trim() })
+                    existingCompanyIds.push({ id: finalCompanyId, name: companyName })
+                    resolvedCompanies.push({ id: finalCompanyId, name: companyName })
                     continue
                 }
                 
@@ -287,6 +400,8 @@ export default function Welcome() {
                         throw new Error(errorData.detail || `Upload fehlgeschlagen für Firma ${i + 1}, Datei ${fileIndex + 1}`)
                     }
                 }
+
+                resolvedCompanies.push({ id: finalCompanyId, name: companyName })
             }
 
             console.log("Alle Uploads erfolgreich")
@@ -294,15 +409,7 @@ export default function Welcome() {
             // Clear any previous errors
             setError("")
 
-            // TODO: Später aktivieren wenn Multi-Firma Dashboard bereit ist
-            // Navigate to dashboard with first company info
-            // const firstCompany = activeCompanies[0]
-            // navigate("/dashboard", { 
-            //     state: { 
-            //         companyId: firstCompany.companyId || createdCompanyIds[0], 
-            //         companyName: firstCompany.companyQuery.trim() 
-            //     } 
-            // })
+            navigateToAnalysis(resolvedCompanies)
         } catch (err) {
             // Rollback: Delete all created companies
             for (const companyId of createdCompanyIds) {
@@ -442,36 +549,67 @@ export default function Welcome() {
                                         
                                         {/* Button to replace existing company data */}
                                         {company.existsInDB && (
-                                            <Button
-                                                onClick={() => handleDeleteCompanyData(index)}
-                                                disabled={deletingData === index}
-                                                className="
-                                                    w-full
-                                                    bg-transparent hover:bg-transparent
-                                                    p-0 h-auto
-                                                    cursor-default
-                                                    active:scale-[0.99] transition-transform
-                                                    disabled:opacity-60 disabled:cursor-not-allowed
-                                                "
-                                                >
-                                                {deletingData === index ? (
-                                                    <span className="inline-flex items-center cursor-default">
-                                                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                                                    Lösche Daten...
-                                                    </span>
-                                                ) : (
-                                                    <span
+                                            <div className="flex flex-wrap items-center justify-center gap-6">
+                                                <Button
+                                                    onClick={() => handleDeleteCompanyData(index)}
+                                                    disabled={deletingData === index}
                                                     className="
-                                                        text-blue-400 underline underline-offset-4
-                                                        hover:text-blue-300
-                                                        cursor-pointer
-                                                        disabled:cursor-not-allowed
+                                                        bg-transparent hover:bg-transparent
+                                                        p-0 h-auto
+                                                        cursor-default
+                                                        active:scale-[0.99] transition-transform
+                                                        disabled:opacity-60 disabled:cursor-not-allowed
                                                     "
-                                                    >
-                                                    Neue Daten hochladen ?
-                                                    </span>
-                                                )}
+                                                >
+                                                    {deletingData === index ? (
+                                                        <span className="inline-flex items-center cursor-default">
+                                                            <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                                            Lösche Daten...
+                                                        </span>
+                                                    ) : (
+                                                        <span
+                                                            className="
+                                                                text-blue-400 underline underline-offset-4
+                                                                hover:text-blue-300
+                                                                cursor-pointer
+                                                                disabled:cursor-not-allowed
+                                                            "
+                                                        >
+                                                            Neue Daten hochladen ?
+                                                        </span>
+                                                    )}
                                                 </Button>
+
+                                                <Button
+                                                    onClick={() => handleDeleteCompany(index)}
+                                                    disabled={deletingCompany === index}
+                                                    className="
+                                                        bg-transparent hover:bg-transparent
+                                                        p-0 h-auto
+                                                        cursor-default
+                                                        active:scale-[0.99] transition-transform
+                                                        disabled:opacity-60 disabled:cursor-not-allowed
+                                                    "
+                                                >
+                                                    {deletingCompany === index ? (
+                                                        <span className="inline-flex items-center cursor-default">
+                                                            <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                                            Lösche Firma...
+                                                        </span>
+                                                    ) : (
+                                                        <span
+                                                            className="
+                                                                text-red-400 underline underline-offset-4
+                                                                hover:text-red-300
+                                                                cursor-pointer
+                                                                disabled:cursor-not-allowed
+                                                            "
+                                                        >
+                                                            Firma "{getCompanyName(company)}" löschen ?
+                                                        </span>
+                                                    )}
+                                                </Button>
+                                            </div>
 
                                             
                                         )}
@@ -582,7 +720,7 @@ export default function Welcome() {
                                         // TODO: Navigate to analysis with multiple companies
                                         //alert(`✅ ${activeCompanies.length} bestehende Firma(en) ausgewählt!\n\nWeiterleitung zur Analyse wird später implementiert.`)
 
-                                        navigate("/compare", { state: { companies: activeCompanies } })
+                                        navigateToAnalysis(buildSelectedCompanies(activeCompanies))
                                     }}
                                     className="w-full h-14 rounded-full text-lg font-semibold cursor-pointer bg-green-600 hover:bg-green-700"
                                     size="lg"

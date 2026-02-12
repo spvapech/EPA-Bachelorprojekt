@@ -10,6 +10,16 @@ supabase = get_supabase_client()
 class CompanyCreate(BaseModel):
     name: str
 
+
+def normalize_company_name(raw_name: str) -> str:
+    trimmed = raw_name.strip()
+    if not trimmed:
+        return trimmed
+    first = trimmed[0]
+    if first.isalpha() and first.islower():
+        return f"{first.upper()}{trimmed[1:]}"
+    return trimmed
+
 @router.get("/companies/search")
 def search_companies(q: str = Query(..., min_length=1)):
     # Vorschläge aus DB, case-insensitive, enthält-suche
@@ -413,11 +423,13 @@ def create_company(company: CompanyCreate):
     Creates a new company in the database.
     Returns the created company with its ID.
     """
+    normalized_name = normalize_company_name(company.name)
+
     # Check if company already exists
     existing = (
         supabase.table("companies")
         .select("id,name")
-        .ilike("name", company.name)
+        .ilike("name", normalized_name)
         .execute()
     )
     
@@ -428,7 +440,7 @@ def create_company(company: CompanyCreate):
     # Create new company
     result = (
         supabase.table("companies")
-        .insert({"name": company.name})
+        .insert({"name": normalized_name})
         .execute()
     )
     
