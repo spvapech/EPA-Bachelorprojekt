@@ -257,7 +257,7 @@ export const TopicOverviewCard = memo(function TopicOverviewCard({ companyId = 1
                             size="sm"
                             className={`flex-1 ${
                                 sourceFilter === 'candidates' 
-                                    ? 'bg-blue-500 text-white hover:bg-blue-600 border-blue-500' 
+                                    ? 'bg-green-500 text-white hover:bg-green-600 border-green-500' 
                                     : 'hover:bg-slate-100'
                             }`}
                         >

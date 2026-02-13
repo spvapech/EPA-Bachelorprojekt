@@ -1069,7 +1069,7 @@ export const exportKPIsAsPDF = async (kpiData) => {
 // ─── FIRMENVERGLEICH PDF-EXPORT ─────────────────────────────────────────────
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const COMPARE_COLORS = [
+const COMPARE_COLORS_DEFAULT = [
     [59, 130, 246],   // blue-500
     [245, 158, 11],   // amber-500
     [16, 185, 129],   // emerald-500
@@ -1082,7 +1082,19 @@ export const exportCompareAsPDF = async (compareData) => {
         barChartElement = null,
         timelineChartElement = null,
         categoryData = [],    // [{ category, ...companyValues }]
+        companyColors = null,  // Optional: [hex strings] - custom colors per company
     } = compareData;
+
+    // Use custom colors or fall back to defaults
+    const hexToRgb = (hex) => {
+        const r = parseInt(hex.slice(1, 3), 16);
+        const g = parseInt(hex.slice(3, 5), 16);
+        const b = parseInt(hex.slice(5, 7), 16);
+        return [r, g, b];
+    };
+    const COMPARE_COLORS = companyColors
+        ? companyColors.map(hex => hexToRgb(hex))
+        : COMPARE_COLORS_DEFAULT;
 
     const companyNames = companies.map(c => c.name || 'Unbekannt');
     const titleLabel = companyNames.join(' vs. ');

@@ -786,8 +786,8 @@ export default function Dashboard() {
         <div className="min-h-screen bg-slate-50">
             <div className="flex">
                 {/* Sidebar - Fixed Overlay */}
-                <aside className={`fixed left-0 top-0 bg-gradient-to-b from-slate-900 to-slate-800 text-white transition-all duration-300 min-h-screen z-50 ${sidebarOpen ? 'w-[400px]' : 'w-[92px]'}`}>
-                    <div className="h-16 flex items-center justify-center">
+                <aside className={`fixed left-0 top-0 text-white min-h-screen z-50 ${sidebarOpen ? 'w-[400px]' : 'w-[92px]'}`} style={{ background: 'linear-gradient(to bottom, #05223e, #0a3158)', transition: 'width 400ms cubic-bezier(0.4, 0, 0.2, 1)' }}>
+                    <div className={`h-16 flex items-center ${sidebarOpen ? 'pl-[330px]' : 'justify-center'}`}>
                         <button 
                             onClick={handleSidebarToggle}
                             className="h-10 w-10 rounded-xl bg-white/10 flex items-center justify-center hover:bg-white/20 transition-colors"
@@ -797,9 +797,9 @@ export default function Dashboard() {
                     </div>
 
                     {sidebarOpen && (
-                        <div className="px-6 py-4">
+                        <div className="px-6 py-4 animate-in fade-in slide-in-from-left-4 duration-300" style={{ animationDelay: '150ms', animationFillMode: 'backwards' }}>
                             {/* Greeting Section */}
-                            <div className="mb-6 pb-4 border-b border-slate-700">
+                            <div className="mb-6 pb-4 border-b border-[#026fb6]/30">
                                 <h1 className="text-2xl font-bold mb-2">AGB-Analysis</h1>
                                 <p className="text-sm text-slate-300">
                                     Wählen Sie eine Firma aus, um die Analyse zu starten.
@@ -823,7 +823,7 @@ export default function Dashboard() {
                                 <Button
                                     onClick={handleCompanyCheck}
                                     disabled={checking || !companyQuery.trim()}
-                                    className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                                    className="w-full bg-[#026fb6] hover:bg-[#025a94] text-white"
                                 >
                                     {checking ? (
                                         <>
@@ -845,13 +845,15 @@ export default function Dashboard() {
                         </div>
                     )}
 
-                    <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex flex-col gap-4">
+                    <div className="absolute bottom-6 left-1/2 -translate-x-1/2">
+                        <div className="relative" style={{ width: sidebarOpen ? '182px' : '56px', height: sidebarOpen ? '56px' : '182px', transition: 'width 400ms cubic-bezier(0.4,0,0.2,1), height 400ms cubic-bezier(0.4,0,0.2,1)' }}>
                         <button
                             onClick={() => navigate("/welcome")}
-                            className="group relative h-14 w-14 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 flex items-center justify-center border border-blue-400 hover:border-blue-300 transition-all duration-200 shadow-lg hover:shadow-xl cursor-pointer transform hover:scale-105"
+                            className="absolute group h-14 w-14 rounded-2xl bg-gradient-to-br from-[#026fb6] to-[#025a94] hover:from-[#0380d0] hover:to-[#026fb6] flex items-center justify-center border border-[#026fb6]/60 hover:border-[#026fb6] shadow-lg hover:shadow-xl cursor-pointer hover:scale-105"
+                            style={{ top: 0, left: 0, transition: 'transform 300ms cubic-bezier(0.4,0,0.2,1), top 300ms cubic-bezier(0.4,0,0.2,1), left 300ms cubic-bezier(0.4,0,0.2,1)' }}
                             title="Zur Startseite"
                         >
-                            <Home className="h-7 w-7 text-white group-hover:animate-bounce" />
+                            <Home className="h-7 w-7 text-white" />
                         </button>
                         <button
                             onClick={() => {
@@ -861,38 +863,41 @@ export default function Dashboard() {
                                 }
                                 navigate("/compare", { state: { companies } })
                             }}
-                            className="group relative h-14 w-14 rounded-2xl bg-gradient-to-br from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 flex items-center justify-center border border-purple-400 hover:border-purple-300 transition-all duration-200 shadow-lg hover:shadow-xl cursor-pointer transform hover:scale-105"
+                            className="absolute group h-14 w-14 rounded-2xl bg-gradient-to-br from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 flex items-center justify-center border border-purple-400 hover:border-purple-300 shadow-lg hover:shadow-xl cursor-pointer hover:scale-105"
+                            style={{ top: sidebarOpen ? 0 : 63, left: sidebarOpen ? 63 : 0, transition: 'top 400ms cubic-bezier(0.4,0,0.2,1), left 400ms cubic-bezier(0.4,0,0.2,1)' }}
                             title="Firmenvergleich"
                         >
-                            <GitCompareArrows className="h-7 w-7 text-white group-hover:animate-bounce" />
+                            <GitCompareArrows className="h-7 w-7 text-white" />
                         </button>
                         <button
                             onClick={handleExportPDF}
                             disabled={exportingPDF}
-                            className={`group relative h-14 w-14 rounded-2xl flex items-center justify-center border transition-all duration-200 shadow-lg cursor-pointer ${
+                            className={`absolute group h-14 w-14 rounded-2xl flex items-center justify-center border shadow-lg cursor-pointer ${
                                 exportingPDF 
                                     ? 'bg-gray-400 border-gray-300 cursor-not-allowed' 
-                                    : 'bg-gradient-to-br from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 border-blue-400 hover:border-blue-300 hover:shadow-xl transform hover:scale-105'
+                                    : 'bg-gradient-to-br from-[#026fb6] to-[#025a94] hover:from-[#0380d0] hover:to-[#026fb6] border-[#026fb6]/60 hover:border-[#026fb6] hover:shadow-xl hover:scale-105'
                             }`}
+                            style={{ top: sidebarOpen ? 0 : 126, left: sidebarOpen ? 126 : 0, transition: 'top 400ms cubic-bezier(0.4,0,0.2,1), left 400ms cubic-bezier(0.4,0,0.2,1)' }}
                             title={exportingPDF ? "PDF wird erstellt..." : "KPIs als PDF exportieren"}
                         >
                             {exportingPDF ? (
                                 <Loader2 className="h-7 w-7 text-white animate-spin" />
                             ) : (
                                 <>
-                                    <Download className="h-7 w-7 text-white group-hover:animate-bounce" />
+                                    <Download className="h-7 w-7 text-white" />
                                     <span className="absolute -right-1 -top-1 flex h-3 w-3">
-                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-                                        <span className="relative inline-flex rounded-full h-3 w-3 bg-blue-500"></span>
+                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#026fb6] opacity-75"></span>
+                                        <span className="relative inline-flex rounded-full h-3 w-3 bg-[#026fb6]"></span>
                                     </span>
                                 </>
                             )}
                         </button>
+                        </div>
                     </div>
                 </aside>
 
                 {/* Main - mit left padding wenn sidebar geschlossen */}
-                <main className={`flex-1 px-8 py-6 transition-all duration-300 ${sidebarOpen ? '' : 'ml-[92px]'}`}>
+                <main className={`flex-1 px-8 py-6 ${sidebarOpen ? '' : 'ml-[92px]'}`} style={{ transition: 'margin-left 400ms cubic-bezier(0.4, 0, 0.2, 1)' }}>
                     {/* Top header */}
                     <div className="flex items-start justify-between gap-6">
                         <div>

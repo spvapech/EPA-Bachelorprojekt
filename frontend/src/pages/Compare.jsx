@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { useLocation, useNavigate } from "react-router-dom"
 import {
     BarChart,
@@ -17,18 +17,28 @@ import {
     PolarAngleAxis,
     PolarRadiusAxis,
 } from "recharts"
-import { Building2, Plus, X, ArrowLeft, Loader2, TrendingUp, TrendingDown, Minus, AlertTriangle, ThumbsDown, Download } from "lucide-react"
+import { Building2, Plus, X, ArrowLeft, Loader2, TrendingUp, TrendingDown, Minus, AlertTriangle, ThumbsDown, Download, Palette } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { CompanySearchSelect } from "@/components/CompanySearchSelect"
 import { exportCompareAsPDF } from "@/utils/pdfExport"
 import { API_URL } from "../config"
 
-// Colors for up to 3 companies
-const COMPANY_COLORS = ["#3b82f6", "#f59e0b", "#10b981"] // blue, amber, green
-const COMPANY_BG = ["bg-blue-50", "bg-amber-50", "bg-emerald-50"]
-const COMPANY_BORDER = ["border-blue-200", "border-amber-200", "border-emerald-200"]
-const COMPANY_TEXT = ["text-blue-700", "text-amber-700", "text-emerald-700"]
+// Color palette for company selection
+const COLOR_PALETTE = [
+    { hex: "#3b82f6", label: "Blau",    bg: "bg-blue-50",    border: "border-blue-200",    text: "text-blue-700" },
+    { hex: "#f59e0b", label: "Amber",   bg: "bg-amber-50",   border: "border-amber-200",   text: "text-amber-700" },
+    { hex: "#10b981", label: "Grün",    bg: "bg-emerald-50", border: "border-emerald-200", text: "text-emerald-700" },
+    { hex: "#ef4444", label: "Rot",     bg: "bg-red-50",     border: "border-red-200",     text: "text-red-700" },
+    { hex: "#8b5cf6", label: "Violett", bg: "bg-violet-50",  border: "border-violet-200",  text: "text-violet-700" },
+    { hex: "#ec4899", label: "Pink",    bg: "bg-pink-50",    border: "border-pink-200",    text: "text-pink-700" },
+    { hex: "#06b6d4", label: "Cyan",    bg: "bg-cyan-50",    border: "border-cyan-200",    text: "text-cyan-700" },
+    { hex: "#f97316", label: "Orange",  bg: "bg-orange-50",  border: "border-orange-200",  text: "text-orange-700" },
+    { hex: "#14b8a6", label: "Teal",    bg: "bg-teal-50",    border: "border-teal-200",    text: "text-teal-700" },
+    { hex: "#6366f1", label: "Indigo",  bg: "bg-indigo-50",  border: "border-indigo-200",  text: "text-indigo-700" },
+]
+
+const DEFAULT_COLOR_INDICES = [0, 1, 2] // blue, amber, green
 
 const CATEGORY_LABELS = {
     avg_arbeitsatmosphaere: "Arbeitsatmosphäre",
@@ -52,20 +62,37 @@ const ComparePage = () => {
     const location = useLocation()
     const navigate = useNavigate()
 
-    // Each slot: { id, name, query }
+    // Each slot: { id, name, query, colorIndex }
     const initialCompanies = location.state?.companies ?? []
     const [slots, setSlots] = useState(() => {
-        const initial = initialCompanies.map((c) => ({
+        const initial = initialCompanies.map((c, i) => ({
             id: c.id != null ? String(c.id) : null,
             name: c.name ?? "",
             query: c.name ?? "",
+            colorIndex: DEFAULT_COLOR_INDICES[i] ?? i % COLOR_PALETTE.length,
         }))
         // Always start with at least 2 slots
         while (initial.length < 2) {
-            initial.push({ id: null, name: "", query: "" })
+            initial.push({ id: null, name: "", query: "", colorIndex: DEFAULT_COLOR_INDICES[initial.length] ?? initial.length % COLOR_PALETTE.length })
         }
         return initial
     })
+
+    // Color picker popover state
+    const [colorPickerSlot, setColorPickerSlot] = useState(null)
+    const colorPickerRef = useRef(null)
+
+    // Close color picker when clicking outside
+    useEffect(() => {
+        if (colorPickerSlot === null) return
+        const handleClickOutside = (e) => {
+            if (colorPickerRef.current && !colorPickerRef.current.contains(e.target)) {
+                setColorPickerSlot(null)
+            }
+        }
+        document.addEventListener('mousedown', handleClickOutside)
+        return () => document.removeEventListener('mousedown', handleClickOutside)
+    }, [colorPickerSlot])
 
     // Per-company data keyed by company id
     const [companyData, setCompanyData] = useState({})
@@ -91,6 +118,7 @@ const ComparePage = () => {
         setSlots((prev) => {
             const next = [...prev]
             next[index] = {
+                ...next[index],
                 id: String(company.id),
                 name: company.name,
                 query: company.name,
@@ -107,7 +135,7 @@ const ComparePage = () => {
                 next.splice(index, 1)
             } else {
                 // Just clear the slot
-                next[index] = { id: null, name: "", query: "" }
+                next[index] = { ...next[index], id: null, name: "", query: "" }
             }
             return next
         })
@@ -115,8 +143,26 @@ const ComparePage = () => {
 
     const addSlot = () => {
         if (slots.length >= MAX_COMPANIES) return
-        setSlots((prev) => [...prev, { id: null, name: "", query: "" }])
+        setSlots((prev) => {
+            // Pick a color not already used
+            const usedColors = prev.map(s => s.colorIndex)
+            const available = DEFAULT_COLOR_INDICES.find(ci => !usedColors.includes(ci)) 
+                ?? COLOR_PALETTE.findIndex((_, i) => !usedColors.includes(i))
+            return [...prev, { id: null, name: "", query: "", colorIndex: available >= 0 ? available : prev.length }]
+        })
     }
+
+    const updateSlotColor = (slotIndex, newColorIndex) => {
+        setSlots((prev) => {
+            const next = [...prev]
+            next[slotIndex] = { ...next[slotIndex], colorIndex: newColorIndex }
+            return next
+        })
+        setColorPickerSlot(null)
+    }
+
+    // Helper to get color info for a slot
+    const getSlotColor = (slotIndex) => COLOR_PALETTE[slots[slotIndex]?.colorIndex ?? 0] || COLOR_PALETTE[0]
 
     // ---------- Data fetching ----------
     const fetchCompanyData = useCallback(async (companyId) => {
@@ -382,8 +428,12 @@ const ComparePage = () => {
                 }
             })
 
+            // Pass selected colors to PDF export
+            const companyColors = activeSlots.map(slot => COLOR_PALETTE[slot.colorIndex]?.hex || '#3b82f6')
+
             await exportCompareAsPDF({
                 companies,
+                companyColors,
                 radarChartElement: document.getElementById('compare-radar-chart-export'),
                 barChartElement: document.getElementById('compare-bar-chart-export'),
                 timelineChartElement: document.getElementById('compare-timeline-chart-export'),
@@ -399,38 +449,46 @@ const ComparePage = () => {
     return (
         <div className="min-h-screen bg-slate-50">
             {/* Header */}
-            <div className="bg-white border-b px-6 py-4 flex items-center gap-4 sticky top-0 z-30">
+            <div className="px-6 py-4 flex items-center gap-4 sticky top-0 z-30 text-white" style={{ background: 'linear-gradient(to right, #05223e, #0a3158)' }}>
                 <Button
                     variant="ghost"
                     size="icon"
                     onClick={() => navigate(-1)}
-                    className="shrink-0"
+                    className="shrink-0 text-white hover:bg-white/10"
                 >
                     <ArrowLeft className="h-5 w-5" />
                 </Button>
                 <div className="flex-1">
-                    <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">
+                    <h1 className="text-2xl font-extrabold tracking-tight text-white">
                         Firmenvergleich
                     </h1>
-                    <p className="text-sm text-slate-500">
+                    <p className="text-sm text-slate-300">
                         Vergleichen Sie bis zu {MAX_COMPANIES} Firmen nebeneinander
                     </p>
                 </div>
                 {activeSlots.length >= 2 && (
-                    <Button
-                        variant="outline"
-                        size="sm"
+                    <button
                         onClick={handleExportPDF}
                         disabled={exporting}
-                        className="shrink-0 gap-2"
+                        className={`shrink-0 relative group h-14 w-14 rounded-2xl flex items-center justify-center border shadow-lg cursor-pointer ${
+                            exporting 
+                                ? 'bg-gray-400 border-gray-300 cursor-not-allowed' 
+                                : 'bg-gradient-to-br from-[#026fb6] to-[#025a94] hover:from-[#0380d0] hover:to-[#026fb6] border-[#026fb6]/60 hover:border-[#026fb6] hover:shadow-xl hover:scale-105'
+                        }`}
+                        title={exporting ? "PDF wird erstellt..." : "Vergleich als PDF exportieren"}
                     >
                         {exporting ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
+                            <Loader2 className="h-7 w-7 text-white animate-spin" />
                         ) : (
-                            <Download className="h-4 w-4" />
+                            <>
+                                <Download className="h-7 w-7 text-white" />
+                                <span className="absolute -right-1 -top-1 flex h-3 w-3">
+                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#026fb6] opacity-75"></span>
+                                    <span className="relative inline-flex rounded-full h-3 w-3 bg-[#026fb6]"></span>
+                                </span>
+                            </>
                         )}
-                        {exporting ? 'Exportiert...' : 'PDF Export'}
-                    </Button>
+                    </button>
                 )}
             </div>
 
@@ -444,22 +502,52 @@ const ComparePage = () => {
                     </CardHeader>
                     <CardContent>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            {slots.map((slot, index) => (
+                            {slots.map((slot, index) => {
+                                const color = getSlotColor(index)
+                                return (
                                 <div
                                     key={index}
                                     className={`relative rounded-xl border-2 p-4 transition-all ${
                                         slot.id
-                                            ? `${COMPANY_BG[index]} ${COMPANY_BORDER[index]}`
+                                            ? `${color.bg} ${color.border}`
                                             : "border-dashed border-slate-300 bg-white"
                                     }`}
                                 >
-                                    {/* Color indicator */}
+                                    {/* Color indicator + picker */}
                                     <div className="flex items-center gap-2 mb-3">
-                                        <div
-                                            className="w-3 h-3 rounded-full shrink-0"
-                                            style={{ backgroundColor: COMPANY_COLORS[index] }}
-                                        />
-                                        <span className={`text-sm font-semibold ${COMPANY_TEXT[index]}`}>
+                                        <div className="relative" ref={colorPickerSlot === index ? colorPickerRef : null}>
+                                            <button
+                                                onClick={() => setColorPickerSlot(colorPickerSlot === index ? null : index)}
+                                                className="w-5 h-5 rounded-full shrink-0 ring-2 ring-white shadow-sm hover:scale-110 transition-transform cursor-pointer"
+                                                style={{ backgroundColor: color.hex }}
+                                                title="Farbe ändern"
+                                            />
+                                            {/* Color picker popover */}
+                                            {colorPickerSlot === index && (
+                                                <div className="absolute top-7 left-0 z-50 bg-white rounded-xl shadow-xl border border-slate-200 p-2 flex gap-1.5 flex-wrap w-[160px] animate-in fade-in zoom-in-95 duration-150">
+                                                    {COLOR_PALETTE.map((c, ci) => {
+                                                        const usedByOther = slots.some((s, si) => si !== index && s.colorIndex === ci)
+                                                        return (
+                                                            <button
+                                                                key={ci}
+                                                                onClick={() => !usedByOther && updateSlotColor(index, ci)}
+                                                                disabled={usedByOther}
+                                                                className={`w-7 h-7 rounded-full transition-all ${
+                                                                    slot.colorIndex === ci 
+                                                                        ? 'ring-2 ring-offset-1 ring-slate-800 scale-110' 
+                                                                        : usedByOther
+                                                                        ? 'opacity-25 cursor-not-allowed'
+                                                                        : 'hover:scale-110 cursor-pointer'
+                                                                }`}
+                                                                style={{ backgroundColor: c.hex }}
+                                                                title={usedByOther ? `${c.label} (vergeben)` : c.label}
+                                                            />
+                                                        )
+                                                    })}
+                                                </div>
+                                            )}
+                                        </div>
+                                        <span className={`text-sm font-semibold ${color.text}`}>
                                             Firma {index + 1}
                                         </span>
                                         {slot.id && (
@@ -494,13 +582,14 @@ const ComparePage = () => {
                                         />
                                     )}
                                 </div>
-                            ))}
+                                )
+                            })}
 
                             {/* Add slot button */}
                             {slots.length < MAX_COMPANIES && (
                                 <button
                                     onClick={addSlot}
-                                    className="flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-300 p-4 text-slate-400 hover:text-slate-600 hover:border-slate-400 transition-colors min-h-[100px]"
+                                    className="flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-[#026fb6]/30 p-4 text-[#026fb6]/50 hover:text-[#026fb6] hover:border-[#026fb6]/60 transition-colors min-h-[100px]"
                                 >
                                     <Plus className="h-6 w-6" />
                                     <span className="text-sm font-medium">Firma hinzufügen</span>
@@ -543,7 +632,7 @@ const ComparePage = () => {
                                                         className="w-2.5 h-2.5 rounded-full"
                                                         style={{
                                                             backgroundColor:
-                                                                COMPANY_COLORS[i],
+                                                                COLOR_PALETTE[slot.colorIndex]?.hex,
                                                         }}
                                                     />
                                                     <span className="text-sm font-medium text-slate-700 truncate max-w-[120px]">
@@ -589,7 +678,7 @@ const ComparePage = () => {
                                                         className="w-2.5 h-2.5 rounded-full"
                                                         style={{
                                                             backgroundColor:
-                                                                COMPANY_COLORS[i],
+                                                                COLOR_PALETTE[slot.colorIndex]?.hex,
                                                         }}
                                                     />
                                                     <span className="text-sm font-medium text-slate-700 truncate max-w-[120px]">
@@ -651,7 +740,7 @@ const ComparePage = () => {
                                                         className="w-2.5 h-2.5 rounded-full shrink-0"
                                                         style={{
                                                             backgroundColor:
-                                                                COMPANY_COLORS[i],
+                                                                COLOR_PALETTE[slot.colorIndex]?.hex,
                                                         }}
                                                     />
                                                     <span className="text-sm font-medium text-slate-700 truncate max-w-[80px]">
@@ -694,7 +783,7 @@ const ComparePage = () => {
                                                         className="w-2.5 h-2.5 rounded-full shrink-0"
                                                         style={{
                                                             backgroundColor:
-                                                                COMPANY_COLORS[i],
+                                                                COLOR_PALETTE[slot.colorIndex]?.hex,
                                                         }}
                                                     />
                                                     <span className="text-sm font-medium text-slate-700 truncate max-w-[80px]">
@@ -742,8 +831,8 @@ const ComparePage = () => {
                                                     key={slot.id}
                                                     name={slot.name}
                                                     dataKey={slot.name}
-                                                    stroke={COMPANY_COLORS[i]}
-                                                    fill={COMPANY_COLORS[i]}
+                                                    stroke={COLOR_PALETTE[slot.colorIndex]?.hex}
+                                                    fill={COLOR_PALETTE[slot.colorIndex]?.hex}
                                                     fillOpacity={0.15}
                                                     strokeWidth={2}
                                                 />
@@ -797,7 +886,7 @@ const ComparePage = () => {
                                                 <Bar
                                                     key={slot.id}
                                                     dataKey={slot.name}
-                                                    fill={COMPANY_COLORS[i]}
+                                                    fill={COLOR_PALETTE[slot.colorIndex]?.hex}
                                                     radius={[0, 4, 4, 0]}
                                                     barSize={activeSlots.length > 2 ? 8 : 12}
                                                 />
@@ -849,7 +938,7 @@ const ComparePage = () => {
                                                     key={slot.id}
                                                     type="monotone"
                                                     dataKey={slot.name}
-                                                    stroke={COMPANY_COLORS[i]}
+                                                    stroke={COLOR_PALETTE[slot.colorIndex]?.hex}
                                                     strokeWidth={2.5}
                                                     dot={{ r: 3 }}
                                                     activeDot={{ r: 5 }}
@@ -887,7 +976,7 @@ const ComparePage = () => {
                                                             className="w-2.5 h-2.5 rounded-full"
                                                             style={{
                                                                 backgroundColor:
-                                                                    COMPANY_COLORS[i],
+                                                                    COLOR_PALETTE[slot.colorIndex]?.hex,
                                                             }}
                                                         />
                                                         <span className="truncate max-w-[100px]">
