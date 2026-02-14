@@ -6,6 +6,7 @@ Supports both lexicon-based and transformer-based approaches.
 
 from typing import Dict, Any, List, Optional
 import logging
+import re
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -15,35 +16,38 @@ logger = logging.getLogger(__name__)
 class SentimentAnalyzer:
     """
     Sentiment analyzer for German text supporting multiple approaches:
-    - lexicon: Rule-based approach with predefined word lists (fast, no dependencies)
-    - transformer: ML-based approach using German BERT models (accurate, requires transformers)
+    - transformer: ML-based approach using German BERT models (accurate, primary mode)
+    - lexicon: Rule-based approach with predefined word lists (fast, fallback/reserve)
     """
     
-    def __init__(self, mode: str = "lexicon"):
+    def __init__(self, mode: str = "transformer"):
         """
         Initialize the sentiment analyzer.
         
         Args:
-            mode: Analysis mode - either "lexicon" (default) or "transformer"
+            mode: Analysis mode - either "transformer" (default, primary) or "lexicon" (fallback/reserve)
         """
         self.mode = mode
         self._transformer_pipeline = None
         self._transformer_available = False
         
-        # Initialize lexicon-based components
+        # Always initialize lexicon as fallback/reserve
         self._init_lexicon()
         
-        # Initialize transformer if requested
+        # Initialize transformer (primary mode)
         if mode == "transformer":
             try:
                 self._init_transformer()
                 self._transformer_available = True
+                logger.info("Transformer mode initialized as primary analyzer.")
             except Exception as e:
                 logger.warning(
                     f"Could not initialize transformer mode: {e}. "
-                    "Falling back to lexicon mode."
+                    "Falling back to lexicon (reserve) mode."
                 )
                 self.mode = "lexicon"
+        else:
+            logger.info("Using lexicon (reserve) mode explicitly.")
     
     def _init_lexicon(self):
         """
@@ -120,6 +124,44 @@ class SentimentAnalyzer:
             'nicht', 'kein', 'keine', 'keiner', 'keines', 'nie', 'niemals',
             'nimmer', 'nirgends', 'nichts', 'kaum', 'wenig'
         }
+        
+        # Neutral/mixed indicator patterns (regex)
+        # These phrases signal neutral or mixed sentiment even when
+        # individual words may carry positive or negative weight
+        self._neutral_patterns = [
+            r'\bnicht\s+schlecht\b',           # "nicht schlecht" = neutral
+            r'\bnicht\s+besonders\b',          # "nicht besonders" = neutral
+            r'\bes\s+ist\s+okay\b',            # "es ist okay" = neutral
+            r'\bgeht\s+so\b',                  # "geht so" = neutral
+            r'\bnichts\s+besonderes\b',        # "nichts besonderes" = neutral
+            r'\bnichts\s+besonders\b',         # variant
+            r'\bkönnte\s+besser\b',            # "könnte besser" = mixed
+            r'\bkönnte\s+schlimmer\b',         # "könnte schlimmer" = mixed
+            r'\bganz\s+okay\b',                # "ganz okay" = neutral
+            r'\bganz\s+in\s+ordnung\b',        # "ganz in ordnung" = neutral
+            r'\bmal\s+so\s+mal\s+so\b',       # "mal so mal so" = neutral
+            r'\bdurchschnitt',                   # "durchschnittlich" = neutral
+            r'\bmittelmäßig\b',                 # middling
+            r'\bin\s+ordnung\b',               # "in ordnung" = neutral
+            r'\bnaja\b',                        # "naja" = mixed
+            r'\bsolide\b',                      # "solide" = neutral-positive
+            r'\bakzeptabel\b',                  # acceptable
+        ]
+        self._compiled_neutral_patterns = [
+            re.compile(p, re.IGNORECASE) for p in self._neutral_patterns
+        ]
+        
+        # Negation-positive patterns: negated negative = neutral/positive
+        self._negated_negative_patterns = [
+            r'\bnicht\s+schlecht\b',
+            r'\bnicht\s+schlimm\b',
+            r'\bnicht\s+übel\b',
+            r'\bkein\w*\s+problem\b',
+            r'\bkein\w*\s+beschwerde\b',
+        ]
+        self._compiled_negated_negative = [
+            re.compile(p, re.IGNORECASE) for p in self._negated_negative_patterns
+        ]
     
     def _init_transformer(self):
         """Initialize transformer-based sentiment analysis."""
@@ -173,11 +215,32 @@ class SentimentAnalyzer:
             logger.error(f"Error loading transformer model: {e}")
             raise
     
+    def _has_neutral_indicators(self, text: str) -> bool:
+        """Check if text contains neutral/mixed sentiment indicator phrases."""
+        for pattern in self._compiled_neutral_patterns:
+            if pattern.search(text):
+                return True
+        return False
+    
+    def _has_negated_negative(self, text: str) -> bool:
+        """Check if text contains negated negative phrases (e.g. 'nicht schlecht')."""
+        for pattern in self._compiled_negated_negative:
+            if pattern.search(text):
+                return True
+        return False
+    
     def _analyze_with_transformer(self, text: str, star_rating: Optional[float] = None) -> Dict[str, Any]:
         """
-        Analyze sentiment using transformer model.
+        Analyze sentiment using transformer model with hybrid lexicon validation.
         
-        Version 2.1: Added adaptive neutral threshold and optional star_rating hint.
+        Version 2.2: Hybrid approach — uses lexicon as correction layer to fix
+        the transformer's negative bias on neutral/mixed German texts.
+        
+        Strategy:
+        1. Get transformer prediction
+        2. Detect neutral indicator phrases (pattern-based)
+        3. Cross-validate with lexicon when transformer and patterns disagree
+        4. Apply adaptive neutral zone
         
         Args:
             text: Input text to analyze
@@ -198,20 +261,18 @@ class SentimentAnalyzer:
             }
         
         try:
-            # Get predictions from model
-            results = self._transformer_pipeline(text[:512])[0]  # Limit to 512 chars
+            # Step 1: Get transformer prediction
+            results = self._transformer_pipeline(text[:512])[0]
             
-            # Model returns: [{'label': 'positive', 'score': 0.99}, {...}]
-            # Find the label with highest score
             best_result = max(results, key=lambda x: x['score'])
             label = best_result['label'].lower()
             confidence = best_result['score']
             
-            # Version 2.1: Adaptive neutral threshold
-            # Based on analysis: many 2-3 star reviews are incorrectly classified
-            # New approach: Use confidence-based neutral zone
-            neutral_threshold_low = -0.15
-            neutral_threshold_high = 0.15
+            # Get all scores for comparison
+            score_map = {r['label'].lower(): r['score'] for r in results}
+            pos_score = score_map.get('positive', 0.0)
+            neg_score = score_map.get('negative', 0.0)
+            neu_score = score_map.get('neutral', 0.0)
             
             # Map to our format
             sentiment_map = {
@@ -224,37 +285,86 @@ class SentimentAnalyzer:
                 label, 
                 ('neutral', 0.0)
             )
-            
-            # Polarity is scaled by confidence
             polarity = polarity_base * confidence
             
-            # Version 2.1: Apply adaptive neutral threshold
-            # If polarity is weak AND confidence is not very high, classify as neutral
-            if neutral_threshold_low <= polarity <= neutral_threshold_high and confidence < 0.85:
+            # Step 2: Neutral indicator detection
+            has_neutral_phrases = self._has_neutral_indicators(text)
+            has_negated_neg = self._has_negated_negative(text)
+            
+            # Step 3: Hybrid lexicon cross-validation
+            lexicon_result = self._analyze_with_lexicon(text)
+            lexicon_sentiment = lexicon_result['sentiment']
+            lexicon_polarity = lexicon_result['polarity']
+            
+            # Step 4: Apply corrections for negative bias
+            
+            # Case A: Neutral indicators detected → override to neutral
+            if has_neutral_phrases:
+                # Text contains explicit neutral phrases like "nicht schlecht",
+                # "es ist okay", "nichts besonderes" etc.
                 sentiment = 'neutral'
                 polarity = 0.0
+                confidence = max(confidence * 0.8, neu_score, 0.6)
+                logger.debug(f"Neutral indicator override: '{text[:40]}...'")
+            
+            # Case B: Negated negative phrases → should be neutral, not negative
+            elif has_negated_neg and sentiment == 'negative':
+                sentiment = 'neutral'
+                polarity = 0.0
+                confidence = max(confidence * 0.7, 0.5)
+                logger.debug(f"Negated-negative override: '{text[:40]}...'")
+            
+            # Case C: Transformer says negative but lexicon says neutral
+            # → likely negative bias, cross-check
+            elif sentiment == 'negative' and lexicon_sentiment == 'neutral':
+                # If the margin between neg and other labels is not huge,
+                # lean towards neutral
+                margin = neg_score - max(pos_score, neu_score)
+                if margin < 0.5:
+                    sentiment = 'neutral'
+                    polarity = 0.0
+                    confidence = confidence * 0.7
+                    logger.debug(f"Hybrid neutral correction: '{text[:40]}...'")
+            
+            # Case D: Transformer says negative but lexicon says positive
+            # → mixed signals, reduce confidence significantly
+            elif sentiment == 'negative' and lexicon_sentiment == 'positive':
+                # Strong disagreement: lean towards lexicon if lexicon is confident
+                if lexicon_result['confidence'] > 0.4:
+                    sentiment = lexicon_sentiment
+                    polarity = lexicon_polarity * 0.7
+                    confidence = (confidence + lexicon_result['confidence']) / 2
+                    logger.debug(f"Hybrid positive correction: '{text[:40]}...'")
+                else:
+                    # Low lexicon confidence too: go neutral
+                    sentiment = 'neutral'
+                    polarity = 0.0
+                    confidence = confidence * 0.6
+            
+            # Case E: Transformer says neutral but lexicon says positive
+            # → transformer may be too conservative, boost positive
+            elif sentiment == 'neutral' and lexicon_sentiment == 'positive':
+                if lexicon_result['confidence'] > 0.3:
+                    sentiment = 'positive'
+                    polarity = lexicon_polarity * 0.8
+                    confidence = (confidence + lexicon_result['confidence']) / 2
+                    logger.debug(f"Hybrid positive boost: '{text[:40]}...'")
             
             # Optional: Use star_rating as calibration hint
             if star_rating is not None:
-                # Star rating 1-2 → likely negative
-                # Star rating 2.5-3.5 → likely neutral  
-                # Star rating 4-5 → likely positive
                 rating_hint = 'neutral'
                 if star_rating <= 2.5:
                     rating_hint = 'negative'
                 elif star_rating >= 3.5:
                     rating_hint = 'positive'
                 
-                # If model and rating disagree strongly, reduce confidence
                 if (rating_hint == 'positive' and sentiment == 'negative') or \
                    (rating_hint == 'negative' and sentiment == 'positive'):
-                    confidence *= 0.7  # Reduce confidence for contradictions
-                    # Consider using neutral in case of strong disagreement
+                    confidence *= 0.7
                     if confidence < 0.6:
                         sentiment = 'neutral'
                         polarity = 0.0
             
-            # Subjectivity: higher confidence = more subjective
             subjectivity = confidence
             
             return {
