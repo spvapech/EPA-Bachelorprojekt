@@ -1075,12 +1075,106 @@ def analyze_topic(
                 current_date = current_date.replace(month=current_date.month + 1)
     
     # Select typical statements (up to 13 most relevant - 3 for "Typische Aussagen" + 10 for "Beispiel-Review")
-    # Randomize the selection to show different examples each time
+    # Score each statement by relevance instead of random selection
     if review_details:
-        # Shuffle to get random examples
-        random.shuffle(review_details)
-        # Take up to 13 random examples
-        selected_reviews = review_details[:13]
+        # Score each review_detail by how "typical"/representative it is
+        def score_statement(detail):
+            text = detail.get("preview", "")
+            text_lower = text.lower()
+            score = 0.0
+            
+            # 1. Keyword density: more keyword matches = more relevant
+            keyword_hits = 0
+            for kw in keywords:
+                keyword_hits += len(re.findall(kw, text_lower, re.IGNORECASE))
+            score += keyword_hits * 10
+            
+            # 2. Ideal sentence length (40-200 chars is most readable/informative)
+            length = len(text)
+            if 40 <= length <= 200:
+                score += 8
+            elif 25 <= length <= 300:
+                score += 4
+            elif length > 300:
+                score += 1  # too long, less "typical"
+            # very short (<25) gets 0 bonus
+            
+            # 3. Penalize generic/uninformative text
+            generic_patterns = [
+                r'^(ja|nein|ok|gut|schlecht|nichts|keine ahnung|kein kommentar)',
+                r'^(s\.?\s*o\.?|siehe oben|wie gesagt)',
+                r'^[-–—•\s]*$',
+            ]
+            for pattern in generic_patterns:
+                if re.search(pattern, text_lower.strip()):
+                    score -= 15
+            
+            # 4. Bonus for substantive content (contains verbs/descriptive words)
+            substantive_indicators = [
+                r'\b(ist|sind|war|wurde|haben|kann|sollte|muss|finde|denke|fühle)\b',
+                r'\b(sehr|besonders|leider|leicht|schwer|gut|toll|super|schlecht|mangelhaft)\b',
+            ]
+            for pattern in substantive_indicators:
+                if re.search(pattern, text_lower):
+                    score += 2
+            
+            # 5. Penalize duplicate-like content (will be handled by dedup below)
+            
+            return score
+        
+        # Score and sort by relevance
+        scored = [(score_statement(d), i, d) for i, d in enumerate(review_details)]
+        scored.sort(key=lambda x: -x[0])  # highest score first
+        
+        # Deduplicate: skip statements that are too similar to already-selected ones
+        selected_reviews = []
+        selected_texts = []
+        
+        def is_too_similar(new_text, existing_texts, threshold=0.6):
+            """Check if new_text is too similar to any existing text using word overlap."""
+            new_words = set(new_text.lower().split())
+            if len(new_words) < 3:
+                return any(new_text.lower().strip() == e.lower().strip() for e in existing_texts)
+            for existing in existing_texts:
+                existing_words = set(existing.lower().split())
+                if not existing_words or not new_words:
+                    continue
+                overlap = len(new_words & existing_words)
+                max_len = max(len(new_words), len(existing_words))
+                if max_len > 0 and overlap / max_len > threshold:
+                    return True
+            return False
+        
+        for _score, _idx, detail in scored:
+            if len(selected_reviews) >= 13:
+                break
+            preview = detail.get("preview", "")
+            # Nur Statements aufnehmen, die mindestens ein Keyword enthalten (Topic-Relevanz)
+            preview_lower = preview.lower()
+            has_keyword = any(re.search(kw, preview_lower, re.IGNORECASE) for kw in keywords)
+            if has_keyword and not is_too_similar(preview, selected_texts):
+                selected_reviews.append(detail)
+                selected_texts.append(preview)
+        
+        # Falls nach Keyword-Filter + Dedup weniger als 13: restliche auffüllen (mit Keyword-Check)
+        if len(selected_reviews) < 13:
+            for _score, _idx, detail in scored:
+                if len(selected_reviews) >= 13:
+                    break
+                if detail not in selected_reviews:
+                    preview = detail.get("preview", "")
+                    preview_lower = preview.lower()
+                    has_keyword = any(re.search(kw, preview_lower, re.IGNORECASE) for kw in keywords)
+                    if has_keyword:
+                        selected_reviews.append(detail)
+        
+        # First 3 = relevanz-sortierte "Typische Aussagen" (bleiben stabil)
+        # Ab Index 3 = "Beispiel-Review" → diese werden randomisiert
+        top_statements = selected_reviews[:3]
+        example_pool = selected_reviews[3:]
+        random.shuffle(example_pool)
+        selected_reviews = top_statements + example_pool
+        
         typical_statements = [detail["preview"] for detail in selected_reviews]
     else:
         typical_statements = [f"Keine spezifischen Aussagen zu {topic_name} gefunden"]
@@ -1104,7 +1198,7 @@ def analyze_topic(
         "color": color,
         "timelineData": timeline_data,
         "typicalStatements": typical_statements,
-        "reviewDetails": selected_reviews  # Use the randomly selected reviews
+        "reviewDetails": selected_reviews  # Relevanz-sortierte Reviews
     }
 
 
