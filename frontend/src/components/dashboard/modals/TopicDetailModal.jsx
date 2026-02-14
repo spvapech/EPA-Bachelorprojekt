@@ -30,6 +30,89 @@ import {
 } from "@/components/ui/select"
 import ReviewDetailModal from "./ReviewDetailModal"
 
+// Helper: Fill in missing months and create gap bridge data for dashed line display
+function processTimelineDataWithGaps(data) {
+    if (!data || data.length < 2) return { data: data || [], hasGaps: false }
+
+    const validData = data.filter(d => d.year && d.monthNum)
+    if (validData.length < 2) return { data: data || [], hasGaps: false }
+
+    const sorted = [...validData].sort((a, b) => {
+        if (a.year !== b.year) return a.year - b.year
+        return a.monthNum - b.monthNum
+    })
+
+    const dataMap = new Map()
+    sorted.forEach(item => {
+        dataMap.set(`${item.year}-${item.monthNum}`, item)
+    })
+
+    const monthNames = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun',
+                         'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez']
+
+    const result = []
+    let hasGaps = false
+
+    const first = sorted[0]
+    const last = sorted[sorted.length - 1]
+    let y = first.year
+    let m = first.monthNum
+
+    // Generate all months between first and last data point
+    while (y < last.year || (y === last.year && m <= last.monthNum)) {
+        const existing = dataMap.get(`${y}-${m}`)
+        if (existing) {
+            result.push({ ...existing, ratingGap: null })
+        } else {
+            hasGaps = true
+            result.push({
+                month: `${monthNames[m - 1]} ${y}`,
+                year: y,
+                monthNum: m,
+                rating: null,
+                ratingGap: null,
+                _isMissing: true,
+            })
+        }
+        m++
+        if (m > 12) { m = 1; y++ }
+    }
+
+    // Interpolate ratingGap for gap segments (dashed line data)
+    let i = 0
+    while (i < result.length) {
+        if (!result[i]._isMissing) { i++; continue }
+
+        const gapStart = i
+        let gapEnd = i
+        while (gapEnd < result.length && result[gapEnd]._isMissing) gapEnd++
+
+        const beforeIdx = gapStart - 1
+        const afterIdx = gapEnd
+
+        if (beforeIdx >= 0 && afterIdx < result.length &&
+            result[beforeIdx].rating != null && result[afterIdx].rating != null) {
+            const beforeRating = result[beforeIdx].rating
+            const afterRating = result[afterIdx].rating
+            const totalLen = afterIdx - beforeIdx
+
+            // Set boundary points so dashed line connects to solid line
+            result[beforeIdx].ratingGap = beforeRating
+            result[afterIdx].ratingGap = afterRating
+
+            // Linearly interpolate gap points
+            for (let j = gapStart; j < gapEnd; j++) {
+                const t = (j - beforeIdx) / totalLen
+                result[j].ratingGap = +(beforeRating + t * (afterRating - beforeRating)).toFixed(2)
+            }
+        }
+
+        i = gapEnd
+    }
+
+    return { data: result, hasGaps }
+}
+
 // Gauge Chart Component
 const GaugeChart = ({ sentiment, value }) => {
     // Berechne den Winkel basierend auf dem Sentiment-Wert (-1 bis 1)
@@ -217,6 +300,7 @@ export default function TopicDetailModal({ open, onOpenChange, topic, onBackToTa
     }
 
     const filteredTimelineData = getFilteredTimelineData()
+    const { data: processedTimelineData, hasGaps: timelineHasGaps } = processTimelineDataWithGaps(filteredTimelineData)
 
     const totalExamples = topic.typicalStatements?.length || 0
     // Beispiel-Review shows indices 3-12 (10 examples total)
@@ -475,7 +559,7 @@ export default function TopicDetailModal({ open, onOpenChange, topic, onBackToTa
                             </CardHeader>
                             <CardContent>
                                 <div className={visibleChartsCount === 1 ? 'h-96' : 'h-64'}>
-                                    {filteredTimelineData.length === 0 ? (
+                                    {processedTimelineData.length === 0 ? (
                                         <div className="flex items-center justify-center h-full">
                                             <div className="text-center">
                                                 <p className="text-slate-500 text-sm">
@@ -487,9 +571,10 @@ export default function TopicDetailModal({ open, onOpenChange, topic, onBackToTa
                                             </div>
                                         </div>
                                     ) : (
-                                        <ResponsiveContainer width="100%" height="100%">
+                                        <>
+                                        <ResponsiveContainer width="100%" height={timelineHasGaps ? "90%" : "100%"}>
                                             <LineChart 
-                                                data={filteredTimelineData}
+                                                data={processedTimelineData}
                                                 margin={{ top: 5, right: 20, left: 20, bottom: 5 }}
                                             >
                                                 <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
@@ -517,18 +602,42 @@ export default function TopicDetailModal({ open, onOpenChange, topic, onBackToTa
                                                     ticks={[0, 1, 2, 3, 4, 5]}
                                                 />
                                                 <Tooltip
-                                                    contentStyle={{
-                                                        backgroundColor: "white",
-                                                        border: "1px solid #e5e7eb",
-                                                        borderRadius: "8px",
-                                                        padding: "8px 12px",
+                                                    content={({ active, payload, label }) => {
+                                                        if (!active || !payload?.length) return null
+                                                        const point = payload[0]?.payload
+                                                        const isMissing = point?._isMissing
+                                                        
+                                                        if (isMissing) {
+                                                            return (
+                                                                <div className="bg-white border border-slate-200 rounded-lg shadow-lg p-3">
+                                                                    <p className="font-semibold text-slate-800 mb-1">{label}</p>
+                                                                    <p className="text-xs text-amber-600 flex items-center gap-1">
+                                                                        <span>⚠️</span> Keine Daten vorhanden
+                                                                    </p>
+                                                                    <p className="text-xs text-slate-400 mt-1">Interpolierter Wert: {point.ratingGap?.toFixed(2)}</p>
+                                                                </div>
+                                                            )
+                                                        }
+                                                        
+                                                        const ratingEntry = payload.find(p => p.dataKey === 'rating' && p.value != null)
+                                                        return (
+                                                            <div className="bg-white border border-slate-200 rounded-lg shadow-lg p-3">
+                                                                <p className="font-semibold text-slate-800 mb-1">{label}</p>
+                                                                {ratingEntry && (
+                                                                    <p className="text-sm text-slate-700">
+                                                                        {ratingEntry.value.toFixed(2)} ⭐ Bewertung
+                                                                    </p>
+                                                                )}
+                                                            </div>
+                                                        )
                                                     }}
-                                                    labelStyle={{ fontWeight: 600, marginBottom: 4 }}
-                                                    formatter={(value) => [`${value.toFixed(2)} ⭐`, 'Bewertung']}
                                                 />
                                                 <Legend 
                                                     wrapperStyle={{ paddingTop: '10px' }}
-                                                    formatter={() => 'Durchschnittsbewertung'}
+                                                    formatter={(value, entry) => {
+                                                        if (entry.dataKey === 'ratingGap') return 'Keine Daten (interpoliert)'
+                                                        return 'Durchschnittsbewertung'
+                                                    }}
                                                 />
                                                 <Line
                                                     type="monotone"
@@ -544,9 +653,31 @@ export default function TopicDetailModal({ open, onOpenChange, topic, onBackToTa
                                                     strokeWidth={3}
                                                     dot={{ fill: "white", strokeWidth: 2, r: 4 }}
                                                     activeDot={{ r: 6 }}
+                                                    connectNulls={false}
                                                 />
+                                                {timelineHasGaps && (
+                                                    <Line
+                                                        type="monotone"
+                                                        dataKey="ratingGap"
+                                                        name="Keine Daten"
+                                                        stroke="#94a3b8"
+                                                        strokeWidth={2}
+                                                        strokeDasharray="6 4"
+                                                        strokeOpacity={0.7}
+                                                        dot={false}
+                                                        activeDot={false}
+                                                        connectNulls={false}
+                                                    />
+                                                )}
                                             </LineChart>
                                         </ResponsiveContainer>
+                                        {timelineHasGaps && (
+                                            <p className="text-xs text-slate-500 text-center italic flex items-center justify-center gap-1">
+                                                <span className="inline-block w-6 h-0 border-t-2 border-dashed border-slate-400"></span>
+                                                Gestrichelte Linie = Keine Daten vorhanden (interpoliert)
+                                            </p>
+                                        )}
+                                        </>
                                     )}
                                 </div>
                             </CardContent>

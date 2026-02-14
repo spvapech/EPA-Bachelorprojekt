@@ -305,7 +305,38 @@ export const TopicRatingCard = memo(function TopicRatingCard({ companyId, onFilt
       withGaps.push(current)
     }
 
-    return withGaps.map((row) => ({
+    // Add gap bridge data for dashed line visualization
+    const withGapBridges = withGaps.map((row, idx) => {
+      const newRow = { ...row }
+      if (!row._isGap) {
+        // Check if this is adjacent to a gap
+        const isBeforeGap = idx + 1 < withGaps.length && withGaps[idx + 1]._isGap
+        const isAfterGap = idx - 1 >= 0 && withGaps[idx - 1]._isGap
+        if (isBeforeGap || isAfterGap) {
+          for (const t of topics || []) {
+            if (newRow[t] != null) {
+              newRow[`${t}__gap`] = newRow[t]
+            }
+          }
+        }
+      } else {
+        // Gap row - interpolate values for dashed line
+        const prevIdx = idx - 1
+        const nextIdx = idx + 1
+        if (prevIdx >= 0 && nextIdx < withGaps.length) {
+          for (const t of topics || []) {
+            const prevVal = withGaps[prevIdx][t]
+            const nextVal = withGaps[nextIdx][t]
+            if (prevVal != null && nextVal != null) {
+              newRow[`${t}__gap`] = +((prevVal + nextVal) / 2).toFixed(2)
+            }
+          }
+        }
+      }
+      return newRow
+    })
+
+    return withGapBridges.map((row) => ({
       ...row,
       periodLabel: row.periodLabel || (granularity === "year" ? formatMonthLabel(row.period) : row.period),
     }))
@@ -355,7 +386,7 @@ export const TopicRatingCard = memo(function TopicRatingCard({ companyId, onFilt
     }
 
     const items = payload
-      .filter((p) => p.dataKey !== "_gapMarker" && p.value !== null && p.value !== undefined)
+      .filter((p) => p.dataKey !== "_gapMarker" && !p.dataKey.endsWith("__gap") && p.value !== null && p.value !== undefined)
       .sort((a, b) => (b.value ?? 0) - (a.value ?? 0))
 
     return (
@@ -578,6 +609,27 @@ export const TopicRatingCard = memo(function TopicRatingCard({ companyId, onFilt
           )
         })}
 
+        {/* Dashed gap bridge lines for each visible topic */}
+        {visibleTopics.map((topic) => {
+          const colorIdx = (topics || []).indexOf(topic)
+          return (
+            <Line
+              key={`${topic}__gap`}
+              type="monotone"
+              dataKey={`${topic}__gap`}
+              stroke={topicColor(Math.max(colorIdx, 0))}
+              strokeWidth={2}
+              strokeDasharray="6 4"
+              strokeOpacity={0.5}
+              dot={false}
+              activeDot={false}
+              connectNulls={false}
+              legendType="none"
+              isAnimationActive={false}
+            />
+          )
+        })}
+
         <Line
           type="monotone"
           dataKey="_gapMarker"
@@ -677,8 +729,9 @@ export const TopicRatingCard = memo(function TopicRatingCard({ companyId, onFilt
           </div>
 
           {gapNotes.length > 0 && (
-            <p className="text-xs text-slate-500 text-center mt-2 italic">
-              Gab: Für diesen Zeitraum liegen keine Bewertungen vor ({gapNotes.join(", ")}).
+            <p className="text-xs text-slate-500 text-center mt-2 italic flex items-center justify-center gap-1">
+              <span className="inline-block w-5 h-0 border-t-2 border-dashed border-slate-400"></span>
+              Gestrichelte Linie = Keine Bewertungen vorhanden ({gapNotes.join(", ")})
             </p>
           )}
           <p className="text-xs text-slate-400 text-center mt-2">Klicken zum Vergrößern</p>
@@ -726,9 +779,9 @@ export const TopicRatingCard = memo(function TopicRatingCard({ companyId, onFilt
               <p>
                 {gapNotes.length > 0 && (
                 <p className="flex items-center justify-center min-h-[30px] gap-1 text-xs text-slate-500 italic">
-                  <span>ℹ️</span>
+                  <span className="inline-block w-5 h-0 border-t-2 border-dashed border-slate-400"></span>
                   <span>
-                    Gap: Für diesen Zeitraum liegen keine Bewertungen vor ({gapNotes.join(", ")}).
+                    Gestrichelte Linie = Keine Bewertungen vorhanden ({gapNotes.join(", ")})
                   </span>
                 </p>
               )}
