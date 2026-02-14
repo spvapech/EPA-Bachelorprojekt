@@ -15,4 +15,5 @@ dependencies = [
     "python-multipart>=0.0.6",
     "transformers>=5.1.0",
     "torch>=2.10.0",
+    "statsmodels>=0.14.0",
 ]

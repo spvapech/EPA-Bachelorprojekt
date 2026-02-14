@@ -129,7 +129,7 @@ async def get_company_overview(company_id: int):
 async def get_company_timeline(
     company_id: int,
     days: int = Query(default=365, description="Number of days to include"),
-    forecast_months: int = Query(default=6, description="Number of months to forecast"),
+    forecast_months: int = Query(default=12, description="Number of months to forecast"),
     source: str = Query(default="all", description="Data source: 'employee', 'candidates', or 'all'")
 ):
     """Get timeline data for ratings over time with forecast."""
@@ -200,7 +200,7 @@ async def get_company_timeline(
                 "is_forecast": False
             })
         
-        # Calculate forecast using linear regression
+        # Calculate forecast using Holt's method
         forecast_data = calculate_forecast(aggregated_timeline, forecast_months)
         
         return {
@@ -214,82 +214,66 @@ async def get_company_timeline(
         raise HTTPException(status_code=500, detail=f"Error fetching timeline: {str(e)}")
 
 
-def calculate_forecast(historical_data: List[Dict[str, Any]], months: int) -> List[Dict[str, Any]]:
-    """
-    Calculate forecast using linear regression based on historical data.
-    
-    Args:
-        historical_data: List of historical monthly data points
-        months: Number of months to forecast
-        
-    Returns:
-        List of forecast data points
-    """
-    if len(historical_data) < 2:
-        # Not enough data for forecast
-        return []
-    
-    # Extract x (time index) and y (score) values
-    x_values = list(range(len(historical_data)))
-    y_values = [point["score"] for point in historical_data]
-    
-    # Calculate linear regression: y = mx + b
-    n = len(x_values)
-    sum_x = sum(x_values)
-    sum_y = sum(y_values)
-    sum_xy = sum(x * y for x, y in zip(x_values, y_values))
-    sum_x_squared = sum(x * x for x in x_values)
-    
-    # Slope (m) and intercept (b)
-    denominator = n * sum_x_squared - sum_x * sum_x
-    
-    if denominator == 0:
-        # Fallback: use average of last values
-        avg_score = sum(y_values) / len(y_values)
-        forecast = []
-        last_date = datetime.strptime(historical_data[-1]["date"], "%Y-%m")
-        for i in range(1, months + 1):
-            # Calculate next month
-            month_offset = last_date.month + i
-            year_offset = (month_offset - 1) // 12
-            month = ((month_offset - 1) % 12) + 1
-            next_month = last_date.replace(year=last_date.year + year_offset, month=month)
-            forecast.append({
-                "date": next_month.strftime("%Y-%m"),
-                "date_display": next_month.strftime("%b %Y"),
-                "score": round(avg_score, 2),
-                "is_forecast": True
-            })
-        return forecast
-    
-    m = (n * sum_xy - sum_x * sum_y) / denominator
-    b = (sum_y - m * sum_x) / n
-    
-    # Generate forecast
+def _fallback_forecast_average(
+    historical_data: List[Dict[str, Any]], months: int, y_values: List[float]
+) -> List[Dict[str, Any]]:
+    """Fallback forecast using average of historical scores (used when Holt fails)."""
+    avg_score = sum(y_values) / len(y_values)
     forecast = []
     last_date = datetime.strptime(historical_data[-1]["date"], "%Y-%m")
-    
     for i in range(1, months + 1):
-        # Calculate next month
         month_offset = last_date.month + i
         year_offset = (month_offset - 1) // 12
         month = ((month_offset - 1) % 12) + 1
         next_month = last_date.replace(year=last_date.year + year_offset, month=month)
-        
-        # Predict score using linear regression
-        future_x = len(historical_data) + i - 1
-        predicted_score = m * future_x + b
-        
-        # Ensure score is within reasonable bounds (0-5 for ratings)
-        predicted_score = max(0, min(5, predicted_score))
-        
         forecast.append({
             "date": next_month.strftime("%Y-%m"),
             "date_display": next_month.strftime("%b %Y"),
-            "score": round(predicted_score, 2),
+            "score": round(avg_score, 2),
             "is_forecast": True
         })
-    
+    return forecast
+
+
+def calculate_forecast(historical_data: List[Dict[str, Any]], months: int) -> List[Dict[str, Any]]:
+    """
+    Calculate forecast from historical monthly data using Holt's method
+    (exponential smoothing with trend). Forecasts are clamped to the rating bounds [0, 5].
+    Falls back to average of historical scores if Holt fails (e.g. too little data).
+    """
+    if months <= 0:
+        return []
+    if len(historical_data) < 2:
+        return []
+
+    y_values = [point["score"] for point in historical_data]
+    last_date = datetime.strptime(historical_data[-1]["date"], "%Y-%m")
+
+    try:
+        from statsmodels.tsa.holtwinters import Holt  # type: ignore[import-untyped]
+        import numpy as np
+
+        series = np.asarray(y_values, dtype=float)
+        model = Holt(series)
+        fit = model.fit()
+        preds = fit.forecast(steps=months)
+    except Exception:
+        return _fallback_forecast_average(historical_data, months, y_values)
+
+    forecast = []
+    for i in range(months):
+        month_offset = last_date.month + (i + 1)
+        year_offset = (month_offset - 1) // 12
+        month = ((month_offset - 1) % 12) + 1
+        next_month = last_date.replace(year=last_date.year + year_offset, month=month)
+        score = float(preds[i])
+        score = max(0.0, min(5.0, score))
+        forecast.append({
+            "date": next_month.strftime("%Y-%m"),
+            "date_display": next_month.strftime("%b %Y"),
+            "score": round(score, 2),
+            "is_forecast": True
+        })
     return forecast
 
 
