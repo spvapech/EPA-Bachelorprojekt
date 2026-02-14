@@ -40,6 +40,106 @@ const COLOR_PALETTE = [
 
 const DEFAULT_COLOR_INDICES = [0, 1, 2] // blue, amber, green
 
+const MONTH_NAMES = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez']
+
+// Fill in missing months and create per-slot gap (interpolated) series for dashed line display
+function processTimelineOverlayWithGaps(timelineOverlay, activeSlots) {
+    if (!timelineOverlay?.length || !activeSlots?.length) return { data: [], slotHasGaps: {} }
+
+    const parseKey = (key) => {
+        const [y, m] = (key || '').split('-').map(Number)
+        return { year: y, month: m }
+    }
+    const toKey = (year, month) => `${year}-${String(month).padStart(2, '0')}`
+
+    const sorted = [...new Set(timelineOverlay.map((r) => r.dateKey).filter(Boolean))].sort()
+    if (sorted.length === 0) return { data: timelineOverlay, slotHasGaps: {} }
+
+    const first = parseKey(sorted[0])
+    const last = parseKey(sorted[sorted.length - 1])
+    const fullMonths = []
+    let y = first.year
+    let m = first.month
+    while (y < last.year || (y === last.year && m <= last.month)) {
+        fullMonths.push({
+            key: toKey(y, m),
+            year: y,
+            monthNum: m,
+            date_display: `${MONTH_NAMES[m - 1]} ${y}`,
+        })
+        m++
+        if (m > 12) {
+            m = 1
+            y++
+        }
+    }
+
+    const rowByKey = {}
+    timelineOverlay.forEach((row) => {
+        const k = row.dateKey
+        if (k) rowByKey[k] = row
+    })
+
+    const data = fullMonths.map(({ key, date_display }) => {
+        const existing = rowByKey[key] || {}
+        const row = {
+            date: date_display,
+            dateKey: key,
+            _slotMissing: {},
+        }
+        activeSlots.forEach((slot) => {
+            const val = existing[slot.name]
+            row[slot.name] = val != null ? val : null
+            if (val == null) row._slotMissing[slot.name] = true
+        })
+        return row
+    })
+
+    const slotHasGaps = {}
+    activeSlots.forEach((slot) => {
+        slotHasGaps[slot.name] = data.some((row) => row._slotMissing[slot.name])
+    })
+
+    // Per-slot interpolation for gap series (slot.name + 'Gap')
+    activeSlots.forEach((slot) => {
+        const key = slot.name + 'Gap'
+        data.forEach((row) => {
+            row[key] = null
+        })
+        let i = 0
+        while (i < data.length) {
+            if (!data[i]._slotMissing[slot.name]) {
+                i++
+                continue
+            }
+            const gapStart = i
+            let gapEnd = i
+            while (gapEnd < data.length && data[gapEnd]._slotMissing[slot.name]) gapEnd++
+            const beforeIdx = gapStart - 1
+            const afterIdx = gapEnd
+            if (
+                beforeIdx >= 0 &&
+                afterIdx < data.length &&
+                data[beforeIdx][slot.name] != null &&
+                data[afterIdx][slot.name] != null
+            ) {
+                const beforeVal = data[beforeIdx][slot.name]
+                const afterVal = data[afterIdx][slot.name]
+                const totalLen = afterIdx - beforeIdx
+                data[beforeIdx][key] = beforeVal
+                data[afterIdx][key] = afterVal
+                for (let j = gapStart; j < gapEnd; j++) {
+                    const t = (j - beforeIdx) / totalLen
+                    data[j][key] = +(beforeVal + t * (afterVal - beforeVal)).toFixed(2)
+                }
+            }
+            i = gapEnd
+        }
+    })
+
+    return { data, slotHasGaps }
+}
+
 const CATEGORY_LABELS = {
     avg_arbeitsatmosphaere: "Arbeitsatmosphäre",
     avg_image: "Image",
@@ -55,6 +155,10 @@ const CATEGORY_LABELS = {
     avg_arbeitsbedingungen: "Arbeitsbedingungen",
     avg_gleichberechtigung: "Gleichberechtigung",
 }
+// Map tooltip label back to category key for per-category counts
+const LABEL_TO_CATEGORY_KEY = Object.fromEntries(
+    Object.entries(CATEGORY_LABELS).map(([key, label]) => [label, key])
+)
 
 const MAX_COMPANIES = 3
 
@@ -81,6 +185,9 @@ const ComparePage = () => {
     // Color picker popover state
     const [colorPickerSlot, setColorPickerSlot] = useState(null)
     const colorPickerRef = useRef(null)
+
+    // Toggle between radar and bar chart in category comparison card
+    const [categoryChartView, setCategoryChartView] = useState("radar")
 
     // Close color picker when clicking outside
     useEffect(() => {
@@ -171,7 +278,7 @@ const ComparePage = () => {
         setLoadingIds((prev) => new Set(prev).add(companyId))
 
         try {
-            const [ratingsRes, avgRes, trendRes, timelineRes, overviewRes, negTopicsRes] =
+            const [ratingsRes, avgRes, trendRes, timelineRes, overviewRes, negTopicsRes, categoryCountsRes] =
                 await Promise.allSettled([
                     fetch(`${API_URL}/companies/${companyId}/ratings`),
                     fetch(`${API_URL}/companies/${companyId}/ratings/avg`),
@@ -186,6 +293,9 @@ const ComparePage = () => {
                     ),
                     fetch(
                         `${API_URL}/topics/company/${companyId}/negative-topics`
+                    ),
+                    fetch(
+                        `${API_URL}/companies/${companyId}/ratings/category-counts`
                     ),
                 ])
 
@@ -208,6 +318,10 @@ const ComparePage = () => {
             const overviewJson =
                 overviewRes.status === "fulfilled" && overviewRes.value.ok
                     ? await overviewRes.value.json()
+                    : null
+            const categoryCountsJson =
+                categoryCountsRes.status === "fulfilled" && categoryCountsRes.value.ok
+                    ? await categoryCountsRes.value.json()
                     : null
             const negTopicsJson =
                 negTopicsRes.status === "fulfilled" && negTopicsRes.value.ok
@@ -333,6 +447,7 @@ const ComparePage = () => {
                 [companyId]: {
                     ratings,
                     categoryRatings: avg,
+                    categoryCounts: categoryCountsJson ?? {},
                     trend,
                     mostCritical,
                     negativeTopic,
@@ -374,7 +489,45 @@ const ComparePage = () => {
     // Build bar chart data (same data, different view)
     const barData = radarData
 
-    // Build timeline overlay data
+    // Per-category rating count per company (for tooltips): from categoryCounts API
+    const categoryCountByCompanyAndCategory = {}
+    activeSlots.forEach((slot) => {
+        categoryCountByCompanyAndCategory[slot.name] = companyData[slot.id]?.categoryCounts ?? {}
+    })
+
+    // Custom tooltip for category charts: shows value + number of ratings for this category per company
+    const CategoryChartTooltip = ({ active, payload, label }) => {
+        if (!active || !payload?.length || !label) return null
+        const categoryKey = LABEL_TO_CATEGORY_KEY[label]
+        return (
+            <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-md">
+                <p className="mb-1.5 font-semibold text-slate-800">{label}</p>
+                <ul className="space-y-1">
+                    {payload.map((entry) => {
+                        const count = categoryKey
+                            ? (categoryCountByCompanyAndCategory[entry.name]?.[categoryKey] ?? 0)
+                            : 0
+                        return (
+                            <li key={entry.name} className="flex items-center gap-2 text-sm">
+                                <span
+                                    className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
+                                    style={{ backgroundColor: entry.color }}
+                                />
+                                <span className="text-slate-700">
+                                    {entry.name}: {entry.value != null ? Number(entry.value).toFixed(2) : "–"}
+                                </span>
+                                <span className="text-slate-500">
+                                    ({count} Bewertung{count !== 1 ? "en" : ""})
+                                </span>
+                            </li>
+                        )
+                    })}
+                </ul>
+            </div>
+        )
+    }
+
+    // Build timeline overlay data (with dateKey for gap processing)
     const buildTimelineOverlay = () => {
         const monthMap = {}
         const monthOrder = []
@@ -383,7 +536,10 @@ const ComparePage = () => {
             timeline.forEach((entry) => {
                 if (!entry.date || entry.is_forecast) return
                 if (!monthMap[entry.date]) {
-                    monthMap[entry.date] = { date: entry.date_display || entry.date }
+                    monthMap[entry.date] = {
+                        dateKey: entry.date,
+                        date: entry.date_display || entry.date,
+                    }
                     monthOrder.push(entry.date)
                 }
                 monthMap[entry.date][slot.name] = entry.score
@@ -394,7 +550,8 @@ const ComparePage = () => {
             .map((key) => monthMap[key])
     }
 
-    const timelineOverlay = buildTimelineOverlay()
+    const rawTimelineOverlay = buildTimelineOverlay()
+    const { data: timelineOverlay, slotHasGaps } = processTimelineOverlayWithGaps(rawTimelineOverlay, activeSlots)
 
     const getNegativeTopicName = (t) => {
         if (!t) return "–"
@@ -800,18 +957,44 @@ const ComparePage = () => {
                             </Card>
                         </div>
 
-                        {/* Category Ratings comparison - Radar + Bar charts */}
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                            {/* Radar Chart */}
-                            <Card className="rounded-2xl shadow-sm">
-                                <CardHeader>
-                                    <CardTitle className="text-base font-bold text-slate-800">
-                                        Kategorievergleich (Radar)
-                                    </CardTitle>
-                                </CardHeader>
-                                <CardContent>
-                                    <div id="compare-radar-chart-export">
-                                    <ResponsiveContainer width="100%" height={400}>    <RadarChart
+                        {/* Category Ratings comparison - Radar / Bar charts in one card with toggle */}
+                        <Card className="rounded-2xl shadow-sm">
+                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                <CardTitle className="text-base font-bold text-slate-800">
+                                    Kategorievergleich
+                                </CardTitle>
+                                <div className="flex rounded-lg border border-slate-200 bg-slate-100/80 p-0.5">
+                                    <button
+                                        type="button"
+                                        onClick={() => setCategoryChartView("radar")}
+                                        className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                                            categoryChartView === "radar"
+                                                ? "bg-white text-slate-800 shadow-sm"
+                                                : "text-slate-600 hover:text-slate-800"
+                                        }`}
+                                    >
+                                        Radar
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setCategoryChartView("bar")}
+                                        className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                                            categoryChartView === "bar"
+                                                ? "bg-white text-slate-800 shadow-sm"
+                                                : "text-slate-600 hover:text-slate-800"
+                                        }`}
+                                    >
+                                        Balken
+                                    </button>
+                                </div>
+                            </CardHeader>
+                            <CardContent>
+                                <div
+                                    id="compare-radar-chart-export"
+                                    className={categoryChartView === "radar" ? "block" : "hidden"}
+                                >
+                                    <ResponsiveContainer width="100%" height={400}>
+                                        <RadarChart
                                             data={radarData}
                                             cx="50%"
                                             cy="50%"
@@ -838,22 +1021,14 @@ const ComparePage = () => {
                                                 />
                                             ))}
                                             <Legend />
-                                            <Tooltip />
+                                            <Tooltip content={<CategoryChartTooltip />} />
                                         </RadarChart>
                                     </ResponsiveContainer>
-                                    </div>
-                                </CardContent>
-                            </Card>
-
-                            {/* Bar Chart */}
-                            <Card className="rounded-2xl shadow-sm">
-                                <CardHeader>
-                                    <CardTitle className="text-base font-bold text-slate-800">
-                                        Kategorievergleich (Balken)
-                                    </CardTitle>
-                                </CardHeader>
-                                <CardContent>
-                                    <div id="compare-bar-chart-export">
+                                </div>
+                                <div
+                                    id="compare-bar-chart-export"
+                                    className={categoryChartView === "bar" ? "block" : "hidden"}
+                                >
                                     <ResponsiveContainer width="100%" height={400}>
                                         <BarChart
                                             data={barData}
@@ -880,7 +1055,7 @@ const ComparePage = () => {
                                                 width={130}
                                                 tick={{ fontSize: 11 }}
                                             />
-                                            <Tooltip />
+                                            <Tooltip content={<CategoryChartTooltip />} />
                                             <Legend />
                                             {activeSlots.map((slot, i) => (
                                                 <Bar
@@ -893,10 +1068,9 @@ const ComparePage = () => {
                                             ))}
                                         </BarChart>
                                     </ResponsiveContainer>
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        </div>
+                                </div>
+                            </CardContent>
+                        </Card>
 
                         {/* Timeline comparison */}
                         {timelineOverlay.length > 0 && (
@@ -931,22 +1105,88 @@ const ComparePage = () => {
                                                 domain={[1, 5]}
                                                 tick={{ fontSize: 11 }}
                                             />
-                                            <Tooltip />
+                                            <Tooltip
+                                                content={({ active, payload, label }) => {
+                                                    if (!active || !payload?.length || !label) return null
+                                                    const point = payload[0]?.payload
+                                                    const slotMissing = point?._slotMissing ?? {}
+                                                    return (
+                                                        <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-md">
+                                                            <p className="mb-1.5 font-semibold text-slate-800">{label}</p>
+                                                            <ul className="space-y-1">
+                                                                {activeSlots.map((slot) => {
+                                                                    const isMissing = slotMissing[slot.name]
+                                                                    const mainVal = point?.[slot.name]
+                                                                    const gapVal = point?.[slot.name + 'Gap']
+                                                                    const displayVal =
+                                                                        mainVal != null
+                                                                            ? mainVal.toFixed(2)
+                                                                            : gapVal != null
+                                                                            ? gapVal.toFixed(2)
+                                                                            : '–'
+                                                                    const color = COLOR_PALETTE[slot.colorIndex]?.hex
+                                                                    return (
+                                                                        <li key={slot.id} className="flex items-center gap-2 text-sm">
+                                                                            <span
+                                                                                className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
+                                                                                style={{ backgroundColor: color }}
+                                                                            />
+                                                                            <span className="text-slate-700">
+                                                                                {slot.name}: {displayVal}
+                                                                            </span>
+                                                                            {isMissing && gapVal != null && (
+                                                                                <span className="text-xs text-amber-600">
+                                                                                    (interpoliert)
+                                                                                </span>
+                                                                            )}
+                                                                        </li>
+                                                                    )
+                                                                })}
+                                                            </ul>
+                                                        </div>
+                                                    )
+                                                }}
+                                            />
                                             <Legend />
                                             {activeSlots.map((slot, i) => (
                                                 <Line
                                                     key={slot.id}
                                                     type="monotone"
                                                     dataKey={slot.name}
+                                                    name={slot.name}
                                                     stroke={COLOR_PALETTE[slot.colorIndex]?.hex}
                                                     strokeWidth={2.5}
                                                     dot={{ r: 3 }}
                                                     activeDot={{ r: 5 }}
-                                                    connectNulls
+                                                    connectNulls={false}
                                                 />
                                             ))}
+                                            {activeSlots.map((slot) =>
+                                                slotHasGaps[slot.name] ? (
+                                                    <Line
+                                                        key={`${slot.id}-gap`}
+                                                        type="monotone"
+                                                        dataKey={slot.name + 'Gap'}
+                                                        name={slot.name + ' (interpoliert)'}
+                                                        stroke={COLOR_PALETTE[slot.colorIndex]?.hex}
+                                                        strokeWidth={2}
+                                                        strokeDasharray="6 4"
+                                                        strokeOpacity={0.7}
+                                                        dot={false}
+                                                        activeDot={false}
+                                                        connectNulls={false}
+                                                        legendType="none"
+                                                    />
+                                                ) : null
+                                            )}
                                         </LineChart>
                                     </ResponsiveContainer>
+                                    {Object.values(slotHasGaps).some(Boolean) && (
+                                        <p className="text-xs text-slate-500 text-center italic flex items-center justify-center gap-1 mt-2">
+                                            <span className="inline-block w-6 h-0 border-t-2 border-dashed border-slate-400"></span>
+                                            Gestrichelte Linie = Keine Daten vorhanden (interpoliert)
+                                        </p>
+                                    )}
                                     </div>
                                 </CardContent>
                             </Card>

@@ -44,6 +44,107 @@ function parseYear(period) {
     return Number.isFinite(y) ? y : null
 }
 
+const MONTH_NAMES = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez']
+
+// Fill in missing months and create gap bridge data for dashed line display (valueKey: 'score' or 'count')
+function processTimelineDataWithGaps(timelineData, valueKey) {
+    if (!timelineData?.length || timelineData.length < 2) return { data: [], hasGaps: false }
+
+    const validData = timelineData
+        .map((d) => {
+            const dateStr = d.date
+            if (!dateStr || typeof dateStr !== 'string') return null
+            const [y, m] = dateStr.split('-').map(Number)
+            if (!Number.isFinite(y) || !Number.isFinite(m)) return null
+            return {
+                year: y,
+                monthNum: m,
+                date: `${MONTH_NAMES[m - 1]} ${y}`,
+                [valueKey]: valueKey === 'score' ? d.score : d.count,
+                count: d.count,
+                score: d.score,
+            }
+        })
+        .filter((d) => d != null && d[valueKey] != null)
+
+    if (validData.length < 2) return { data: [], hasGaps: false }
+
+    const sorted = [...validData].sort((a, b) => {
+        if (a.year !== b.year) return a.year - b.year
+        return a.monthNum - b.monthNum
+    })
+
+    const dataMap = new Map()
+    sorted.forEach((item) => {
+        dataMap.set(`${item.year}-${item.monthNum}`, item)
+    })
+
+    const result = []
+    let hasGaps = false
+    const first = sorted[0]
+    const last = sorted[sorted.length - 1]
+    let y = first.year
+    let m = first.monthNum
+
+    while (y < last.year || (y === last.year && m <= last.monthNum)) {
+        const existing = dataMap.get(`${y}-${m}`)
+        const gapKey = valueKey + 'Gap'
+        if (existing) {
+            result.push({ ...existing, [gapKey]: null, _isMissing: false })
+        } else {
+            hasGaps = true
+            result.push({
+                date: `${MONTH_NAMES[m - 1]} ${y}`,
+                year: y,
+                monthNum: m,
+                [valueKey]: null,
+                [gapKey]: null,
+                count: null,
+                _isMissing: true,
+            })
+        }
+        m++
+        if (m > 12) {
+            m = 1
+            y++
+        }
+    }
+
+    let i = 0
+    const gapKey = valueKey + 'Gap'
+    while (i < result.length) {
+        if (!result[i]._isMissing) {
+            i++
+            continue
+        }
+        const gapStart = i
+        let gapEnd = i
+        while (gapEnd < result.length && result[gapEnd]._isMissing) gapEnd++
+        const beforeIdx = gapStart - 1
+        const afterIdx = gapEnd
+        if (
+            beforeIdx >= 0 &&
+            afterIdx < result.length &&
+            result[beforeIdx][valueKey] != null &&
+            result[afterIdx][valueKey] != null
+        ) {
+            const beforeVal = result[beforeIdx][valueKey]
+            const afterVal = result[afterIdx][valueKey]
+            const totalLen = afterIdx - beforeIdx
+            result[beforeIdx][gapKey] = beforeVal
+            result[afterIdx][gapKey] = afterVal
+            for (let j = gapStart; j < gapEnd; j++) {
+                const t = (j - beforeIdx) / totalLen
+                const interp = valueKey === 'count' ? Math.round(beforeVal + t * (afterVal - beforeVal)) : +(beforeVal + t * (afterVal - beforeVal)).toFixed(2)
+                result[j][gapKey] = interp
+            }
+        }
+        i = gapEnd
+    }
+
+    return { data: result, hasGaps }
+}
+
 // Memoized TimelineCard für bessere Performance
 export const TimelineCard = memo(function TimelineCard({ companyId, onFiltersChange, onLoadingChange }) {
     const [timelineData, setTimelineData] = useState([])
@@ -224,6 +325,13 @@ export const TimelineCard = memo(function TimelineCard({ companyId, onFiltersCha
         return forecastTrends
     }, [forecastData, timelineData, metric])
 
+    // Process historical timeline with gap filling (Ø Score and Anzahl only)
+    const { data: processedHistorical, hasGaps: timelineHasGaps } = useMemo(() => {
+        if (metric !== "Ø Score" && metric !== "Anzahl") return { data: [], hasGaps: false }
+        const valueKey = metric === "Anzahl" ? "count" : "score"
+        return processTimelineDataWithGaps(timelineData, valueKey)
+    }, [timelineData, metric])
+
     // Prepare chart data - combine historical and forecast with bridge point
     const chartData = useMemo(() => {
         if (timelineData.length === 0) return []
@@ -266,31 +374,54 @@ export const TimelineCard = memo(function TimelineCard({ companyId, onFiltersCha
             return [...historicalTrends, ...forecastTrends]
         }
 
-        // Historical data points - last point gets both values to bridge the lines
-        const historical = timelineData.map((item, index) => {
-            const isLast = index === timelineData.length - 1
-            return {
-                date: item.date_display || item.date,
-                historical: metric === "Anzahl" ? item.count : item.score,
-                // Bridge point: last historical also gets forecast value to connect lines
-                // For "Anzahl" mode, forecast is null since we can't forecast count
-                forecast: isLast && forecastData.length > 0 && metric === "Ø Score" ? item.score : null,
-                count: item.count,
-                score: item.score
+        // Historical: use gap-filled data when available (Ø Score / Anzahl with 2+ points)
+        const valueKey = metric === "Anzahl" ? "count" : "score"
+        const gapKey = valueKey + "Gap"
+        let historical
+        if (processedHistorical.length > 0) {
+            historical = processedHistorical.map((row, index) => {
+                const isLast = index === processedHistorical.length - 1
+                return {
+                    date: row.date,
+                    historical: row[valueKey] ?? null,
+                    historicalGap: row[gapKey] ?? null,
+                    _isMissing: row._isMissing,
+                    count: row.count ?? null,
+                    score: row.score ?? null,
+                    forecast: isLast && forecastData.length > 0 && metric === "Ø Score" ? row[valueKey] : null,
+                }
+            })
+            // Bridge: last historical point gets forecast value for line connection
+            if (historical.length > 0 && forecastData.length > 0 && metric === "Ø Score") {
+                historical[historical.length - 1].forecast = historical[historical.length - 1].historical
             }
-        })
+        } else {
+            historical = timelineData.map((item, index) => {
+                const isLast = index === timelineData.length - 1
+                return {
+                    date: item.date_display || item.date,
+                    historical: metric === "Anzahl" ? item.count : item.score,
+                    historicalGap: null,
+                    _isMissing: false,
+                    forecast: isLast && forecastData.length > 0 && metric === "Ø Score" ? item.score : null,
+                    count: item.count,
+                    score: item.score,
+                }
+            })
+        }
 
         // Forecast data points - only show forecast for "Ø Score" mode
         const forecast = metric === "Ø Score" ? forecastData.map(item => ({
             date: item.date_display || item.date,
             historical: null,
+            historicalGap: null,
             forecast: item.score,
             count: null,
-            score: null
+            score: null,
         })) : []
 
         return [...historical, ...forecast]
-    }, [timelineData, forecastData, metric, trendData, forecastTrendData])
+    }, [timelineData, forecastData, metric, trendData, forecastTrendData, processedHistorical])
 
     // Find the last historical date for reference line
     const lastHistoricalDate = timelineData.length > 0 
@@ -358,6 +489,24 @@ export const TimelineCard = memo(function TimelineCard({ companyId, onFiltersCha
             const historicalValue = payload.find(p => p.dataKey === "historical")?.value
             const forecastValue = payload.find(p => p.dataKey === "forecast")?.value
             const dataPoint = payload[0]?.payload
+            const isMissing = dataPoint?._isMissing
+
+            if (isMissing) {
+                const gapValue = dataPoint?.historicalGap
+                return (
+                    <div className="bg-white border border-slate-200 rounded-lg shadow-lg p-3">
+                        <p className="font-semibold text-slate-800 mb-1">{label}</p>
+                        <p className="text-xs text-amber-600 flex items-center gap-1">
+                            <span>⚠️</span> Keine Daten vorhanden
+                        </p>
+                        {gapValue != null && (
+                            <p className="text-xs text-slate-400 mt-1">
+                                Interpolierter Wert: {metric === "Anzahl" ? Math.round(gapValue) : gapValue.toFixed(2)}
+                            </p>
+                        )}
+                    </div>
+                )
+            }
 
             return (
                 <div className="bg-white border border-slate-200 rounded-lg shadow-lg p-3">
@@ -613,6 +762,22 @@ export const TimelineCard = memo(function TimelineCard({ companyId, onFiltersCha
                     />
                 )}
 
+                {/* Historical gap line - dashed (when there are missing months) */}
+                {metric !== "Trend" && timelineHasGaps && (
+                    <Line 
+                        type="monotone" 
+                        dataKey="historicalGap" 
+                        stroke="#94a3b8" 
+                        strokeWidth={2}
+                        strokeDasharray="6 4"
+                        strokeOpacity={0.7}
+                        dot={false}
+                        activeDot={false}
+                        connectNulls={false}
+                        legendType="none"
+                    />
+                )}
+
                 {/* Forecast data line - dashed orange (only for "Ø Score" mode) */}
                 {metric === "Ø Score" && (
                     <Line 
@@ -856,6 +1021,12 @@ export const TimelineCard = memo(function TimelineCard({ companyId, onFiltersCha
                     </div>
 
                     <ChartLegend />
+                    {timelineHasGaps && (
+                        <p className="text-xs text-slate-500 text-center italic flex items-center justify-center gap-1 mt-2">
+                            <span className="inline-block w-6 h-0 border-t-2 border-dashed border-slate-400"></span>
+                            Gestrichelte Linie = Keine Daten vorhanden (interpoliert)
+                        </p>
+                    )}
                     <SummaryStats />
                     
                     <p className="text-xs text-slate-400 text-center mt-2">
@@ -891,6 +1062,12 @@ export const TimelineCard = memo(function TimelineCard({ companyId, onFiltersCha
                         </div>
 
                         <ChartLegend compact={true} />
+                        {timelineHasGaps && (
+                            <p className="text-xs text-slate-500 text-center italic flex items-center justify-center gap-1 mt-2 flex-shrink-0">
+                                <span className="inline-block w-6 h-0 border-t-2 border-dashed border-slate-400"></span>
+                                Gestrichelte Linie = Keine Daten vorhanden (interpoliert)
+                            </p>
+                        )}
 
                         {/* Extended Stats in Modal - Compact */}
                         {timelineData.length > 0 && (

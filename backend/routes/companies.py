@@ -59,6 +59,45 @@ def get_company_ratings_avg(company_id: int):
     return res.data[0] if len(res.data) > 0 else {}
 
 
+# Mapping used for category counts (same keys as frontend CATEGORY_LABELS)
+CATEGORY_COLUMN_MAP = {
+    "avg_arbeitsatmosphaere": "sternebewertung_arbeitsatmosphaere",
+    "avg_image": "sternebewertung_image",
+    "avg_work_life_balance": "sternebewertung_work_life_balance",
+    "avg_karriere_weiterbildung": "sternebewertung_karriere_weiterbildung",
+    "avg_gehalt_sozialleistungen": "sternebewertung_gehalt_sozialleistungen",
+    "avg_kollegenzusammenhalt": "sternebewertung_kollegenzusammenhalt",
+    "avg_umwelt_sozialbewusstsein": "sternebewertung_umwelt_sozialbewusstsein",
+    "avg_vorgesetztenverhalten": "sternebewertung_vorgesetztenverhalten",
+    "avg_kommunikation": "sternebewertung_kommunikation",
+    "avg_interessante_aufgaben": "sternebewertung_interessante_aufgaben",
+    "avg_umgang_aelteren_kollegen": "sternebewertung_umgang_mit_aelteren_kollegen",
+    "avg_arbeitsbedingungen": "sternebewertung_arbeitsbedingungen",
+    "avg_gleichberechtigung": "sternebewertung_gleichberechtigung",
+}
+
+
+@router.get("/companies/{company_id}/ratings/category-counts")
+def get_company_category_counts(company_id: int):
+    """Return number of non-null ratings per category (employee table). Keys match avg_* used elsewhere."""
+    try:
+        columns = list(CATEGORY_COLUMN_MAP.values())
+        res = (
+            supabase.table("employee")
+            .select(",".join(columns))
+            .eq("company_id", company_id)
+            .execute()
+        )
+        rows = res.data or []
+        counts = {}
+        for avg_key, col in CATEGORY_COLUMN_MAP.items():
+            n = sum(1 for r in rows if r.get(col) is not None)
+            counts[avg_key] = n
+        return counts
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/companies/{company_id}/ratings")
 def get_company_ratings_avg(company_id: int):
     res = supabase.rpc("get_employee_ratings_avg", {"p_company_id": company_id}).execute()
