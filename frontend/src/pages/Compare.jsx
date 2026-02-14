@@ -654,6 +654,8 @@ const ComparePage = () => {
                 barChartElement: document.getElementById('compare-bar-chart-export'),
                 timelineChartElement: document.getElementById('compare-timeline-chart-export'),
                 categoryData: radarData,
+                summaryData,
+                categoryChartView,
             })
         } catch (err) {
             console.error('PDF-Export fehlgeschlagen:', err)

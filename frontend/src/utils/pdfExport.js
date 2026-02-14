@@ -1083,6 +1083,8 @@ export const exportCompareAsPDF = async (compareData) => {
         timelineChartElement = null,
         categoryData = [],    // [{ category, ...companyValues }]
         companyColors = null,  // Optional: [hex strings] - custom colors per company
+        summaryData = null,    // Summary insights from Compare.jsx
+        categoryChartView = 'radar',  // 'radar' or 'bar' - which chart view is active
     } = compareData;
 
     // Use custom colors or fall back to defaults
@@ -1109,11 +1111,14 @@ export const exportCompareAsPDF = async (compareData) => {
     let barImg = null;
     let timelineImg = null;
 
-    try { radarImg = await extractChartImage(radarChartElement); }
-    catch (e) { console.warn('Radar-Chart Extraktion fehlgeschlagen:', e); }
-
-    try { barImg = await extractChartImage(barChartElement); }
-    catch (e) { console.warn('Bar-Chart Extraktion fehlgeschlagen:', e); }
+    // Nur das ausgewählte Category-Chart extrahieren
+    if (categoryChartView === 'radar') {
+        try { radarImg = await extractChartImage(radarChartElement); }
+        catch (e) { console.warn('Radar-Chart Extraktion fehlgeschlagen:', e); }
+    } else if (categoryChartView === 'bar') {
+        try { barImg = await extractChartImage(barChartElement); }
+        catch (e) { console.warn('Bar-Chart Extraktion fehlgeschlagen:', e); }
+    }
 
     try { timelineImg = await extractChartImage(timelineChartElement); }
     catch (e) { console.warn('Timeline-Chart Extraktion fehlgeschlagen:', e); }
@@ -1242,6 +1247,170 @@ export const exportCompareAsPDF = async (compareData) => {
         doc.text(String(pg), pageX, tocY, { align: 'right' });
         tocY += 6;
     });
+
+    // ═════════════════════════════════════════════════════════════════════════
+    // SEITE 1.5: DETAILLIERTE ZUSAMMENFASSUNG (wenn summaryData vorhanden)
+    // ═════════════════════════════════════════════════════════════════════════
+    if (summaryData) {
+        doc.addPage();
+        currentPage++;
+
+        doc.setFillColor(...COLORS.bgLight);
+        doc.rect(0, 0, PAGE.width, PAGE.height, 'F');
+
+        let summaryPageY = addSectionTitle(doc, 'Detaillierte Zusammenfassung', PAGE.marginTop + 5,
+            'Kernerkenntnisse aus dem Firmenvergleich');
+
+        // Grid-Layout: 2 Spalten
+        const numCols = 2;
+        const colGap = 5;
+        const rowGap = 6;
+        const colWidth = (PAGE.contentWidth - (numCols - 1) * colGap) / numCols;
+
+        // Helper zum Zeichnen einer Zusammenfassungsbox
+        const drawSummaryBox = (xPos, yPos, width, title, iconColor, content) => {
+            const boxPadding = 6;
+            const lineHeight = 4.5;
+            const titleHeight = 8;
+            
+            // Inhaltshöhe berechnen
+            const contentLines = content.split('\n').length;
+            const contentHeight = contentLines * lineHeight + boxPadding;
+            const totalHeight = titleHeight + contentHeight;
+
+            // Box zeichnen
+            doc.setFillColor(...COLORS.white);
+            doc.setDrawColor(...COLORS.border);
+            doc.setLineWidth(0.3);
+            doc.roundedRect(xPos, yPos, width, totalHeight, 2, 2, 'FD');
+
+            // Icon-Bereich (farbiger Akzent links)
+            doc.setFillColor(...iconColor);
+            doc.roundedRect(xPos, yPos, 4, totalHeight, 2, 2, 'F');
+
+            // Titel
+            doc.setFontSize(9);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(...COLORS.dark);
+            doc.text(title, xPos + 8, yPos + 5);
+
+            // Content
+            doc.setFontSize(7.5);
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(...COLORS.text);
+            const contentY = yPos + titleHeight + 2;
+            const lines = content.split('\n');
+            lines.forEach((line, idx) => {
+                // Text umbrechen wenn zu lang
+                const maxWidth = width - 16;
+                const wrappedLines = doc.splitTextToSize(line, maxWidth);
+                wrappedLines.forEach((wrappedLine, wIdx) => {
+                    doc.text(wrappedLine, xPos + 8, contentY + (idx * lineHeight) + (wIdx * lineHeight));
+                });
+            });
+
+            return totalHeight;
+        };
+
+        // Sammle alle Boxen-Daten
+        const boxes = [];
+
+        // 1. Gesamtführer
+        let leaderContent = '';
+        if (summaryData.leader) {
+            if (summaryData.leader.isTied) {
+                leaderContent = `Mehrere Firmen gleichauf (Ø ${Number(summaryData.leader.score).toFixed(2)})`;
+            } else {
+                leaderContent = `${summaryData.leader.name}: ${Number(summaryData.leader.score).toFixed(2)}`;
+            }
+        } else {
+            leaderContent = 'Keine Daten verfügbar';
+        }
+        boxes.push({ title: 'Gesamtführer', color: [245, 158, 11], content: leaderContent });
+
+        // 2. Stärken-Profil
+        let strengthsContent = '';
+        if (summaryData.strengths && summaryData.strengths.length > 0) {
+            strengthsContent = summaryData.strengths
+                .map(({ slot, label, score }) => 
+                    `• ${slot.name}: ${label || '–'}${score != null ? ` (${score.toFixed(2)})` : ''}`
+                )
+                .join('\n');
+        } else {
+            strengthsContent = 'Keine Daten verfügbar';
+        }
+        boxes.push({ title: 'Stärken-Profil', color: [16, 185, 129], content: strengthsContent });
+
+        // 3. Größte Unterschiede
+        let gapsContent = '';
+        if (summaryData.biggestGaps && summaryData.biggestGaps.length > 0) {
+            gapsContent = summaryData.biggestGaps
+                .map(g => `• ${g.label}: Differenz ${g.spread.toFixed(2)} Punkte`)
+                .join('\n');
+        } else {
+            gapsContent = 'Keine nennenswerten Unterschiede';
+        }
+        boxes.push({ title: 'Größte Unterschiede', color: [59, 130, 246], content: gapsContent });
+
+        // 4. Gemeinsame Schwächen
+        let weaknessesContent = '';
+        if (summaryData.sharedWeaknesses && summaryData.sharedWeaknesses.length > 0) {
+            weaknessesContent = summaryData.sharedWeaknesses.join(', ') + ' (alle unter 3,0)';
+        } else {
+            weaknessesContent = 'Keine – keine Kategorie bei allen unter 3,0';
+        }
+        boxes.push({ title: 'Gemeinsame Schwächen', color: [239, 68, 68], content: weaknessesContent });
+
+        // 5. Trend-Ausblick
+        let trendsContent = '';
+        if (summaryData.trends && summaryData.trends.length > 0) {
+            trendsContent = summaryData.trends
+                .map(({ slot, trend }) => {
+                    if (!trend) return `• ${slot.name}: –`;
+                    const delta = parseFloat(trend.avgDelta) > 0 ? `+${trend.avgDelta}` : trend.avgDelta;
+                    return `• ${slot.name}: ${delta} (12 Mon.)`;
+                })
+                .join('\n');
+        } else {
+            trendsContent = 'Keine Trenddaten verfügbar';
+        }
+        boxes.push({ title: 'Trend-Ausblick', color: [100, 116, 139], content: trendsContent });
+
+        // 6. Chart-Ansicht Information (nur wenn relevant)
+        if (radarImg || barImg) {
+            const chartViewText = categoryChartView === 'radar' ? 'Radar-Ansicht' : 'Balken-Ansicht';
+            boxes.push({ 
+                title: 'Diagramm-Ansicht', 
+                color: [139, 92, 246], 
+                content: `Kategorievergleich wird als ${chartViewText} dargestellt`
+            });
+        }
+
+        // Zeichne Boxen in Grid-Layout
+        let currentRow = 0;
+        let currentCol = 0;
+        let rowHeights = [0]; // Track max height per row
+
+        boxes.forEach((box, idx) => {
+            const xPos = PAGE.marginLeft + currentCol * (colWidth + colGap);
+            const yPos = summaryPageY + rowHeights.slice(0, currentRow).reduce((sum, h) => sum + h + rowGap, 0);
+            
+            const boxHeight = drawSummaryBox(xPos, yPos, colWidth, box.title, box.color, box.content);
+            
+            // Track max height in this row
+            rowHeights[currentRow] = Math.max(rowHeights[currentRow] || 0, boxHeight);
+            
+            currentCol++;
+            if (currentCol >= numCols) {
+                currentCol = 0;
+                currentRow++;
+                rowHeights[currentRow] = 0;
+            }
+        });
+
+        // Update summaryPageY für nachfolgende Inhalte
+        summaryPageY += rowHeights.reduce((sum, h) => sum + h, 0) + (rowHeights.length - 1) * rowGap;
+    }
 
     // ═════════════════════════════════════════════════════════════════════════
     // SEITE 2: KPI-VERGLEICH
