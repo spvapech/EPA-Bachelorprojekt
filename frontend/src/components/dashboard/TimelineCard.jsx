@@ -231,7 +231,7 @@ export const TimelineCard = memo(function TimelineCard({ companyId, onFiltersCha
                 }
 
                 const response = await fetch(
-                    `${API_URL}/analytics/company/${companyId}/timeline?days=${days}&forecast_months=12&source=${source}`
+                    `${API_URL}/analytics/company/${companyId}/timeline?days=${days}&forecast_months=6&source=${source}`
                 )
 
                 if (!response.ok) {

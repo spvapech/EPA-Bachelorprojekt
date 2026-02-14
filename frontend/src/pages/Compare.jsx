@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react"
+import { useState, useEffect, useCallback, useRef, useMemo } from "react"
 import { useLocation, useNavigate } from "react-router-dom"
 import {
     BarChart,
@@ -17,7 +17,7 @@ import {
     PolarAngleAxis,
     PolarRadiusAxis,
 } from "recharts"
-import { Building2, Plus, X, ArrowLeft, Loader2, TrendingUp, TrendingDown, Minus, AlertTriangle, ThumbsDown, Download, Palette } from "lucide-react"
+import { Building2, Plus, X, ArrowLeft, Loader2, TrendingUp, TrendingDown, Minus, AlertTriangle, ThumbsDown, Download, Palette, Trophy, BarChart3 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { CompanySearchSelect } from "@/components/CompanySearchSelect"
@@ -563,6 +563,65 @@ const ComparePage = () => {
         return "–"
     }
 
+    // ---------- Summary insights (Zusammenfassung) ----------
+    const summaryData = useMemo(() => {
+        if (activeSlots.length < 2) return null
+
+        const scores = activeSlots
+            .map((slot) => ({
+                name: slot.name,
+                colorIndex: slot.colorIndex,
+                score: companyData[slot.id]?.ratings?.avg_overall,
+            }))
+            .filter((s) => s.score != null && Number.isFinite(s.score))
+
+        const maxScore = scores.length ? Math.max(...scores.map((s) => s.score)) : null
+        const minScore = scores.length ? Math.min(...scores.map((s) => s.score)) : null
+        const leaders = scores.filter((s) => s.score === maxScore)
+        const isTied = leaders.length >= 2 && maxScore != null && minScore != null && maxScore - minScore <= 0.1
+        const leader = scores.length ? { ...leaders[0], isTied } : null
+
+        const strengths = activeSlots.map((slot) => {
+            const cat = companyData[slot.id]?.categoryRatings
+            if (!cat || typeof cat !== "object") return { slot, label: null, score: null }
+            const entries = Object.entries(cat)
+                .filter(([key]) => CATEGORY_LABELS[key] && Number.isFinite(Number(cat[key])))
+                .map(([key, value]) => ({ key, label: CATEGORY_LABELS[key], score: Number(value) }))
+            if (!entries.length) return { slot, label: null, score: null }
+            const best = entries.reduce((a, b) => (b.score > a.score ? b : a), entries[0])
+            return { slot, label: best.label, score: best.score }
+        })
+
+        const categoryKeys = Object.keys(CATEGORY_LABELS)
+        const gaps = categoryKeys.map((key) => {
+            const values = activeSlots
+                .map((s) => companyData[s.id]?.categoryRatings?.[key])
+                .filter((v) => v != null && Number.isFinite(Number(v)))
+                .map(Number)
+            const spread = values.length >= 2 ? Math.max(...values) - Math.min(...values) : 0
+            return { key, label: CATEGORY_LABELS[key], spread, values }
+        })
+        const biggestGaps = gaps
+            .filter((g) => g.spread > 0)
+            .sort((a, b) => b.spread - a.spread)
+            .slice(0, 3)
+
+        const sharedWeaknesses = categoryKeys.filter((key) => {
+            const vals = activeSlots
+                .map((s) => companyData[s.id]?.categoryRatings?.[key])
+                .filter((v) => v != null && Number.isFinite(Number(v)))
+                .map(Number)
+            return vals.length === activeSlots.length && vals.every((v) => v < 3.0)
+        }).map((key) => CATEGORY_LABELS[key])
+
+        const trends = activeSlots.map((slot) => ({
+            slot,
+            trend: companyData[slot.id]?.trend ?? null,
+        }))
+
+        return { leader, strengths, biggestGaps, sharedWeaknesses, trends }
+    }, [activeSlots, companyData])
+
     const [exporting, setExporting] = useState(false)
 
     const handleExportPDF = async () => {
@@ -956,6 +1015,124 @@ const ComparePage = () => {
                                 </CardContent>
                             </Card>
                         </div>
+
+                        {/* Zusammenfassung (Summary) */}
+                        {summaryData && (
+                            <Card className="rounded-2xl shadow-sm">
+                                <CardHeader className="pb-2">
+                                    <CardTitle className="text-base font-bold text-slate-800">
+                                        Zusammenfassung
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                        {/* Gesamtführer */}
+                                        <div className="flex gap-3">
+                                            <div className="shrink-0 w-9 h-9 rounded-lg bg-amber-100 flex items-center justify-center">
+                                                <Trophy className="h-4 w-4 text-amber-600" />
+                                            </div>
+                                            <div className="min-w-0">
+                                                <p className="text-sm font-semibold text-slate-800 mb-1">Gesamtführer</p>
+                                                {summaryData.leader ? (
+                                                    summaryData.leader.isTied ? (
+                                                        <p className="text-sm text-slate-600">Mehrere Firmen gleichauf (Ø {Number(summaryData.leader.score).toFixed(2)})</p>
+                                                    ) : (
+                                                        <p className="text-sm text-slate-600 flex items-center gap-1.5">
+                                                            <span className="inline-block w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: COLOR_PALETTE[summaryData.leader.colorIndex]?.hex }} />
+                                                            {summaryData.leader.name}: {Number(summaryData.leader.score).toFixed(2)}
+                                                        </p>
+                                                    )
+                                                ) : (
+                                                    <p className="text-sm text-slate-500">–</p>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* Stärken-Profil */}
+                                        <div className="flex gap-3">
+                                            <div className="shrink-0 w-9 h-9 rounded-lg bg-emerald-100 flex items-center justify-center">
+                                                <TrendingUp className="h-4 w-4 text-emerald-600" />
+                                            </div>
+                                            <div className="min-w-0">
+                                                <p className="text-sm font-semibold text-slate-800 mb-1">Stärken-Profil</p>
+                                                <ul className="space-y-0.5">
+                                                    {summaryData.strengths.map(({ slot, label, score }) => (
+                                                        <li key={slot.id} className="text-sm text-slate-600 flex items-center gap-1.5">
+                                                            <span className="inline-block w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: COLOR_PALETTE[slot.colorIndex]?.hex }} />
+                                                            {slot.name}: {label ?? "–"}{score != null ? ` (${score.toFixed(2)})` : ""}
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            </div>
+                                        </div>
+
+                                        {/* Größte Unterschiede */}
+                                        <div className="flex gap-3">
+                                            <div className="shrink-0 w-9 h-9 rounded-lg bg-blue-100 flex items-center justify-center">
+                                                <BarChart3 className="h-4 w-4 text-blue-600" />
+                                            </div>
+                                            <div className="min-w-0">
+                                                <p className="text-sm font-semibold text-slate-800 mb-1">Größte Unterschiede</p>
+                                                {summaryData.biggestGaps.length ? (
+                                                    <ul className="space-y-0.5 text-sm text-slate-600">
+                                                        {summaryData.biggestGaps.map((g) => (
+                                                            <li key={g.key}>{g.label}: Differenz {g.spread.toFixed(2)} Punkte</li>
+                                                        ))}
+                                                    </ul>
+                                                ) : (
+                                                    <p className="text-sm text-slate-500">Keine nennenswerten Unterschiede</p>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* Gemeinsame Schwächen */}
+                                        <div className="flex gap-3 md:col-span-2 lg:col-span-1">
+                                            <div className="shrink-0 w-9 h-9 rounded-lg bg-red-100 flex items-center justify-center">
+                                                <AlertTriangle className="h-4 w-4 text-red-600" />
+                                            </div>
+                                            <div className="min-w-0">
+                                                <p className="text-sm font-semibold text-slate-800 mb-1">Gemeinsame Schwächen</p>
+                                                {summaryData.sharedWeaknesses.length ? (
+                                                    <p className="text-sm text-slate-600">{summaryData.sharedWeaknesses.join(", ")} (alle unter 3,0)</p>
+                                                ) : (
+                                                    <p className="text-sm text-slate-600">Keine – keine Kategorie bei allen unter 3,0</p>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* Trend-Ausblick */}
+                                        <div className="flex gap-3 md:col-span-2">
+                                            <div className="shrink-0 w-9 h-9 rounded-lg bg-slate-100 flex items-center justify-center">
+                                                <TrendingUp className="h-4 w-4 text-slate-600" />
+                                            </div>
+                                            <div className="min-w-0">
+                                                <p className="text-sm font-semibold text-slate-800 mb-1">Trend-Ausblick</p>
+                                                <ul className="space-y-0.5">
+                                                    {summaryData.trends.map(({ slot, trend }) => (
+                                                        <li key={slot.id} className="text-sm text-slate-600 flex items-center gap-2">
+                                                            <span className="inline-block w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: COLOR_PALETTE[slot.colorIndex]?.hex }} />
+                                                            {slot.name}:
+                                                            {trend ? (
+                                                                <>
+                                                                    {trend.sign === "up" && <TrendingUp className="h-3.5 w-3.5 text-green-600 inline" />}
+                                                                    {trend.sign === "down" && <TrendingDown className="h-3.5 w-3.5 text-red-600 inline" />}
+                                                                    {trend.sign === "flat" && <Minus className="h-3.5 w-3.5 text-slate-400 inline" />}
+                                                                    <span className={trend.sign === "up" ? "text-green-600" : trend.sign === "down" ? "text-red-600" : "text-slate-500"}>
+                                                                        {parseFloat(trend.avgDelta) > 0 ? "+" : ""}{trend.avgDelta} (12 Mon.)
+                                                                    </span>
+                                                                </>
+                                                            ) : (
+                                                                <span className="text-slate-400">–</span>
+                                                            )}
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        )}
 
                         {/* Category Ratings comparison - Radar / Bar charts in one card with toggle */}
                         <Card className="rounded-2xl shadow-sm">
