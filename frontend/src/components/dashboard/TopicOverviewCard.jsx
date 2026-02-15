@@ -10,14 +10,14 @@ import {
 } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { useState, useEffect, memo } from "react"
+import { useState, useEffect, memo, forwardRef, useImperativeHandle } from "react"
 import TopicDetailModal from "./modals/TopicDetailModal"
 import TopicTableModal from "./modals/TopicTableModal"
 import { FileText } from "lucide-react"
 import { API_URL } from "@/config"
 
 // Memoized TopicOverviewCard für bessere Performance
-export const TopicOverviewCard = memo(function TopicOverviewCard({ companyId = 1, onDataChange, onLoadingChange }) {
+export const TopicOverviewCard = memo(forwardRef(function TopicOverviewCard({ companyId = 1, onDataChange, onLoadingChange }, ref) {
     const [topicsData, setTopicsData] = useState([])
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState(null)
@@ -98,6 +98,22 @@ export const TopicOverviewCard = memo(function TopicOverviewCard({ companyId = 1
     useEffect(() => {
         setIsModalOpen(tableModalOpen || detailModalOpen)
     }, [tableModalOpen, detailModalOpen])
+
+    // Expose openTopicByName to parent via ref
+    useImperativeHandle(ref, () => ({
+        openTopicByName: (name) => {
+            const found = topicsData.find(t => 
+                t.topic?.toLowerCase() === name?.toLowerCase()
+            )
+            if (found) {
+                setSelectedTopic(found)
+                setDetailModalOpen(true)
+            } else {
+                // Fallback: open table modal
+                setTableModalOpen(true)
+            }
+        }
+    }), [topicsData])
 
     const handleCardClick = () => {
         setTableModalOpen(true)
@@ -332,4 +348,4 @@ export const TopicOverviewCard = memo(function TopicOverviewCard({ companyId = 1
             )}
         </>
     )
-})
+}))

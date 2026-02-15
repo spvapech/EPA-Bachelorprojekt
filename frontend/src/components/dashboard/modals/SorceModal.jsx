@@ -16,7 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ArrowDown, ArrowUp, ArrowUpDown, Filter, Search, X } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, Filter, Search, Star, X } from "lucide-react";
 
 const API_URL = "http://localhost:8000/api";
 
@@ -126,8 +126,23 @@ export default function SorceModal({ open, onOpenChange, companyId }) {
 
   // Backend liefert Werte ~0..5 -> Sterne direkt 1..5
   function renderStars(score) {
-    const stars = Math.max(0, Math.min(5, Math.round(score)));
-    return "⭐".repeat(stars);
+    const filled = Math.max(0, Math.min(5, Math.round(score)));
+    const empty = 5 - filled;
+    return (
+      <div className="flex items-center gap-2">
+        <div className="flex">
+          {Array.from({ length: filled }, (_, i) => (
+            <Star key={`f-${i}`} className="h-5 w-5 fill-yellow-400 text-yellow-400" />
+          ))}
+          {Array.from({ length: empty }, (_, i) => (
+            <Star key={`e-${i}`} className="h-5 w-5 text-gray-300" />
+          ))}
+        </div>
+        <span className="rounded bg-gray-100 px-2 py-0.5 text-sm font-medium text-gray-700">
+          {score.toFixed(1)}
+        </span>
+      </div>
+    );
   }
 
   return (

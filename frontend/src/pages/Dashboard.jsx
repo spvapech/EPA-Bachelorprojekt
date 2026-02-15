@@ -9,6 +9,9 @@ import {
     Loader2,
     Menu,
     GitCompareArrows,
+    TrendingUp,
+    TrendingDown,
+    Minus,
 } from "lucide-react"
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -109,6 +112,9 @@ export default function Dashboard() {
         topicOverview: true,
         kpiCards: true
     })
+    
+    // Ref für TopicOverviewCard (um Topic-Detail direkt zu öffnen)
+    const topicOverviewRef = useRef(null)
     
     // Ref für aktuellen Loading State (für Closures)
     const loadingStatesRef = useRef(dashboardLoadingStates)
@@ -994,19 +1000,23 @@ export default function Dashboard() {
                                     Trend
                                 </CardTitle>
                             </CardHeader>
-                            <CardContent className="pt-0 pb-4 flex flex-col items-center gap-0.5">
+                            <CardContent className="pt-0 pb-4 flex flex-col items-center gap-1">
                                 {trendData?.avgDelta ? (
                                     <>
                                         <div
                                             className={
                                                 trendData.sign === 'up'
-                                                    ? 'text-green-600 text-2xl font-extrabold leading-none'
+                                                    ? 'text-green-600'
                                                     : trendData.sign === 'down'
-                                                      ? 'text-red-600 text-2xl font-extrabold leading-none'
-                                                      : 'text-slate-500 text-2xl font-extrabold leading-none'
+                                                      ? 'text-red-600'
+                                                      : 'text-slate-500'
                                             }
                                         >
-                                            {trendData.sign === 'up' ? '↑' : trendData.sign === 'down' ? '↓' : '—'}
+                                            {trendData.sign === 'up'
+                                                ? <TrendingUp className="h-7 w-7" />
+                                                : trendData.sign === 'down'
+                                                  ? <TrendingDown className="h-7 w-7" />
+                                                  : <Minus className="h-7 w-7" />}
                                         </div>
                                         <div
                                             className={
@@ -1067,7 +1077,12 @@ export default function Dashboard() {
                             companyId={effectiveCompanyId}
                         />
 
-                        <Card className="rounded-3xl shadow-smon" onClick={() => setOpenNegative(true)}>
+                        <Card className="rounded-3xl shadow-sm cursor-pointer hover:shadow-md transition-shadow" onClick={() => {
+                            const name = getNegativeTopicName(negativeTopicItem)
+                            if (name && name !== '-') {
+                                topicOverviewRef.current?.openTopicByName(name)
+                            }
+                        }}>
                             <CardHeader className="pb-1 pt-4">
                                 <CardTitle className="text-base font-bold text-slate-800">
                                     Negative Topic
@@ -1107,6 +1122,7 @@ export default function Dashboard() {
                     {/* Topic Overview */}
                     <div className="mt-4">
                         <TopicOverviewCard 
+                            ref={topicOverviewRef}
                             companyId={selectedCompany || selectedCompanyId} 
                             onDataChange={handleTopicOverviewDataChange}
                             onLoadingChange={handleTopicOverviewLoadingChange}

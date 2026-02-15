@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ArrowDown, ArrowUp, Filter, Search, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Filter, Search, TrendingDown, TrendingUp, Minus, X } from "lucide-react";
 
 const API_URL = "http://localhost:8000/api";
 
@@ -141,9 +141,11 @@ export default function TrendModal({ open, onOpenChange, companyId }) {
 
     const fmtDelta = (d, sign) => {
         if (sign === "new") return "neu";
-        if (d === null || !Number.isFinite(d)) return "—";
-        const v = Math.abs(Math.round(d * 10) / 10);
-        return v > 0 ? `${v}` : `${v}`;
+        if (d === null || !Number.isFinite(d)) return "0";
+        const v = Math.round(d * 10) / 10;
+        if (sign === "up") return `+${Math.abs(v)}`;
+        if (sign === "down") return `-${Math.abs(v)}`;
+        return `${v}`;
     };
 
     const trendColor = (sign) => {
@@ -153,8 +155,11 @@ export default function TrendModal({ open, onOpenChange, companyId }) {
         return "text-gray-600";
     };
 
-    const arrow = (sign) =>
-        sign === "up" ? "↑" : sign === "down" ? "↓" : "—";
+    const TrendIcon = ({ sign }) => {
+        if (sign === "up") return <TrendingUp className="h-5 w-5" />;
+        if (sign === "down") return <TrendingDown className="h-5 w-5" />;
+        return <Minus className="h-5 w-5" />;
+    };
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
@@ -291,10 +296,8 @@ export default function TrendModal({ open, onOpenChange, companyId }) {
                                     {row.title}:
                                 </div>
                                 <div className={`flex items-center gap-2 font-bold text-base w-28 justify-end ${trendColor(row.sign)}`}>
-                                    <span>{arrow(row.sign)}</span>
-                                    <span>
-                                        {row.sign === "flat" ? "0" : fmtDelta(row.delta, row.sign)}
-                                    </span>
+                                    <TrendIcon sign={row.sign} />
+                                    <span>{fmtDelta(row.delta, row.sign)}</span>
                                 </div>
                             </div>
                         ))}
