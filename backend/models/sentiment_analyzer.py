@@ -169,18 +169,14 @@ class SentimentAnalyzer:
             from transformers import pipeline
             logger.info("Loading German sentiment analysis model...")
             
-            # Version 2.1 Improvements (2026-02-01):
-            # Using german-nlp-group/electra-base-german-europeana-cased-sentiment
-            # Reasons:
-            # - Better accuracy on formal German text (like workplace reviews)
-            # - Improved neutral sentiment detection
-            # - Larger training corpus with diverse text types
-            # Fallback to oliverguhr if primary model unavailable
+            # Primary model: oliverguhr/german-sentiment-bert
+            # - Trained specifically on German text
+            # - Supports positive/negative/neutral labels
+            # Fallback: cardiffnlp multilingual model
             
             model_options = [
-                "german-nlp-group/electra-base-german-europeana-cased-sentiment",  # Primary
-                "oliverguhr/german-sentiment-bert",  # Fallback 1
-                "cardiffnlp/twitter-xlm-roberta-base-sentiment-multilingual"  # Fallback 2
+                "oliverguhr/german-sentiment-bert",  # Primary
+                "cardiffnlp/twitter-xlm-roberta-base-sentiment-multilingual"  # Fallback
             ]
             
             loaded = False
