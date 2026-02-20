@@ -310,6 +310,11 @@ class SentimentAnalyzer:
                 confidence = max(confidence * 0.7, 0.5)
                 logger.debug(f"Negated-negative override: '{text[:40]}...'")
             
+            # Hard cap: wenn der Transformer sehr sicher ist (>= 0.75),
+            # vertrauen wir ihm komplett — kein Lexikon-Override mehr.
+            elif confidence >= 0.75:
+                logger.debug(f"Transformer high confidence ({confidence:.2f}), skipping lexicon correction.")
+            
             # Case C: Transformer says negative but lexicon says neutral
             # → only correct if transformer is genuinely uncertain
             elif sentiment == 'negative' and lexicon_sentiment == 'neutral':
