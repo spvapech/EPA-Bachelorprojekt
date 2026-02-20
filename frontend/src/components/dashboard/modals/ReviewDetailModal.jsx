@@ -395,7 +395,7 @@ export default function ReviewDetailModal({
                                             return (
                                                 <div
                                                     key={key}
-                                                    className={`flex flex-col gap-2 p-4 rounded-lg border ${getBgColor(rating)} transition-all hover:shadow-md`}
+                                                    className={`flex flex-col gap-2 p-4 rounded-lg border ${getBgColor(rating)} transition-all hover:shadow-md cursor-pointer`}
                                                 >
                                                     <span className="text-sm font-semibold text-slate-800">
                                                         {label}

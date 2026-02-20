@@ -233,7 +233,8 @@ export const TopicOverviewCard = memo(forwardRef(function TopicOverviewCard({ co
     return (
         <>
             <Card 
-                className="rounded-3xl shadow-sm hover:shadow-md transition-shadow"
+                className="rounded-3xl shadow-sm hover:shadow-md transition-shadow cursor-pointer"
+                onClick={handleCardClick}
             >
                 <CardHeader className="pb-2 pt-4">
                     <CardTitle className="text-lg font-bold text-slate-800">
@@ -242,12 +243,12 @@ export const TopicOverviewCard = memo(forwardRef(function TopicOverviewCard({ co
                 </CardHeader>
                 <CardContent className="pb-4">
                     {/* Datenquellen Filter */}
-                    <div className="flex gap-2 mb-4">
+                    <div className="flex gap-2 mb-4" onClick={(e) => e.stopPropagation()}>
                         <Button
                             variant="outline"
                             onClick={() => setSourceFilter(null)}
                             size="sm"
-                            className={`flex-1 ${
+                            className={`flex-1 cursor-pointer ${
                                 sourceFilter === null 
                                     ? 'bg-blue-500 text-white hover:bg-blue-600 border-blue-500' 
                                     : 'hover:bg-slate-100'
@@ -259,7 +260,7 @@ export const TopicOverviewCard = memo(forwardRef(function TopicOverviewCard({ co
                             variant="outline"
                             onClick={() => setSourceFilter('employee')}
                             size="sm"
-                            className={`flex-1 ${
+                            className={`flex-1 cursor-pointer ${
                                 sourceFilter === 'employee' 
                                     ? 'bg-blue-500 text-white hover:bg-blue-600 border-blue-500' 
                                     : 'hover:bg-slate-100'
@@ -271,7 +272,7 @@ export const TopicOverviewCard = memo(forwardRef(function TopicOverviewCard({ co
                             variant="outline"
                             onClick={() => setSourceFilter('candidates')}
                             size="sm"
-                            className={`flex-1 ${
+                            className={`flex-1 cursor-pointer ${
                                 sourceFilter === 'candidates' 
                                     ? 'bg-green-500 text-white hover:bg-green-600 border-green-500' 
                                     : 'hover:bg-slate-100'
@@ -299,10 +300,7 @@ export const TopicOverviewCard = memo(forwardRef(function TopicOverviewCard({ co
                         </div>
                     )}
                     
-                    <div 
-                        className="cursor-pointer"
-                        onClick={handleCardClick}
-                    >
+                    <div>
                         <div className="grid grid-cols-3 gap-4">
                             <div>
                                 <p className="text-xs text-slate-600 mb-0.5">Total Topics</p>
