@@ -75,6 +75,24 @@ export default function ReviewDetailModal({
         }
     }
 
+    // Maps numeric status values and common variants to readable labels
+    const formatStatus = (status) => {
+        if (!status) return null
+        const s = String(status).trim()
+
+        // Numeric encoding
+        if (s === "1" || s === "1.0") return "Angestellt"
+        if (s === "0" || s === "0.0") return "Ex-Angestellt"
+
+        // Normalize common textual variants (e.g. "Ex-Angestellter", "Ex Angestellter", "ex-angestellt")
+        const normalized = s.toLowerCase().replace(/\s+/g, "-")
+        if (/^ex-?angestell/i.test(normalized) || /^ex-angestell/i.test(normalized)) {
+            return "Ex-Angestellt"
+        }
+
+        return s
+    }
+
     // Get badge variant based on status
     const getStatusBadgeVariant = (status) => {
         const statusLower = status?.toLowerCase() || ""
@@ -216,8 +234,8 @@ export default function ReviewDetailModal({
                                     {fullReview.status && (
                                         <>
                                             <span className="text-slate-400">•</span>
-                                            <Badge variant={getStatusBadgeVariant(fullReview.status)}>
-                                                {fullReview.status}
+                                            <Badge variant={getStatusBadgeVariant(formatStatus(fullReview.status))}>
+                                                {formatStatus(fullReview.status)}
                                             </Badge>
                                         </>
                                     )}
