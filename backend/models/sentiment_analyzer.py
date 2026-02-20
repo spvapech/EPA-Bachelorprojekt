@@ -229,8 +229,8 @@ class SentimentAnalyzer:
         """
         Analyze sentiment using transformer model with hybrid lexicon validation.
         
-        Version 2.2: Hybrid approach — uses lexicon as correction layer to fix
-        the transformer's negative bias on neutral/mixed German texts.
+        Version 2.3: Hybrid approach — transformer is primary, lexicon only corrects
+        when transformer is genuinely uncertain (tightened thresholds).
         
         Strategy:
         1. Get transformer prediction
@@ -311,22 +311,21 @@ class SentimentAnalyzer:
                 logger.debug(f"Negated-negative override: '{text[:40]}...'")
             
             # Case C: Transformer says negative but lexicon says neutral
-            # → likely negative bias, cross-check
+            # → only correct if transformer is genuinely uncertain
             elif sentiment == 'negative' and lexicon_sentiment == 'neutral':
-                # If the margin between neg and other labels is not huge,
-                # lean towards neutral
+                # Require both a small margin AND low confidence before overriding
                 margin = neg_score - max(pos_score, neu_score)
-                if margin < 0.5:
+                if margin < 0.2 and confidence < 0.55:
                     sentiment = 'neutral'
                     polarity = 0.0
                     confidence = confidence * 0.7
                     logger.debug(f"Hybrid neutral correction: '{text[:40]}...'")
             
             # Case D: Transformer says negative but lexicon says positive
-            # → mixed signals, reduce confidence significantly
+            # → only override if lexicon is very confident
             elif sentiment == 'negative' and lexicon_sentiment == 'positive':
-                # Strong disagreement: lean towards lexicon if lexicon is confident
-                if lexicon_result['confidence'] > 0.4:
+                # Strong disagreement: lexicon must be very confident to override transformer
+                if lexicon_result['confidence'] > 0.7:
                     sentiment = lexicon_sentiment
                     polarity = lexicon_polarity * 0.7
                     confidence = (confidence + lexicon_result['confidence']) / 2
@@ -338,9 +337,9 @@ class SentimentAnalyzer:
                     confidence = confidence * 0.6
             
             # Case E: Transformer says neutral but lexicon says positive
-            # → transformer may be too conservative, boost positive
+            # → only boost if lexicon is confident
             elif sentiment == 'neutral' and lexicon_sentiment == 'positive':
-                if lexicon_result['confidence'] > 0.3:
+                if lexicon_result['confidence'] > 0.6:
                     sentiment = 'positive'
                     polarity = lexicon_polarity * 0.8
                     confidence = (confidence + lexicon_result['confidence']) / 2
