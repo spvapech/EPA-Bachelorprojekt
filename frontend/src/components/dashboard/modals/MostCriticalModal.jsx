@@ -5,6 +5,8 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
+import { AlertTriangle, TrendingDown, BarChart3, Layers } from "lucide-react";
 import { API_URL } from "../../../config";
 
 // Labels für Kategorie-Keys aus dem Backend
@@ -113,49 +115,70 @@ export default function MostCriticalModal({ open, onOpenChange, companyId = null
         return [];
     }, [item]);
 
+    const impactColor = useMemo(() => {
+        if (impact === "Hoch") return "text-red-600 bg-red-50 border-red-200";
+        if (impact === "Mittel") return "text-orange-600 bg-orange-50 border-orange-200";
+        return "text-yellow-600 bg-yellow-50 border-yellow-200";
+    }, [impact]);
+
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="w-[95vw] sm:w-full sm:max-w-4xl max-h-[85vh] overflow-y-auto rounded-2xl p-6 sm:p-10 bg-white shadow-2xl">
-                <DialogHeader className="text-left">
-                    <DialogTitle className="text-5xl font-extrabold text-slate-800 tracking-tight">
-                        Most Critical
-                    </DialogTitle>
-
-                    {/* Topic (rot) */}
-                    <div className="mt-8 text-[42px] font-extrabold text-red-700 leading-tight">
+            <DialogContent className="w-[95vw] sm:w-full sm:max-w-lg max-h-[85vh] overflow-y-auto rounded-2xl p-0 bg-white shadow-2xl">
+                {/* Header mit rotem Gradient */}
+                <div className="bg-gradient-to-r from-red-600 to-red-700 rounded-t-2xl px-6 py-6">
+                    <DialogHeader className="text-left">
+                        <DialogTitle className="text-xl font-bold text-white flex items-center gap-2">
+                            <AlertTriangle className="h-5 w-5" />
+                            Most Critical
+                        </DialogTitle>
+                    </DialogHeader>
+                    <div className="mt-3 text-2xl font-extrabold text-white leading-tight">
                         {loading ? "…" : error ? "-" : categoryTitle}
                     </div>
-                </DialogHeader>
+                </div>
 
-                <div className="mt-14 space-y-10">
+                <div className="px-6 py-5 space-y-4">
                     {loading ? (
-                        <div className="text-center text-lg">Lade Daten…</div>
+                        <div className="text-center text-base text-slate-500 py-8">Lade Daten…</div>
                     ) : error ? (
-                        <div className="text-center text-red-600 text-lg">Fehler: {error}</div>
+                        <div className="text-center text-red-600 text-base py-8">Fehler: {error}</div>
                     ) : !item ? (
-                        <div className="text-center text-lg">Keine kritischste Kategorie gefunden.</div>
+                        <div className="text-center text-base text-slate-500 py-8">Keine kritischste Kategorie gefunden.</div>
                     ) : (
                         <>
                             {/* Anteil negativer Reviews */}
-                            <div className="flex items-center justify-between">
-                                <div className="text-[28px] font-extrabold text-black">Anteil negativer Reviews:</div>
-                                <div className="text-[28px] font-extrabold text-black">{negP === null ? "-" : `${negP} %`}</div>
+                            <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                                <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                                    <TrendingDown className="h-4 w-4 text-red-500" />
+                                    Anteil negativer Reviews
+                                </div>
+                                <Badge variant="destructive" className="text-sm px-3 py-1 font-bold">
+                                    {negP === null ? "-" : `${negP} %`}
+                                </Badge>
                             </div>
 
-                            {/* Impact */}
-                            <div className="flex items-center justify-between">
-                                <div className="text-[28px] font-extrabold text-black">Impact-Indikator:</div>
-                                <div className="text-[32px] font-extrabold text-red-600">{impact}</div>
+                            {/* Impact-Indikator */}
+                            <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                                <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                                    <BarChart3 className="h-4 w-4 text-orange-500" />
+                                    Impact-Indikator
+                                </div>
+                                <span className={`text-sm font-bold px-3 py-1 rounded-full border ${impactColor}`}>
+                                    {impact}
+                                </span>
                             </div>
 
                             {/* Betroffene Kategorien */}
-                            <div className="mt-8 text-center">
-                                <div className="text-[30px] font-extrabold text-black">Betroffene Kategorien:</div>
-                                <div className="mt-10 space-y-6">
+                            <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                                <div className="flex items-center gap-2 text-sm font-semibold text-slate-700 mb-2">
+                                    <Layers className="h-4 w-4 text-slate-500" />
+                                    Betroffene Kategorien
+                                </div>
+                                <div className="flex flex-wrap gap-2">
                                     {(affectedCategories.length ? affectedCategories : ["Allgemein"]).map((c, idx) => (
-                                        <div key={`${c}-${idx}`} className="text-[36px] font-extrabold text-black leading-tight">
+                                        <Badge key={`${c}-${idx}`} variant="outline" className="text-sm font-semibold px-3 py-1">
                                             {c}
-                                        </div>
+                                        </Badge>
                                     ))}
                                 </div>
                             </div>
