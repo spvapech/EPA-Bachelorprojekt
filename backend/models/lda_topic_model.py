@@ -120,11 +120,11 @@ class LDATopicAnalyzer:
         # Gewichtungen für verschiedene Mitarbeitertypen
         # Höhere Werte bedeuten mehr Einfluss auf die Topic-Analyse
         self.employee_type_weights = {
-            'Employee': 1.5,      # Vollzeitangestellte haben höhere Gewichtung
-            'Manager': 2.0,       # Manager haben die höchste Gewichtung
-            'Student': 0.8,       # Studenten haben niedrigere Gewichtung
-            'Nicht-Employee': 0.5, # Nicht-Mitarbeiter haben die niedrigste Gewichtung
-            'default': 1.0        # Standard-Gewichtung für unbekannte Typen
+            'Employee': 1.0,      
+            'Manager': 1.0,       
+            'Student': 1.0,       
+            'Nicht-Employee': 1.0, 
+            'default': 1.0        
         }
         
         # Metadata für jedes Dokument (z.B. Employee-Typ, Quelle)
