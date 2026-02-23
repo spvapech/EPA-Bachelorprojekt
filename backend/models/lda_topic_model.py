@@ -98,12 +98,12 @@ class LDATopicAnalyzer:
         
         return keywords
     
-    def __init__(self, num_topics: int = 8, passes: int = 25, iterations: int = 600):
+    def __init__(self, num_topics: int = 12, passes: int = 25, iterations: int = 600):
         """
         Initialize the LDA Topic Analyzer.
         
         Args:
-            num_topics: Number of topics to extract (optimized: 8 for better balance)
+            num_topics: Number of topics to extract (optimized: 12 for better balance)
             passes: Number of passes through the corpus during training (optimized: 25)
             iterations: Number of iterations for the model (optimized: 600)
         """
