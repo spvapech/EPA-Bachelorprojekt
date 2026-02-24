@@ -437,9 +437,9 @@ export default function Welcome() {
                     <h1 className="text-5xl font-bold text-white mb-4">
                         Willkommen bei AGB-Analysis!
                     </h1>
-                    {/* <p className="text-xl text-slate-200">
-                        Laden Sie Ihre Excel-Dateien hoch, um mit der Analyse zu beginnen
-                    </p> */}
+                    <p className="mt-2 text-lg text-slate-300 max-w-2xl mx-auto">
+                        Ihr interaktives und KI-unterstuetztes Tool zur Analyse von Arbeitgeberbewertungen und zum Vergleich von Firmen.
+                    </p>
                 </div>
 
                 {/* Mode Selection */}
