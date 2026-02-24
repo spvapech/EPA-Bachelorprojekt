@@ -1089,7 +1089,7 @@ export default function Dashboard() {
                                 </CardTitle>
                             </CardHeader>
                             <CardContent className="pt-0 pb-4">
-                                <div className="text-lg font-extrabold text-orange-400">
+                                <div className="text-lg font-extrabold text-orange-400 truncate" title={getNegativeTopicName(negativeTopicItem)}>
                                     {getNegativeTopicName(negativeTopicItem)}
                                 </div>
                             </CardContent>

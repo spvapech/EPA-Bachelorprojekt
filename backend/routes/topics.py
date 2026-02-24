@@ -546,10 +546,21 @@ async def get_negative_topics_by_company(company_id: int, limit: Optional[int] =
             topic_words = extract_words(t)
             topic_words = [w for w in topic_words if w]
 
+            # Build a concise, readable topic label
+            # Prefer existing label/topic field or category, fall back to top topic words
             topic_label = None
-            if topic_words:
-                topic_label = topic_words[0]
-                topic_label = topic_label[:1].upper() + topic_label[1:]
+            existing_label = t.get("topic_label") or t.get("topic") or t.get("label") or ""
+            existing_label = existing_label.strip()
+            if existing_label and len(existing_label) <= 30:
+                topic_label = existing_label[:1].upper() + existing_label[1:]
+            elif topic_words:
+                # Pick the shortest meaningful word (>=4 chars) from top-3 words as label
+                candidates = [w for w in topic_words[:3] if len(w) >= 4]
+                if candidates:
+                    best = min(candidates, key=len)
+                else:
+                    best = topic_words[0]
+                topic_label = best[:1].upper() + best[1:]
 
             enriched_topic = dict(t)
             enriched_topic["topic_words"] = topic_words

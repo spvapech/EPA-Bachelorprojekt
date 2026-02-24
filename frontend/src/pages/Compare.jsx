@@ -991,12 +991,13 @@ const ComparePage = () => {
                                 <CardContent className="space-y-3">
                                     {activeSlots.map((slot, i) => {
                                         const nt = companyData[slot.id]?.negativeTopic
+                                        const ntName = getNegativeTopicName(nt)
                                         return (
                                             <div
                                                 key={slot.id}
-                                                className="flex items-center justify-between gap-2"
+                                                className="flex items-center justify-between gap-3"
                                             >
-                                                <div className="flex items-center gap-2 min-w-0">
+                                                <div className="flex items-center gap-2 min-w-0 shrink-0">
                                                     <div
                                                         className="w-2.5 h-2.5 rounded-full shrink-0"
                                                         style={{
@@ -1004,12 +1005,12 @@ const ComparePage = () => {
                                                                 COLOR_PALETTE[slot.colorIndex]?.hex,
                                                         }}
                                                     />
-                                                    <span className="text-sm font-medium text-slate-700 truncate max-w-[80px]">
+                                                    <span className="text-sm font-medium text-slate-700 truncate max-w-[110px]" title={slot.name}>
                                                         {slot.name}
                                                     </span>
                                                 </div>
-                                                <span className="text-lg font-extrabold text-orange-400 truncate max-w-[130px] text-right">
-                                                    {getNegativeTopicName(nt)}
+                                                <span className="text-base font-extrabold text-orange-400 truncate flex-1 text-right" title={ntName}>
+                                                    {ntName}
                                                 </span>
                                             </div>
                                         )
