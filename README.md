@@ -18,6 +18,7 @@
 
 - [Requirements / Dependencies](#-requirements--dependencies)
 - [Schnellstart](#-schnellstart)
+- [Installationsanleitung](#-installationsanleitung)
 - [Einrichtung](#-einrichtung)
 - [Projektstruktur](#-projektstruktur)
 - [LDA Topic Modeling](#-lda-topic-modeling)
@@ -54,10 +55,11 @@ Um das Projekt lokal laufen zu lassen, benötigst du:
 ### Python-Pakete (Backend):
 * `fastapi` - Web Framework
 * `gensim` - Topic Modeling (LDA)
-* `transformers` - ML-basierte Sentiment-Analyse (neu!)
-* `torch` - PyTorch für Transformer-Modelle (neu!)
+* `transformers` >= 5.1 - ML-basierte Sentiment-Analyse (German BERT)
+* `torch` >= 2.10 - PyTorch Backend für Transformers
 * `pandas` - Datenverarbeitung
 * `supabase` - Datenbank-Client
+* `statsmodels` - Statistische Auswertung
 
 ### npm-Pakete (Frontend):
 * `@radix-ui/react-checkbox` - Checkbox-Komponente
@@ -68,7 +70,18 @@ Um das Projekt lokal laufen zu lassen, benötigst du:
 * `lucide-react` - Icon-Bibliothek
 * `tailwindcss` - CSS-Framework
 
-## 🚀 Einrichtung
+## � Installationsanleitung
+
+Eine ausführliche Schritt-für-Schritt-Anleitung zur Einrichtung des Projekts findest du in der **[INSTALLATION.md](./INSTALLATION.md)**.
+
+Sie enthält:
+- Voraussetzungen & Software-Installation
+- Backend- & Frontend-Setup (mit `uv` und `pip`)
+- Umgebungsvariablen konfigurieren
+- Installation verifizieren
+- Häufige Probleme & Lösungen
+
+## �🚀 Einrichtung
 
 ### Backend (FastAPI)
 
@@ -252,11 +265,13 @@ gruppe-P1-3/
 │   │   │       └── ...andere UI Komponenten
 │   │   ├── pages/             # Seiten
 │   │   │   ├── Dashboard.jsx
+│   │   │   ├── Compare.jsx
 │   │   │   └── Welcome.jsx
 │   │   └── lib/               # Utilities
 │   ├── public/                # Statische Assets
 │   └── package.json           # Node.js Dependencies
-└── requirements.txt            # Python Dependencies (Projekt-Root)
+├── requirements.txt            # Python Dependencies (Projekt-Root)
+└── INSTALLATION.md             # Ausführliche Installationsanleitung
 ```
 
 ## 🛠️ Technologie-Stack
@@ -267,9 +282,10 @@ gruppe-P1-3/
 * **Datenbank:** Supabase (PostgreSQL)
 * **ML/AI:** 
   - Gensim 4.3+ (LDA Topic Modeling)
-  - Transformers 4.30+ (ML-basierte Sentiment-Analyse mit German BERT)
-  - PyTorch 2.0+ (Backend für Transformer-Modelle)
+  - Transformers 5.1+ (ML-basierte Sentiment-Analyse mit German BERT)
+  - PyTorch 2.10+ (Backend für Transformer-Modelle)
   - Lexikon-basierte Sentiment-Analyse (regelbasiert, schnell)
+* **Statistik:** Statsmodels 0.14+
 * **Datenverarbeitung:** Pandas, OpenPyXL
 * **Tools:** Python-dotenv, Python-multipart
 

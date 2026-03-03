@@ -1,13 +1,21 @@
 # Backend Dependencies
-# Installation with uv: uv sync
+# Installation with uv: uv sync (empfohlen, nutzt pyproject.toml)
 # Installation with pip: pip install -r requirements.txt
+#
+# HINWEIS: Die kanonische Quelle für Dependencies ist backend/pyproject.toml.
+# Diese Datei wird als Fallback für pip-Nutzer gepflegt.
 
+# Web Framework & Server
 fastapi>=0.124.0
 uvicorn>=0.38.0
+
+# Datenbank
 supabase>=2.0.0
+
+# Konfiguration
 python-dotenv>=1.0.0
 
-# Topic Modeling with Gensim
+# Topic Modeling
 gensim>=4.3.0
 
 # Excel Processing
@@ -17,11 +25,15 @@ openpyxl>=3.1.0
 # File Upload Support
 python-multipart>=0.0.6
 
-# Sentiment Analysis
-# Lexicon-based: No dependencies (default)
-# Transformer-based: Requires transformers and torch (optional)
-transformers>=4.30.0  # For ML-based sentiment analysis
-torch>=2.0.0  # PyTorch backend for transformers
+# Sentiment Analysis (Transformer-basiert)
+transformers>=5.1.0
+torch>=2.10.0
+
+# Statistische Auswertung
+statsmodels>=0.14.0
+
+# --- Dev Dependencies (optional, für Tests) ---
+# pytest>=9.0.2
 
 # Note: uv itself is installed separately as a system-level tool
 # Installation: https://docs.astral.sh/uv/getting-started/installation/
