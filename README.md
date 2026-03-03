@@ -4,15 +4,13 @@
 
 **Version 2.1 - Performance & Struktur-Optimierungen** (5. Februar 2026)
 - ⚡ **Dashboard Performance**: ~50% schnellere Ladezeiten durch parallele API-Calls
-- 🗂️ **Projekt-Struktur**: Tests und Docs neu organisiert für bessere Übersicht
+- 🗂️ **Projekt-Struktur**: Tests neu organisiert für bessere Übersicht
 - 🚀 **Optimierungen**: Caching, Debouncing, React.memo für flüssigeres UI
-- 📖 [Performance-Verbesserungen](./DASHBOARD_PERFORMANCE_IMPROVEMENTS.md)
 
 **Version 2.0 - Topic-Filterung nach Datenquellen** (1. Februar 2026)
 - ✅ Separate Topics für Bewerber (10) und Mitarbeiter (13)
 - ✅ Verbesserte UI mit Filter-Buttons
 - ✅ Neu trainierte LDA-Modelle
-- 📖 [Detaillierte Dokumentation](./CHANGELOG_TOPIC_FILTERING.md) | [Kurzübersicht](./TOPIC_FILTERING_SUMMARY.md)
 
 ## 📋 Inhaltsverzeichnis
 
@@ -66,9 +64,14 @@ Um das Projekt lokal laufen zu lassen, benötigst du:
 * `@radix-ui/react-label` - Label-Komponente
 * `@radix-ui/react-dialog` - Dialog/Modal-Komponente
 * `@radix-ui/react-select` - Select/Dropdown-Komponente
+* `@radix-ui/react-dropdown-menu` - Dropdown-Menü-Komponente
+* `@radix-ui/react-popover` - Popover-Komponente
+* `@radix-ui/react-separator` - Separator-Komponente
+* `cmdk` - Command-Menü-Komponente
 * `recharts` - Chart-Bibliothek
 * `lucide-react` - Icon-Bibliothek
 * `tailwindcss` - CSS-Framework
+* `html2canvas` + `jspdf` - PDF-Export
 
 ## � Installationsanleitung
 
@@ -186,7 +189,7 @@ gruppe-P1-3/
 │   ├── main.py                  # Haupteinstiegspunkt
 │   ├── config.py                # Konfiguration
 │   ├── pyproject.toml           # Python Dependencies (uv)
-│   ├── requirements.txt         # Python Dependencies (pip)
+│   ├── examples_statistical_usage.py # Statistik-Beispiele
 │   │
 │   ├── database/                # Datenbankverbindungen (Supabase)
 │   │   └── supabase_client.py
@@ -203,48 +206,44 @@ gruppe-P1-3/
 │   │   └── saved_models/       # Trainierte Modelle
 │   │
 │   ├── services/                # Business Logic Services
-│   │   ├── excel_service.py    # Excel Import/Export
-│   │   ├── topic_model_service.py # Topic Modeling DB Service
-│   │   ├── topic_rating_service.py # Topic-Rating-Analyse
-│   │   └── statistical_*.py    # Statistische Services
+│   │   ├── excel_service.py               # Excel Import/Export
+│   │   ├── topic_model_service.py         # Topic Modeling DB Service
+│   │   ├── topic_rating_service.py        # Topic-Rating-Analyse
+│   │   ├── topic_average_rating_service.py # Topic-Durchschnittsbewertungen
+│   │   ├── statistical_enrichment.py      # Statistische Anreicherung
+│   │   └── statistical_validator.py       # Statistische Validierung
 │   │
 │   ├── routes/                  # API Endpoints
-│   │   ├── analytics.py        # Analytics API
-│   │   ├── companies.py        # Company Management
-│   │   ├── topics.py           # Topic Modeling API
+│   │   ├── analytics.py        # Analytics API (12 Endpoints)
+│   │   ├── companies.py        # Company Management (9 Endpoints)
+│   │   ├── topics.py           # Topic Modeling API (13 Endpoints)
 │   │   └── upload.py           # File Upload
 │   │
-│   ├── scripts/                 # 🆕 Utility Scripts
+│   ├── scripts/                 # Utility Scripts
 │   │   ├── train_models.py     # Model Training
-│   │   └── fix_html_entities.py # Text Cleanup
+│   │   ├── fix_html_entities.py # Text Cleanup
+│   │   ├── sweep_num_topics_db.py    # Topic-Anzahl Optimierung
+│   │   └── test_num_topics_compare.py # Topic-Vergleichstests
 │   │
-│   ├── tests/                   # 🆕 Organisierte Tests
+│   ├── tests/                   # Organisierte Tests
 │   │   ├── topic_modeling/     # Topic Modeling Tests
 │   │   ├── sentiment_analysis/ # Sentiment Tests
-│   │   ├── statistical/        # Statistical Tests
-│   │   └── results/            # Test-Ergebnisse
-│   │
-│   ├── docs/                    # 🆕 Strukturierte Dokumentation
-│   │   ├── architecture/       # System-Design
-│   │   ├── implementation/     # Code-Details
-│   │   ├── evaluations/        # Test-Ergebnisse
-│   │   ├── improvements/       # Performance & Features
-│   │   ├── Analyse_Pipeline/   # Pipeline Docs
-│   │   ├── LDA_Topic_Modeling/ # LDA Docs
-│   │   └── Sentiment_Analysis/ # Sentiment Docs
+│   │   └── statistical/        # Statistical Tests
 │   │
 │   └── examples/                # Beispiele & Demos
 │       ├── topic_modeling_examples.py
-│       ├── topic_rating_examples.py
-│       └── examples_statistical_usage.py
+│       └── topic_rating_examples.py
+│
 ├── frontend/                    # React/Vite Frontend
 │   ├── src/                    # Quellcode
 │   │   ├── components/         # React Komponenten
-│   │   │   ├── CompanySearchSelect.jsx  # 🆕 Optimiert mit Caching
+│   │   │   ├── CompanySearchSelect.jsx  # Optimiert mit Caching
 │   │   │   ├── dashboard/     # Dashboard Components
-│   │   │   │   ├── TimelineCard.jsx         # 🆕 React.memo optimiert
-│   │   │   │   ├── TopicRatingCard.jsx      # 🆕 React.memo optimiert
-│   │   │   │   ├── TopicOverviewCard.jsx    # 🆕 React.memo optimiert
+│   │   │   │   ├── DominantTopicsCard.jsx   # Dominante Topics
+│   │   │   │   ├── IndividualReviewsCard.jsx # Einzelne Reviews
+│   │   │   │   ├── TimelineCard.jsx         # React.memo optimiert
+│   │   │   │   ├── TopicRatingCard.jsx      # React.memo optimiert
+│   │   │   │   ├── TopicOverviewCard.jsx    # React.memo optimiert
 │   │   │   │   └── modals/
 │   │   │   │       ├── MostCriticalModal.jsx
 │   │   │   │       ├── NegativTopicModal.jsx
@@ -254,20 +253,29 @@ gruppe-P1-3/
 │   │   │   │       ├── TopicDetailModal.jsx   # Topic Details mit Ansicht-Anpassen
 │   │   │   │       └── ReviewDetailModal.jsx  # Vollständige Review-Ansicht
 │   │   │   └── ui/            # UI Components (shadcn)
-│   │   │       ├── badge.jsx
-│   │   │       ├── button.jsx
-│   │   │       ├── card.jsx
-│   │   │       ├── checkbox.jsx      # Für Ansicht-Anpassen (NEU)
-│   │   │       ├── dialog.jsx
-│   │   │       ├── input.jsx
-│   │   │       ├── label.jsx         # Für Ansicht-Anpassen (NEU)
-│   │   │       ├── select.jsx
-│   │   │       └── ...andere UI Komponenten
+│   │   │       ├── badge.tsx
+│   │   │       ├── button.tsx
+│   │   │       ├── card.tsx
+│   │   │       ├── checkbox.jsx
+│   │   │       ├── command.tsx
+│   │   │       ├── dialog.tsx
+│   │   │       ├── dropdown-menu.tsx
+│   │   │       ├── input.tsx
+│   │   │       ├── label.jsx
+│   │   │       ├── popover.tsx
+│   │   │       ├── select.tsx
+│   │   │       ├── separator.tsx
+│   │   │       └── table.tsx
 │   │   ├── pages/             # Seiten
 │   │   │   ├── Dashboard.jsx
 │   │   │   ├── Compare.jsx
 │   │   │   └── Welcome.jsx
+│   │   ├── utils/             # Hilfsfunktionen
+│   │   │   ├── pdfExport.js   # PDF Export
+│   │   │   ├── chartValidator.js # Chart Validierung
+│   │   │   └── pdf/           # PDF Utilities
 │   │   └── lib/               # Utilities
+│   │       └── utils.ts
 │   ├── public/                # Statische Assets
 │   └── package.json           # Node.js Dependencies
 ├── requirements.txt            # Python Dependencies (Projekt-Root)
@@ -291,14 +299,15 @@ gruppe-P1-3/
 
 ### Frontend
 * **Framework:** React 19
-* **Build Tool:** Vite 5
-* **Routing:** React Router DOM
+* **Build Tool:** Vite 6
+* **Routing:** React Router DOM 7
 * **UI Library:** shadcn/ui (Radix UI + Tailwind CSS)
   - Dialog, Select, Dropdown Menu, Popover, Separator
   - Checkbox, Label (für Ansicht-Anpassung)
-  - Badge, Button, Card, Input
+  - Badge, Button, Card, Input, Command, Table
 * **Charts:** Recharts (Line Charts, Gauge Charts)
 * **Icons:** Lucide React (Eye, ChevronDown, ChevronUp, Calendar, etc.)
+* **PDF Export:** html2canvas + jsPDF
 * **Styling:** Tailwind CSS v4 mit Custom Animations
 * **Linting:** ESLint
 
@@ -335,7 +344,7 @@ Dieses Projekt enthält eine vollständige **LDA Topic Modeling**-Integration mi
   - **Transformer-Mode:** ML-basiert mit German BERT, 100% Genauigkeit
 ✅ **Sterne-Bewertungen** - Kombiniert Text-Topics mit Rating-Daten  
 ✅ **Datenbankintegration** - Direkter Zugriff auf Kandidaten- und Mitarbeiter-Daten  
-✅ **RESTful API** - 12 Endpunkte für Training, Analyse und Vorhersage  
+✅ **RESTful API** - 13 Endpunkte für Training, Analyse und Vorhersage  
 ✅ **Modellpersistenz** - Speichern und Laden trainierter Modelle  
 ✅ **Deutsche Textverarbeitung** - Optimierte Stopword-Liste  
 ✅ **Flexible Analyse** - Einzelne Texte oder ganze Datensätze  
@@ -370,19 +379,21 @@ Dieses Projekt enthält eine vollständige **LDA Topic Modeling**-Integration mi
 | `/api/topics/train` | POST | Neues Modell trainieren |
 | `/api/topics/topics` | GET | Entdeckte Topics anzeigen |
 | `/api/topics/predict` | POST | Topics für Text vorhersagen |
-| `/api/topics/predict-with-sentiment` | POST | Topics + Sentiment-Analyse |
 | `/api/topics/analyze-record` | POST | Spezifischen Datensatz analysieren |
 | `/api/topics/analyze/employee-reviews-with-ratings` | GET | Employee Reviews mit Topics, Sentiment & Ratings |
 | `/api/topics/analyze/candidate-reviews-with-ratings` | GET | Candidate Reviews mit Topics, Sentiment & Ratings |
 | `/api/topics/analyze/topic-rating-correlation` | GET | Korrelation zwischen Topics und Bewertungen |
 | `/api/topics/models/list` | GET | Gespeicherte Modelle auflisten |
 | `/api/topics/models/load` | POST | Gespeichertes Modell laden |
+| `/api/topics/company/{company_id}/negative-topics` | GET | Negative Topics einer Firma |
+| `/api/topics/company/{company_id}/most-critical` | GET | Kritischste Topics einer Firma |
 
 ### Installation testen
 
 ```bash
+# Tests ausführen
 cd backend
-uv run python test_topic_modeling.py
+pytest tests/
 ```
 
 ### Beispiele ausführen
@@ -399,108 +410,11 @@ cd backend
 uv run python examples/topic_rating_examples.py
 ```
 
-### Dokumentation
+### Beispiele
 
-- � **LDA Schnellstart**: [`backend/docs/QUICKSTART_LDA.md`](backend/docs/QUICKSTART_LDA.md)
-- 🎯 **Topic-Analyse Guide**: [`backend/docs/TOPIC_OVERVIEW_GUIDE.md`](backend/docs/TOPIC_OVERVIEW_GUIDE.md)
-- 📊 **Analyse-Erklärung**: [`backend/docs/TOPIC_ANALYSIS_EXPLANATION.md`](backend/docs/TOPIC_ANALYSIS_EXPLANATION.md)
-- 📚 **LDA API-Referenz**: [`backend/docs/TOPIC_MODELING_API.md`](backend/docs/TOPIC_MODELING_API.md)
-- 📋 **Topic Overview API**: [`backend/docs/TOPIC_OVERVIEW_API.md`](backend/docs/TOPIC_OVERVIEW_API.md)
-- ⭐ **Topic-Rating-Analyse**: [`backend/docs/TOPIC_RATING_ANALYSIS.md`](backend/docs/TOPIC_RATING_ANALYSIS.md)
-- 📖 **Feature-Übersicht**: [`backend/docs/TOPIC_MODELING_README.md`](backend/docs/TOPIC_MODELING_README.md)
-- 💡 **Beispiele**: [`backend/examples/`](backend/examples/)
+- 💡 [`backend/examples/`](backend/examples/) - Beispiele & Demos
   - `topic_modeling_examples.py` - Basic LDA
   - `topic_rating_examples.py` - Topics + Sentiment + Ratings
-
-### Projektstruktur (Topic Modeling)
-
-```
-gruppe-P1-3/
-├── backend/
-│   ├── models/
-│   │   ├── lda_topic_model.py          # LDA-Modell-Implementierung (mit Sentiment)
-│   │   ├── sentiment_analyzer.py       # Sentiment-Analyse für deutsche Texte
-│   │   └── saved_models/               # Gespeicherte LDA-Modelle
-│   │       ├── lda_model_*.model
-│   │       ├── lda_model_*.dict
-│   │       ├── lda_model_*.bigram
-│   │       ├── lda_model_*.trigram
-│   │       └── lda_model_*.meta
-│   │
-│   ├── services/
-│   │   ├── topic_model_service.py      # Datenbankservice für Topic Modeling
-│   │   └── topic_rating_service.py     # Topic-Rating-Analyse
-│   │
-│   ├── routes/
-│   │   └── topics.py                   # API-Endpunkte (12 Endpoints)
-│   │
-│   ├── scripts/                         # 🆕 Utility Scripts
-│   │   └── train_models.py             # Model Training Script
-│   │
-│   ├── tests/                           # 🆕 Organisierte Tests
-│   │   ├── topic_modeling/             # Topic Modeling Tests
-│   │   │   ├── test_lda_topic_modeling.py
-│   │   │   ├── test_topic_modeling.py
-│   │   │   ├── test_topic_merging.py
-│   │   │   └── ...
-│   │   ├── sentiment_analysis/         # Sentiment Tests
-│   │   ├── statistical/                # Statistical Tests
-│   │   └── results/                    # Test-Ergebnisse
-│   │
-│   ├── examples/
-│   │   ├── topic_modeling_examples.py  # Basic LDA Beispiele
-│   │   └── topic_rating_examples.py    # Topic-Rating Beispiele
-│   │
-│   └── docs/                           # 🆕 Strukturierte Dokumentation
-│       ├── architecture/               # System-Design
-│       ├── implementation/             # Code-Details
-│       ├── evaluations/               # Test-Ergebnisse
-│       ├── improvements/              # Performance & Features
-│       │   └── DASHBOARD_PERFORMANCE_IMPROVEMENTS.md
-│       ├── LDA_Topic_Modeling/        # LDA-spezifische Docs
-│       │   ├── QUICKSTART_LDA.md
-│       │   ├── TOPIC_OVERVIEW_GUIDE.md
-│       │   └── ...
-│       └── Sentiment_Analysis/        # Sentiment-spezifische Docs
-│
-├── frontend/
-│   └── src/
-│       ├── components/
-│       │   ├── CompanySearchSelect.jsx         # 🆕 Optimiert mit Caching
-│       │   ├── dashboard/
-│       │   │   ├── TimelineCard.jsx           # 🆕 React.memo optimiert
-│       │   │   ├── TopicRatingCard.jsx        # 🆕 React.memo optimiert
-│       │   │   ├── TopicOverviewCard.jsx      # 🆕 React.memo optimiert
-│       │   │   └── modals/
-│       │   │       ├── TopicTableModal.jsx     # Alle Topics Tabelle mit Suche
-│       │   │       ├── TopicDetailModal.jsx    # Topic-Details mit Charts
-│       │   │       │   # Features:
-│       │   │       │   # - Einklappbare Ansicht-Steuerung
-│       │   │       │   # - Line Chart (Rating über Zeit mit Zeitfilter)
-│       │   │       │   # - Gauge Chart (Sentiment-Visualisierung)
-│       │   │       │   # - Typische Aussagen (Top 3)
-│       │   │       │   # - Beispiel-Review mit Navigation
-│       │   │       │   # - Responsive Layout (Charts passen sich an)
-│       │   │       └── ReviewDetailModal.jsx   # Vollständige Review-Ansicht
-│       │   └── ui/
-│       │       ├── checkbox.jsx                # Für Ansicht-Anpassen
-│       │       ├── label.jsx                   # Für Ansicht-Anpassen
-│       │       ├── dialog.jsx                  # Für Modals
-│       │       ├── select.jsx                  # Für Zeitfilter
-│       │       ├── badge.jsx                   # Für Sentiment-Tags
-│       │       └── card.jsx                    # Für Layout-Struktur
-│       │
-│       ├── pages/
-│       │   ├── Dashboard.jsx                   # 🆕 Performance-optimiert
-│       │   │   # - Paralleles Laden der KPI-Daten
-│       │   │   # - Debounced Company Search
-│       │   │   # - Optimierte State Management
-│       │   └── Welcome.jsx
-│       │
-│       └── utils/
-│           ├── pdfExport.js                    # PDF Export Utilities
-│           └── chartValidator.js               # Chart Validation
-```
 
 ### Workflow
 
@@ -563,8 +477,8 @@ for topic in correlation['topics']:
 # Topics mit Ratings analysieren
 curl "http://localhost:8000/api/topics/analyze/topic-rating-correlation"
 
-# Text mit Sentiment analysieren
-curl -X POST http://localhost:8000/api/topics/predict-with-sentiment \
+# Text analysieren
+curl -X POST http://localhost:8000/api/topics/predict \
   -H "Content-Type: application/json" \
   -d '{"text": "Die Work-Life-Balance ist ausgezeichnet!", "threshold": 0.1}'
 ```
@@ -649,10 +563,9 @@ pytest backend/tests/statistical/        # Nur Statistical
 ## 📚 Weitere Ressourcen
 
 ### Projekt-Dokumentation
-- **Performance-Verbesserungen**: [DASHBOARD_PERFORMANCE_IMPROVEMENTS.md](./DASHBOARD_PERFORMANCE_IMPROVEMENTS.md)
-- **Topic-Filterung**: [CHANGELOG_TOPIC_FILTERING.md](./CHANGELOG_TOPIC_FILTERING.md)
-- **Backend Docs**: [backend/docs/](./backend/docs/) (strukturiert nach Kategorien)
+- **Installationsanleitung**: [INSTALLATION.md](./INSTALLATION.md)
 - **Test-Dokumentation**: [backend/tests/](./backend/tests/)
+- **Beispiele**: [backend/examples/](./backend/examples/)
 
 ### API & Tools
 - **API Dokumentation**: http://localhost:8000/docs (Swagger UI)
