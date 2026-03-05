@@ -7,6 +7,7 @@ Ausführung:
 """
 
 import os
+import pytest
 from models.lda_topic_model import LDATopicAnalyzer
 from services.topic_model_service import TopicModelDatabase
 
@@ -14,7 +15,8 @@ from services.topic_model_service import TopicModelDatabase
 class TestLDATopicAnalyzer:
     """Tests für die LDA Topic Analyzer Klasse"""
     
-    def sample_texts(self, dummy=None):
+    @pytest.fixture
+    def sample_texts(self):
         """Beispiel-Texte für Tests"""
         return [
             "Die Work-Life Balance ist sehr gut. Flexible Arbeitszeiten und Homeoffice möglich.",
@@ -29,7 +31,8 @@ class TestLDATopicAnalyzer:
             "Schnelle Antwort und zeitgerechte Rückmeldung nach dem Interview.",
         ]
     
-    def get_analyzer(self):
+    @pytest.fixture
+    def analyzer(self):
         """LDA Analyzer Instanz für Tests"""
         return LDATopicAnalyzer(num_topics=5)
     
@@ -76,15 +79,21 @@ class TestLDATopicAnalyzer:
         print(f"\n✓ {len(stopwords)} Stopwords geladen")
     
     def test_normalize_abbreviations(self, analyzer):
-        """Test: Abkürzungen werden korrekt normalisiert"""
+        """Test: Abkürzungen werden korrekt normalisiert via preprocess_text"""
         text = "Der MA arbeitet für den AG und nutzt WLB."
-        normalized = analyzer.normalize_abbreviations(text)
+        tokens = analyzer.preprocess_text(text)
         
-        assert 'mitarbeiter' in normalized.lower()
-        assert 'arbeitgeber' in normalized.lower()
-        assert 'work_life_balance' in normalized.lower()
+        # Abkürzungen werden in preprocess_text normalisiert
+        assert 'mitarbeiter' in tokens or any('mitarbeiter' in t for t in tokens)
+        assert 'arbeitgeber' in tokens or any('arbeitgeber' in t for t in tokens)
+        # WLB wird zu work_life_balance normalisiert, aber Bigrams erst in prepare_documents erstellt
+        # Daher prüfen wir auf die Einzelteile oder den zusammengesetzten Begriff
+        has_wlb = ('work_life_balance' in tokens 
+                   or any('work_life_balance' in t for t in tokens)
+                   or ('work' in tokens and 'life' in tokens))
+        assert has_wlb, f"WLB nicht korrekt normalisiert. Tokens: {tokens}"
         
-        print(f"\n✓ Text normalisiert: '{text}' -> '{normalized}'")
+        print(f"\n✓ Text normalisiert: '{text}' -> '{tokens}'")
     
     def test_preprocess_text(self, analyzer):
         """Test: Text-Preprocessing funktioniert korrekt"""
@@ -169,12 +178,8 @@ class TestLDATopicAnalyzer:
         # Trainieren
         analyzer.train_model(sample_texts)
         
-        # Temporären Speicherort verwenden
-        original_save_path = analyzer.save_dir
-        analyzer.save_dir = str(tmp_path)
-        
-        # Speichern
-        model_path = analyzer.save_model()
+        # Speichern im temporären Verzeichnis
+        model_path = analyzer.save_model(model_dir=str(tmp_path))
         assert os.path.exists(f"{model_path}.model")
         assert os.path.exists(f"{model_path}.dict")
         
@@ -187,16 +192,14 @@ class TestLDATopicAnalyzer:
         assert new_analyzer.dictionary is not None
         assert new_analyzer.num_topics == analyzer.num_topics
         
-        # Cleanup
-        analyzer.save_dir = original_save_path
-        
         print(f"\n✓ Modell gespeichert und geladen: {model_path}")
 
 
 class TestTopicModelDatabase:
     """Tests für die Topic Model Database Service"""
     
-    def get_db_service(self):
+    @pytest.fixture
+    def db_service(self):
         """Database Service Instanz"""
         return TopicModelDatabase()
     

@@ -1,16 +1,5 @@
 # Gruppe P1-3 — Projekt
 
-## 🆕 Aktuelle Updates
-
-**Version 2.1 - Performance & Struktur-Optimierungen** (5. Februar 2026)
-- ⚡ **Dashboard Performance**: ~50% schnellere Ladezeiten durch parallele API-Calls
-- 🗂️ **Projekt-Struktur**: Tests neu organisiert für bessere Übersicht
-- 🚀 **Optimierungen**: Caching, Debouncing, React.memo für flüssigeres UI
-
-**Version 2.0 - Topic-Filterung nach Datenquellen** (1. Februar 2026)
-- ✅ Separate Topics für Bewerber (10) und Mitarbeiter (13)
-- ✅ Verbesserte UI mit Filter-Buttons
-- ✅ Neu trainierte LDA-Modelle
 
 ## 📋 Inhaltsverzeichnis
 

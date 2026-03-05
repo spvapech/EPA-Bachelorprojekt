@@ -49,7 +49,7 @@ powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
 ## 2. Repository klonen
 
 ```bash
-git clone <REPO-URL> gruppe-P1-3
+git clone https://github.com/IIS-Bachelorprojekt/gruppe-P1-3.git gruppe-P1-3
 cd gruppe-P1-3
 ```
 

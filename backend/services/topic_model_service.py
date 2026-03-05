@@ -76,8 +76,12 @@ class TopicModelDatabase:
                 'verbesserungsvorschlaege'
             ]
         
-        # Build query
+        # Build query - filter rows where at least one text field is not null
         query = self.supabase.table('employee').select(','.join(fields))
+        
+        # Nur Zeilen mit mindestens einem befüllten Textfeld abrufen
+        or_filter = ','.join([f"{f}.not.is.null" for f in fields])
+        query = query.or_(or_filter)
         
         if limit:
             query = query.limit(limit)
@@ -123,6 +127,10 @@ class TopicModelDatabase:
         # Build query - include status field for employee type
         select_fields = fields + ['status', 'id']
         query = self.supabase.table('employee').select(','.join(select_fields))
+        
+        # Nur Zeilen mit mindestens einem befüllten Textfeld abrufen
+        or_filter = ','.join([f"{f}.not.is.null" for f in fields])
+        query = query.or_(or_filter)
         
         if limit:
             query = query.limit(limit)
