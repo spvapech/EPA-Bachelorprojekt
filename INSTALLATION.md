@@ -1,5 +1,26 @@
 # Installationsanleitung — Gruppe P1-3
 
+Hinweis zur KI-Unterstützung
+
+Teile dieser Datei wurden mit Hilfe von KI-gestützten Entwicklungswerkzeugen erstellt:
+- GitHub Copilot
+- Claude Sonnet 4.6
+
+Die generierten Inhalte wurden anschließend vom Autor geprüft,
+überarbeitet und in das Projekt integriert.
+
+Quelle der KI-Ausgabe:
+Anthropic (2026)
+
+Autor: Vaios Pechlevanidis
+Datum: 01.03.2026
+
+Anthropic (2026): Claude Sonnet 4.6 – Large Language Model.
+https://www.anthropic.com. Abgerufen am 01.03.2026.
+
+GitHub (2026): GitHub Copilot – AI Pair Programmer.
+https://github.com/features/copilot. Abgerufen am 01.03.2026.
+
 Diese Anleitung beschreibt Schritt für Schritt, wie du das Projekt lokal einrichtest und startest.
 
 ---
