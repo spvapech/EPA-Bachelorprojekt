@@ -35,6 +35,21 @@ CREATE TABLE IF NOT EXISTS employee (
     sternebewertung_arbeitsbedingungen NUMERIC(3, 2),
     sternebewertung_gleichberechtigung NUMERIC(3, 2),
     
+    -- Topic Text Columns (comments per topic)
+    arbeitsatmosphaere TEXT,
+    image TEXT,
+    work_life_balance TEXT,
+    karriere_weiterbildung TEXT,
+    gehalt_sozialleistungen TEXT,
+    kollegenzusammenhalt TEXT,
+    umwelt_sozialbewusstsein TEXT,
+    vorgesetztenverhalten TEXT,
+    kommunikation TEXT,
+    interessante_aufgaben TEXT,
+    umgang_mit_aelteren_kollegen TEXT,
+    arbeitsbedingungen TEXT,
+    gleichberechtigung TEXT,
+
     -- Timestamps
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
