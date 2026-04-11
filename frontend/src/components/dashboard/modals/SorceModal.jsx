@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/table";
 import { ArrowDown, ArrowUp, ArrowUpDown, Filter, Search, Star, X } from "lucide-react";
 
-const API_URL = "http://localhost:8000/api";
+const API_URL = (import.meta.env.VITE_API_URL || "http://localhost:8000") + "/api";
 
 // Labels für deine Keys (damit es schön aussieht)
 const LABELS = {

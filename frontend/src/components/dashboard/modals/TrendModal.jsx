@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ArrowDown, ArrowUp, Filter, Search, TrendingDown, TrendingUp, Minus, X } from "lucide-react";
 
-const API_URL = "http://localhost:8000/api";
+const API_URL = (import.meta.env.VITE_API_URL || "http://localhost:8000") + "/api";
 
 const LABELS = {
     avg_arbeitsatmosphaere: "Arbeitsatmosphäre",
