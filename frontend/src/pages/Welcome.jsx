@@ -1,9 +1,8 @@
 import { useEffect, useState } from "react"
 import { useLocation, useNavigate } from "react-router-dom"
 import { FileSpreadsheet, ArrowRight, Building2, Upload as UploadIcon, Loader2, X } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { CompanySearchSelect } from "@/components/CompanySearchSelect"
+import { Button } from "@/components/ui/button"
 import { API_URL } from "../config"
 
 
@@ -430,79 +429,74 @@ export default function Welcome() {
     }
 
     return (
-        <div className="min-h-screen flex items-center justify-center p-4 py-12" style={{backgroundColor: '#05223e'}}>
+        <div className="min-h-screen flex items-center justify-center p-4 py-12"
+             style={{ background: 'linear-gradient(160deg, #05223e 0%, #0a3158 60%, #0d3d6e 100%)' }}>
             <div className="w-full max-w-6xl">
+
                 {/* Welcome Header */}
-                <div className="text-center mb-8">
-                    <h1 className="text-5xl font-bold text-white mb-4">
-                        Willkommen bei AGB-Analysis!
+                <div className="text-center mb-10">
+                    {/* Brand mark */}
+                    <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-white/10 border border-white/20 mb-6">
+                        <span style={{ font: '700 20px/1 var(--font-sans)', color: '#fff', letterSpacing: '-0.02em' }}>A</span>
+                    </div>
+                    <h1 style={{ font: '700 40px/1.1 var(--font-sans)', letterSpacing: '-0.025em', color: '#fff', margin: '0 0 12px' }}>
+                        AGB-Analysis
                     </h1>
-                    <p className="mt-2 text-lg text-slate-300 max-w-2xl mx-auto">
-                        Ihr interaktives und KI-unterstuetztes Tool zur Analyse von Arbeitgeberbewertungen und zum Vergleich von Firmen.
+                    <p style={{ font: '400 16px/1.6 var(--font-sans)', color: 'rgba(255,255,255,0.65)', maxWidth: 520, margin: '0 auto' }}>
+                        KI-gestützte Analyse von Arbeitgeberbewertungen &mdash; Firmen verstehen, vergleichen und verbessern.
                     </p>
                 </div>
 
                 {/* Mode Selection */}
                 <div className="mb-8">
-                    <p className="text-center mb-4 text-lg font-medium" style={{color: '#00aded'}}>
-                        Wie viele Firmen möchten Sie analysieren?
+                    <p style={{ textAlign: 'center', marginBottom: 16, font: '500 12px/1 var(--font-mono)', letterSpacing: '0.06em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.5)' }}>
+                        Wie viele Firmen analysieren?
                     </p>
-                    <div className="flex justify-center gap-4">
-                        <button
-                            onClick={() => setMode(1)}
-                            className={`px-8 py-4 rounded-2xl font-bold text-lg transition-all transform hover:scale-105 border-2 ${
-                                mode === 1
-                                    ? 'bg-white text-[#026fb6] shadow-xl border-[#026fb6]'
-                                    : 'bg-white/20 text-white hover:bg-white/30 border-[#026fb6]'
-                            }`}
-                        >
-                            <Building2 className="h-6 w-6 mx-auto mb-2" />
-                            1 Firma
-                        </button>
-                        <button
-                            onClick={() => setMode(2)}
-                            className={`px-8 py-4 rounded-2xl font-bold text-lg transition-all transform hover:scale-105 border-2 ${
-                                mode === 2
-                                    ? 'bg-white text-[#026fb6] shadow-xl border-[#026fb6]'
-                                    : 'bg-white/20 text-white hover:bg-white/30 border-[#026fb6]'
-                            }`}
-                        >
-                            <div className="flex gap-1 justify-center mb-2">
-                                <Building2 className="h-6 w-6" />
-                                <Building2 className="h-6 w-6" />
-                            </div>
-                            2 Firmen
-                        </button>
-                        <button
-                            onClick={() => setMode(3)}
-                            className={`px-8 py-4 rounded-2xl font-bold text-lg transition-all transform hover:scale-105 border-2 ${
-                                mode === 3
-                                    ? 'bg-white text-[#026fb6] shadow-xl border-[#026fb6]'
-                                    : 'bg-white/20 text-white hover:bg-white/30 border-[#026fb6]'
-                            }`}
-                        >
-                            <div className="flex gap-1 justify-center mb-2">
-                                <Building2 className="h-6 w-6" />
-                                <Building2 className="h-6 w-6" />
-                                <Building2 className="h-6 w-6" />
-                            </div>
-                            3 Firmen
-                        </button>
+                    <div className="flex justify-center gap-3">
+                        {[1, 2, 3].map((n) => (
+                            <button
+                                key={n}
+                                onClick={() => setMode(n)}
+                                style={{
+                                    padding: '12px 28px',
+                                    borderRadius: 10,
+                                    font: '600 14px/1 var(--font-sans)',
+                                    border: `1px solid ${mode === n ? 'rgba(255,255,255,0.4)' : 'rgba(255,255,255,0.15)'}`,
+                                    background: mode === n ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.06)',
+                                    color: mode === n ? '#fff' : 'rgba(255,255,255,0.6)',
+                                    cursor: 'pointer',
+                                    transition: 'all 150ms ease',
+                                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
+                                }}
+                            >
+                                <div style={{ display: 'flex', gap: 3 }}>
+                                    {Array.from({ length: n }).map((_, i) => (
+                                        <Building2 key={i} className="h-5 w-5" />
+                                    ))}
+                                </div>
+                                {n} Firma{n > 1 ? 'en' : ''}
+                            </button>
+                        ))}
                     </div>
                 </div>
 
                 {/* Company Upload Cards */}
-                <div className={`grid gap-6 mb-6 ${mode === 1 ? 'grid-cols-1 max-w-2xl mx-auto' : mode === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
+                <div className={`grid gap-5 mb-6 ${mode === 1 ? 'grid-cols-1 max-w-xl mx-auto' : mode === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
                     {companies.slice(0, mode).map((company, index) => (
-                        <Card key={index} className="rounded-3xl shadow-xl border-2 bg-slate-800" style={{borderColor: '#026fb6'}}>
-                            <CardHeader className="text-center pb-4">
-                                <CardTitle className="text-xl font-bold text-white">
+                        <div key={index} style={{
+                            background: 'rgba(255,255,255,0.07)',
+                            border: '1px solid rgba(255,255,255,0.15)',
+                            borderRadius: 12,
+                            padding: '20px',
+                            backdropFilter: 'blur(12px)',
+                        }}>
+                            <div style={{ marginBottom: 16 }}>
+                                <span style={{ font: '500 11px/1 var(--font-mono)', letterSpacing: '0.06em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.45)', marginBottom: 4, display: 'block' }}>
                                     Firma {index + 1}
-                                </CardTitle>
-                                
-                            </CardHeader>
+                                </span>
+                            </div>
 
-                            <CardContent className="space-y-4">
+                            <div className="space-y-4">
                                 {/* Company Name Input */}
                                 <div className="space-y-2">
                                     <label className="text-sm font-medium text-slate-300">
@@ -519,32 +513,43 @@ export default function Welcome() {
 
                                 {/* Check Company Button */}
                                 {!company.isChecked && (
-                                    <Button
+                                    <button
                                         onClick={() => handleCheckCompany(index)}
                                         disabled={checking === index || !company.companyQuery.trim()}
-                                        className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                                        style={{
+                                            width: '100%', height: 36,
+                                            borderRadius: 8,
+                                            font: '600 13px/1 var(--font-sans)',
+                                            background: checking === index || !company.companyQuery.trim() ? 'rgba(255,255,255,0.1)' : 'rgba(37,99,235,0.8)',
+                                            color: '#fff',
+                                            border: '1px solid rgba(255,255,255,0.2)',
+                                            cursor: checking === index || !company.companyQuery.trim() ? 'not-allowed' : 'pointer',
+                                            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                                            transition: 'background 150ms ease',
+                                        }}
                                     >
                                         {checking === index ? (
-                                            <>
-                                                <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                                                Prüfe...
-                                            </>
+                                            <><Loader2 className="h-4 w-4 animate-spin" /> Prüfe…</>
                                         ) : (
                                             "Firma prüfen"
                                         )}
-                                    </Button>
+                                    </button>
                                 )}
 
                                 {/* Status after check */}
                                 {company.isChecked && (
                                     <>
-                                        <div className={`p-3 rounded-lg ${company.existsInDB ? 'bg-green-900/30 border border-green-700' : 'bg-blue-900/30 border border-blue-700'}`}>
-                                            <p className={`text-sm font-medium ${company.existsInDB ? 'text-green-300' : 'text-blue-300'}`}>
-                                                {company.existsInDB 
-                                                    ? `✓ Firma "${company.companyQuery}" existiert bereits` 
-                                                    : `Neue Firma "${company.companyQuery}" - Dateien hochladen`}    
-
-                                            </p>
+                                        <div style={{
+                                            padding: '8px 12px',
+                                            borderRadius: 8,
+                                            background: company.existsInDB ? 'rgba(16,185,129,0.15)' : 'rgba(59,130,246,0.15)',
+                                            border: `1px solid ${company.existsInDB ? 'rgba(16,185,129,0.4)' : 'rgba(59,130,246,0.4)'}`,
+                                            font: '500 12px/1.4 var(--font-sans)',
+                                            color: company.existsInDB ? '#6ee7b7' : '#93c5fd',
+                                        }}>
+                                            {company.existsInDB
+                                                ? `✓ Firma "${company.companyQuery}" existiert bereits`
+                                                : `Neue Firma "${company.companyQuery}" – Dateien hochladen`}
                                         </div>
                                         
                                         {/* Button to replace existing company data */}
@@ -689,14 +694,14 @@ export default function Welcome() {
                                         )}
                                     </div>
                                 )}
-                            </CardContent>
-                        </Card>
+                            </div>
+                        </div>
                     ))}
                 </div>
 
                 {/* Error Message */}
                 {error && (
-                    <div className="max-w-2xl mx-auto mb-6 bg-red-900/30 border-2 border-red-700 rounded-2xl p-4 text-red-300 text-sm">
+                    <div style={{ maxWidth: 560, margin: '0 auto 16px', padding: '10px 14px', borderRadius: 8, background: 'rgba(244,63,94,0.15)', border: '1px solid rgba(244,63,94,0.4)', font: '400 13px/1.4 var(--font-sans)', color: '#fca5a5' }}>
                         {error}
                     </div>
                 )}
@@ -711,52 +716,42 @@ export default function Welcome() {
                     const hasNewCompanies = activeCompanies.some(c => !c.existsInDB)
                     const allExisting = activeCompanies.every(c => c.existsInDB)
                     
-                    if (allExisting) {
-                        // All companies exist - show "Continue to Analysis" button
-                        return (
-                            <div className="max-w-2xl mx-auto">
-                                <Button
-                                    onClick={() => {
-                                        // TODO: Navigate to analysis with multiple companies
-                                        //alert(`✅ ${activeCompanies.length} bestehende Firma(en) ausgewählt!\n\nWeiterleitung zur Analyse wird später implementiert.`)
+                    const btnBase = {
+                        width: '100%', height: 48, borderRadius: 10,
+                        font: '600 15px/1 var(--font-sans)',
+                        color: '#fff', border: 'none', cursor: 'pointer',
+                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                        transition: 'background 150ms ease',
+                    }
 
-                                        navigateToAnalysis(buildSelectedCompanies(activeCompanies))
-                                    }}
-                                    className="w-full h-14 rounded-full text-lg font-semibold cursor-pointer bg-green-600 hover:bg-green-700"
-                                    size="lg"
+                    if (allExisting) {
+                        return (
+                            <div style={{ maxWidth: 480, margin: '0 auto' }}>
+                                <button
+                                    onClick={() => navigateToAnalysis(buildSelectedCompanies(activeCompanies))}
+                                    style={{ ...btnBase, background: '#059669' }}
                                 >
-                                    <>
-                                        <ArrowRight className="h-5 w-5 mr-2" />
-                                        Weiter zur Analyse
-                                    </>
-                                </Button>
+                                    <ArrowRight className="h-5 w-5" />
+                                    Weiter zur Analyse
+                                </button>
                             </div>
                         )
                     }
-                    
+
                     if (hasNewCompanies) {
-                        // Has new companies - show "Upload & Continue" button
                         return (
-                            <div className="max-w-2xl mx-auto">
-                                <Button
+                            <div style={{ maxWidth: 480, margin: '0 auto' }}>
+                                <button
                                     onClick={handleUpload}
                                     disabled={uploading}
-                                    className="w-full h-14 rounded-full text-lg font-semibold cursor-pointer disabled:cursor-not-allowed"
-                                    size="lg"
+                                    style={{ ...btnBase, background: uploading ? 'rgba(255,255,255,0.15)' : '#2563eb', cursor: uploading ? 'not-allowed' : 'pointer' }}
                                 >
                                     {uploading ? (
-                                        <>
-                                            <div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
-                                            Wird hochgeladen...
-                                        </>
+                                        <><div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> Wird hochgeladen…</>
                                     ) : (
-                                        <>
-                                            <UploadIcon className="h-5 w-5 mr-2" />
-                                            Alle Dateien hochladen & Fortfahren
-                                            <ArrowRight className="h-5 w-5 ml-2" />
-                                        </>
+                                        <><UploadIcon className="h-5 w-5" /> Dateien hochladen & Fortfahren <ArrowRight className="h-5 w-5" /></>
                                     )}
-                                </Button>
+                                </button>
                             </div>
                         )
                     }
@@ -765,16 +760,15 @@ export default function Welcome() {
                 })()}
 
                 {/* Skip Option */}
-                <div className="max-w-2xl mx-auto">
-                    <div className="text-center pt-4">
-                        <button
-                            onClick={() => navigate("/dashboard")}
-                            className="text-sm text-slate-300 hover:text-white underline"
-                        >
-                            Überspringen und Dashboard ansehen
-                        </button>
-                    </div>
+                <div style={{ textAlign: 'center', paddingTop: 16 }}>
+                    <button
+                        onClick={() => navigate("/dashboard")}
+                        style={{ font: '400 13px/1 var(--font-sans)', color: 'rgba(255,255,255,0.45)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}
+                    >
+                        Überspringen und Dashboard ansehen
+                    </button>
                 </div>
+
             </div>
         </div>
     )

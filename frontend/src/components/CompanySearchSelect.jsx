@@ -17,12 +17,14 @@ import {
 } from "@/components/ui/popover"
 import { API_URL } from "../config"
 
-export function CompanySearchSelect({ 
-    value, 
-    onValueChange, 
+export function CompanySearchSelect({
+    value,
+    onValueChange,
     onCompanySelect,
     onCreateNew,
-    variant = "light" // "light" or "dark"
+    variant = "light", // "light" or "dark"
+    compact = false,    // compact mode for topbar
+    placeholder        // optional override for placeholder text
 }) {
     const [open, setOpen] = useState(false)
     const [companies, setCompanies] = useState([])
@@ -90,21 +92,27 @@ export function CompanySearchSelect({
                     role="combobox"
                     aria-expanded={open}
                     className={cn(
-                        "w-full justify-between h-auto text-left font-normal",
-                        isDark 
-                            ? "rounded-lg border-slate-600 bg-slate-800 px-4 py-2 text-white placeholder-slate-400 hover:bg-slate-700 focus:ring-2 focus:ring-blue-400" 
-                            : "rounded-xl border-slate-300 bg-white px-4 py-3 hover:bg-slate-50"
+                        "w-full justify-between text-left font-normal",
+                        compact
+                            ? "h-7 px-2.5 text-[12px] rounded-md border-slate-300 bg-white hover:bg-slate-50"
+                            : "h-auto",
+                        !compact && (isDark
+                            ? "rounded-lg border-slate-600 bg-slate-800 px-4 py-2 text-white placeholder-slate-400 hover:bg-slate-700 focus:ring-2 focus:ring-blue-400"
+                            : "rounded-xl border-slate-300 bg-white px-4 py-3 hover:bg-slate-50")
                     )}
-                >  
+                >
                     <span className={cn(
                         "truncate",
-                        value ? "text-white" : (isDark ? "text-slate-400" : "text-slate-400")
+                        value
+                            ? (compact ? "text-slate-900" : (isDark ? "text-white" : "text-slate-900"))
+                            : "text-slate-400"
                     )}>
-                        {value || "Firmenname eingeben oder auswählen..."}
+                        {value || placeholder || (compact ? "Firma wählen…" : "Firmenname eingeben oder auswählen...")}
                     </span>
                     <ChevronsUpDown className={cn(
-                        "ml-2 h-4 w-4 shrink-0",
-                        isDark ? "text-white opacity-70" : "opacity-50"
+                        "ml-2 shrink-0",
+                        compact ? "h-3.5 w-3.5 opacity-60" : "h-4 w-4",
+                        !compact && (isDark ? "text-white opacity-70" : "opacity-50")
                     )} />
                 </Button>
             </PopoverTrigger>
