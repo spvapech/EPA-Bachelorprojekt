@@ -1,5 +1,7 @@
 import * as React from "react"
 import {
+    AreaChart,
+    Area,
     LineChart,
     Line,
     XAxis,
@@ -9,6 +11,7 @@ import {
     ResponsiveContainer,
     ReferenceLine,
     Legend,
+    ComposedChart,
 } from "recharts"
 import { Filter, ChevronDown, Maximize2, X, Activity, BarChart2, Calendar } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -485,79 +488,73 @@ export const TimelineCard = memo(function TimelineCard({ companyId, onFiltersCha
         }
     }, [metric, source, granularity, selectedYear, timelineData, forecastData, trendData]); // onFiltersChange NICHT in Dependencies!
 
-    // Custom tooltip
+    // Custom tooltip — slate-900 dark style mit Mono-Zahlen
     const CustomTooltip = ({ active, payload, label }) => {
-        if (active && payload && payload.length) {
-            const historicalValue = payload.find(p => p.dataKey === "historical")?.value
-            const forecastValue = payload.find(p => p.dataKey === "forecast")?.value
-            const dataPoint = payload[0]?.payload
-            const isMissing = dataPoint?._isMissing
+        if (!active || !payload?.length) return null
+        const historicalValue = payload.find(p => p.dataKey === "historical")?.value
+        const forecastValue = payload.find(p => p.dataKey === "forecast")?.value
+        const dataPoint = payload[0]?.payload
+        const isMissing = dataPoint?._isMissing
+        const fmtV = (v) => metric === "Anzahl" ? Math.round(v) : Number(v).toFixed(2).replace(".", ",")
 
-            if (isMissing) {
-                const gapValue = dataPoint?.historicalGap
-                return (
-                    <div className="bg-white border border-slate-200 rounded-lg shadow-lg p-3">
-                        <p className="font-semibold text-slate-800 mb-1">{label}</p>
-                        <p className="text-xs text-amber-600 flex items-center gap-1">
-                            <span>⚠️</span> Keine Daten vorhanden
+        return (
+            <div className="bg-slate-900 border border-slate-700 rounded-md shadow-lg px-3 py-2 text-[12px] min-w-[140px]">
+                <p className="font-mono text-[10px] tracking-[0.05em] uppercase text-slate-400 mb-1.5">{label}</p>
+                {isMissing ? (
+                    <>
+                        <p className="text-amber-400 inline-flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                            Keine Daten
                         </p>
-                        {gapValue != null && (
-                            <p className="text-xs text-slate-400 mt-1">
-                                Interpolierter Wert: {metric === "Anzahl" ? Math.round(gapValue) : gapValue.toFixed(2)}
+                        {dataPoint?.historicalGap != null && (
+                            <p className="text-slate-500 mt-1 tnum">
+                                interpoliert: <span className="text-slate-300 font-medium">{fmtV(dataPoint.historicalGap)}</span>
                             </p>
                         )}
-                    </div>
-                )
-            }
-
-            return (
-                <div className="bg-white border border-slate-200 rounded-lg shadow-lg p-3">
-                    <p className="font-semibold text-slate-800 mb-1">{label}</p>
-                    {metric === "Trend" && historicalValue !== null && historicalValue !== undefined && (
-                        <>
-                            <p className="text-blue-600 text-sm">
-                                Trend: <span className={`font-bold ${historicalValue >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                    {historicalValue >= 0 ? '+' : ''}{historicalValue.toFixed(2)}
+                    </>
+                ) : (
+                    <>
+                        {historicalValue != null && (
+                            <p className="flex items-center justify-between gap-3">
+                                <span className="inline-flex items-center gap-1.5 text-slate-400">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
+                                    {metric === "Trend" ? "Trend" : "Historisch"}
+                                </span>
+                                <span className={`font-semibold tnum ${
+                                    metric === "Trend"
+                                        ? (historicalValue >= 0 ? "text-emerald-400" : "text-rose-400")
+                                        : "text-white"
+                                }`}>
+                                    {metric === "Trend" && historicalValue >= 0 ? "+" : ""}
+                                    {fmtV(historicalValue)}
                                 </span>
                             </p>
-                            {dataPoint?.score !== null && dataPoint?.score !== undefined && (
-                                <p className="text-slate-600 text-xs mt-1">
-                                    Aktuell: <span className="font-semibold">{dataPoint.score.toFixed(2)}</span>
-                                </p>
-                            )}
-                            {dataPoint?.prevScore !== null && dataPoint?.prevScore !== undefined && (
-                                <p className="text-slate-500 text-xs">
-                                    Vorher: <span className="font-semibold">{dataPoint.prevScore.toFixed(2)}</span>
-                                </p>
-                            )}
-                        </>
-                    )}
-                    {metric !== "Trend" && historicalValue !== null && historicalValue !== undefined && (
-                        <p className="text-blue-600 text-sm">
-                            Historisch: <span className="font-bold">
-                                {metric === "Anzahl" 
-                                    ? Math.round(historicalValue) 
-                                    : historicalValue.toFixed(2)}
-                            </span>
-                        </p>
-                    )}
-                    {forecastValue !== null && forecastValue !== undefined && (
-                        <p className="text-orange-500 text-sm">
-                            {metric === "Trend" ? "Prognose Trend: " : "Prognose: "}
-                            <span className={`font-bold ${metric === "Trend" && forecastValue >= 0 ? 'text-green-600' : metric === "Trend" ? 'text-red-600' : ''}`}>
-                                {metric === "Trend" && forecastValue >= 0 ? '+' : ''}{forecastValue.toFixed(2)}
-                            </span>
-                        </p>
-                    )}
-                    {metric === "Ø Score" && dataPoint?.count && (
-                        <p className="text-slate-500 text-xs mt-1">
-                            Bewertungen: {dataPoint.count}
-                        </p>
-                    )}
-                </div>
-            )
-        }
-        return null
+                        )}
+                        {forecastValue != null && (
+                            <p className="flex items-center justify-between gap-3 mt-1">
+                                <span className="inline-flex items-center gap-1.5 text-slate-400">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-orange-400" />
+                                    Prognose
+                                </span>
+                                <span className={`font-semibold tnum ${
+                                    metric === "Trend"
+                                        ? (forecastValue >= 0 ? "text-emerald-400" : "text-rose-400")
+                                        : "text-orange-300"
+                                }`}>
+                                    {metric === "Trend" && forecastValue >= 0 ? "+" : ""}
+                                    {fmtV(forecastValue)}
+                                </span>
+                            </p>
+                        )}
+                        {metric === "Ø Score" && dataPoint?.count && (
+                            <p className="text-slate-500 mt-1.5 pt-1.5 border-t border-slate-700 tnum text-[11px]">
+                                {dataPoint.count} {dataPoint.count === 1 ? "Bewertung" : "Bewertungen"}
+                            </p>
+                        )}
+                    </>
+                )}
+            </div>
+        )
     }
 
     // Filter dropdowns component (reusable)
@@ -589,156 +586,149 @@ export const TimelineCard = memo(function TimelineCard({ companyId, onFiltersCha
         </>
     )
 
-    // Chart component (reusable for card and modal)
+    // Chart component — Modern Area-Chart mit Gradient-Fill (Stripe/Linear-Stil)
     const TimelineChart = ({ height = 200 }) => (
         <ResponsiveContainer width="100%" height={height === "100%" ? "100%" : height}>
-            <LineChart 
-                data={chartData} 
-                margin={{ left: 0, right: 20, top: 5, bottom: 5 }}
+            <ComposedChart
+                data={chartData}
+                margin={{ left: 0, right: 16, top: 8, bottom: 5 }}
             >
-                <CartesianGrid 
-                    strokeDasharray="3 3" 
-                    stroke="#e2e8f0"
-                    vertical={false}
-                />
-                <XAxis 
-                    dataKey="date" 
-                    tick={{ fontSize: 11, fill: "#64748b" }}
+                {/* Gradient-Definitionen für Area-Fills */}
+                <defs>
+                    <linearGradient id="histGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%"   stopColor="#3b82f6" stopOpacity={0.18} />
+                        <stop offset="100%" stopColor="#3b82f6" stopOpacity={0.0} />
+                    </linearGradient>
+                    <linearGradient id="trendGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%"   stopColor="#10b981" stopOpacity={0.18} />
+                        <stop offset="100%" stopColor="#10b981" stopOpacity={0.0} />
+                    </linearGradient>
+                    <linearGradient id="forecastGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%"   stopColor="#f97316" stopOpacity={0.14} />
+                        <stop offset="100%" stopColor="#f97316" stopOpacity={0.0} />
+                    </linearGradient>
+                </defs>
+
+                <CartesianGrid strokeDasharray="2 4" stroke="#f1f5f9" vertical={false} />
+
+                <XAxis
+                    dataKey="date"
+                    tick={{ fontSize: 10, fill: "#94a3b8" }}
                     tickLine={false}
                     axisLine={{ stroke: "#e2e8f0" }}
                     interval="preserveStartEnd"
+                    tickMargin={8}
                 />
-                <YAxis 
+                <YAxis
                     domain={yAxisDomain}
-                    tick={{ fontSize: 11, fill: "#64748b" }}
+                    tick={{ fontSize: 10, fill: "#94a3b8" }}
                     tickLine={false}
                     axisLine={false}
+                    width={32}
                     tickFormatter={(value) => {
                         if (metric === "Anzahl") return Math.round(value).toString()
-                        if (metric === "Trend") return (value >= 0 ? '+' : '') + value.toFixed(1)
+                        if (metric === "Trend") return (value >= 0 ? "+" : "") + value.toFixed(1)
                         return value.toFixed(1)
                     }}
                 />
-                <Tooltip content={<CustomTooltip />} />
-                
-                {/* Reference line at y=0 for Trend mode */}
+                <Tooltip
+                    content={<CustomTooltip />}
+                    cursor={{ stroke: "#cbd5e1", strokeWidth: 1, strokeDasharray: "3 3" }}
+                />
+
+                {/* Reference line at y=0 für Trend */}
                 {metric === "Trend" && (
-                    <ReferenceLine 
-                        y={0} 
-                        stroke="#94a3b8" 
+                    <ReferenceLine y={0} stroke="#cbd5e1" strokeDasharray="2 4" strokeWidth={1} />
+                )}
+
+                {/* Trennlinie historisch ↔ forecast */}
+                {((metric === "Ø Score" && forecastData.length > 0) ||
+                  (metric === "Trend"   && forecastTrendData.length > 0)) && lastHistoricalDate && (
+                    <ReferenceLine
+                        x={lastHistoricalDate}
+                        stroke="#94a3b8"
                         strokeDasharray="3 3"
-                        strokeWidth={1}
+                        strokeWidth={1.5}
                     />
                 )}
 
-                {/* Reference line separating historical and forecast (for Trend mode) */}
-                {metric === "Trend" && lastHistoricalDate && forecastTrendData.length > 0 && (
-                    <ReferenceLine 
-                        x={lastHistoricalDate} 
-                        stroke="#94a3b8" 
-                        strokeDasharray="5 5"
-                        strokeWidth={2}
-                        label={{ 
-                            value: "", 
-                            position: "top",
-                            fill: "#64748b",
-                            fontSize: 11,
-                            fontWeight: 500
-                        }}
-                    />
-                )}
-
-                {/* Reference line separating historical and forecast (only for "Ø Score" mode) */}
-                {metric === "Ø Score" && lastHistoricalDate && forecastData.length > 0 && (
-                    <ReferenceLine 
-                        x={lastHistoricalDate} 
-                        stroke="#94a3b8" 
-                        strokeDasharray="5 5"
-                        strokeWidth={2}
-                        label={{ 
-                            value: "", 
-                            position: "top",
-                            fill: "#64748b",
-                            fontSize: 11,
-                            fontWeight: 500
-                        }}
-                    />
-                )}
-
-                {/* Historical data line - solid blue (not shown for Trend mode) */}
+                {/* === Historische Daten === */}
                 {metric !== "Trend" && (
-                    <Line 
-                        type="monotone" 
-                        dataKey="historical" 
-                        stroke="#3b82f6" 
-                        strokeWidth={3}
-                        dot={{ fill: "#3b82f6", r: 4, strokeWidth: 0 }}
-                        activeDot={{ r: 6, fill: "#2563eb" }}
+                    <Area
+                        type="monotone"
+                        dataKey="historical"
+                        stroke="#3b82f6"
+                        strokeWidth={2}
+                        fill="url(#histGradient)"
+                        dot={false}
+                        activeDot={{ r: 4, fill: "#3b82f6", stroke: "#fff", strokeWidth: 2 }}
                         name="Historisch"
                         connectNulls={false}
                     />
                 )}
 
-                {/* Historical gap line - dashed (when there are missing months) */}
-                {metric !== "Trend" && timelineHasGaps && (
-                    <Line 
-                        type="monotone" 
-                        dataKey="historicalGap" 
-                        stroke="#94a3b8" 
-                        strokeWidth={2}
-                        strokeDasharray="6 4"
-                        strokeOpacity={0.7}
-                        dot={false}
-                        activeDot={false}
-                        connectNulls={false}
-                        legendType="none"
-                    />
-                )}
-
-                {/* Forecast data line - dashed orange (only for "Ø Score" mode) */}
-                {metric === "Ø Score" && (
-                    <Line 
-                        type="monotone" 
-                        dataKey="forecast" 
-                        stroke="#f97316" 
-                        strokeWidth={3}
-                        strokeDasharray="8 4"
-                        dot={{ fill: "#f97316", r: 4, strokeWidth: 0 }}
-                        activeDot={{ r: 6, fill: "#ea580c" }}
-                        name="Prognose"
-                        connectNulls={false}
-                    />
-                )}
-
-                {/* Historical trend line - solid green */}
                 {metric === "Trend" && (
-                    <Line 
-                        type="monotone" 
-                        dataKey="historical" 
-                        stroke="#10b981" 
-                        strokeWidth={3}
-                        dot={{ fill: "#10b981", r: 4, strokeWidth: 0 }}
-                        activeDot={{ r: 6, fill: "#059669" }}
+                    <Area
+                        type="monotone"
+                        dataKey="historical"
+                        stroke="#10b981"
+                        strokeWidth={2}
+                        fill="url(#trendGradient)"
+                        dot={false}
+                        activeDot={{ r: 4, fill: "#10b981", stroke: "#fff", strokeWidth: 2 }}
                         name="Trend Historisch"
                         connectNulls={false}
                     />
                 )}
 
-                {/* Forecast trend line - dashed orange (for Trend mode) */}
+                {/* Gestrichelte Gap-Line bei Lücken — deutlich sichtbar über der Area */}
+                {metric !== "Trend" && timelineHasGaps && (
+                    <Line
+                        type="monotone"
+                        dataKey="historicalGap"
+                        stroke="#94a3b8"
+                        strokeWidth={2}
+                        strokeDasharray="6 4"
+                        strokeOpacity={0.85}
+                        dot={false}
+                        activeDot={false}
+                        connectNulls={false}
+                        legendType="none"
+                        isAnimationActive={false}
+                    />
+                )}
+
+                {/* === Forecast === */}
+                {metric === "Ø Score" && (
+                    <Area
+                        type="monotone"
+                        dataKey="forecast"
+                        stroke="#f97316"
+                        strokeWidth={2}
+                        strokeDasharray="5 3"
+                        fill="url(#forecastGradient)"
+                        dot={false}
+                        activeDot={{ r: 4, fill: "#f97316", stroke: "#fff", strokeWidth: 2 }}
+                        name="Prognose"
+                        connectNulls={false}
+                    />
+                )}
+
                 {metric === "Trend" && forecastTrendData.length > 0 && (
-                    <Line 
-                        type="monotone" 
-                        dataKey="forecast" 
-                        stroke="#f97316" 
-                        strokeWidth={3}
-                        strokeDasharray="8 4"
-                        dot={{ fill: "#f97316", r: 4, strokeWidth: 0 }}
-                        activeDot={{ r: 6, fill: "#ea580c" }}
+                    <Area
+                        type="monotone"
+                        dataKey="forecast"
+                        stroke="#f97316"
+                        strokeWidth={2}
+                        strokeDasharray="5 3"
+                        fill="url(#forecastGradient)"
+                        dot={false}
+                        activeDot={{ r: 4, fill: "#f97316", stroke: "#fff", strokeWidth: 2 }}
                         name="Trend Prognose"
                         connectNulls={false}
                     />
                 )}
-            </LineChart>
+            </ComposedChart>
         </ResponsiveContainer>
     )
 

@@ -413,6 +413,7 @@ export const TopicRatingCard = memo(function TopicRatingCard({ companyId, onFilt
   }, [source, granularity, selectedYear, visibleTopics, chartData, loading]);
 
   // Tooltip
+  // Tooltip — slate-900 dark style mit Mono-Zahlen
   const CustomTooltip = ({ active, payload, label }) => {
     if (!active || !payload?.length) return null
 
@@ -420,34 +421,38 @@ export const TopicRatingCard = memo(function TopicRatingCard({ companyId, onFilt
 
     if (gapInfo) {
       return (
-        <div className="bg-white border border-slate-200 rounded-lg shadow-lg p-3 max-w-[300px]">
-          <p className="font-semibold text-slate-800 mb-1">gab</p>
-          <p className="text-xs text-slate-600">Keine Bewertungen zwischen {gapInfo}.</p>
+        <div className="bg-slate-900 border border-slate-700 rounded-md shadow-lg px-3 py-2 text-[12px] max-w-[260px]">
+          <p className="font-mono text-[10px] tracking-[0.05em] uppercase text-slate-400 mb-1">Lücke</p>
+          <p className="text-amber-400 inline-flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+            Keine Bewertungen
+          </p>
+          <p className="text-slate-500 mt-0.5 text-[11px]">{gapInfo}</p>
         </div>
       )
     }
 
     const items = payload
-      .filter((p) => p.dataKey !== "_gapMarker" && !p.dataKey.endsWith("__gap") && p.value !== null && p.value !== undefined)
+      .filter((p) => p.dataKey !== "_gapMarker" && !p.dataKey.endsWith("__gap") && p.value != null)
       .sort((a, b) => (b.value ?? 0) - (a.value ?? 0))
 
     return (
-      <div className="bg-white border border-slate-200 rounded-lg shadow-lg p-3 max-w-[300px]">
-        <p className="font-semibold text-slate-800 mb-2">{label}</p>
-        <div className="space-y-1">
+      <div className="bg-slate-900 border border-slate-700 rounded-md shadow-lg px-3 py-2 text-[12px] max-w-[300px]">
+        <p className="font-mono text-[10px] tracking-[0.05em] uppercase text-slate-400 mb-1.5">{label}</p>
+        <div className="space-y-0.5">
           {items.map((p) => (
             <div key={p.dataKey} className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2 min-w-0">
+              <div className="flex items-center gap-1.5 min-w-0">
                 <span
-                  className="inline-block h-2.5 w-2.5 rounded-full flex-shrink-0"
+                  className="inline-block h-1.5 w-1.5 rounded-full flex-shrink-0"
                   style={{ backgroundColor: p.stroke }}
                 />
-                <span className="text-xs text-slate-700 truncate">
+                <span className="text-slate-300 truncate">
                   {prettifyTopicKey(p.dataKey)}
                 </span>
               </div>
-              <span className="text-xs font-bold text-slate-900">
-                {Number(p.value).toFixed(2)}
+              <span className="font-semibold tnum text-white">
+                {Number(p.value).toFixed(2).replace(".", ",")}
               </span>
             </div>
           ))}
@@ -569,46 +574,48 @@ export const TopicRatingCard = memo(function TopicRatingCard({ companyId, onFilt
 
   const TopicChart = ({ height = 200 }) => (
     <ResponsiveContainer width="100%" height={height === "100%" ? "100%" : height}>
-      <LineChart data={chartData} margin={{ left: 0, right: 20, top: 5, bottom: 5 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+      <LineChart data={chartData} margin={{ left: 0, right: 16, top: 8, bottom: 5 }}>
+        <CartesianGrid strokeDasharray="2 4" stroke="#f1f5f9" vertical={false} />
         <XAxis
           dataKey="periodLabel"
-          tick={{ fontSize: 11, fill: "#64748b" }}
+          tick={{ fontSize: 10, fill: "#94a3b8" }}
           tickLine={false}
           axisLine={{ stroke: "#e2e8f0" }}
           interval="preserveStartEnd"
+          tickMargin={8}
         />
         <YAxis
           domain={[0, 5]}
-          tick={{ fontSize: 11, fill: "#64748b" }}
+          tick={{ fontSize: 10, fill: "#94a3b8" }}
           tickLine={false}
           axisLine={false}
+          width={32}
           tickFormatter={(v) => Number(v).toFixed(1)}
         />
-        <Tooltip content={<CustomTooltip />} />
-        <Legend
-          wrapperStyle={{ fontSize: 11, color: "#64748b" }}
-          formatter={(value) => prettifyTopicKey(value)}
+        <Tooltip
+          content={<CustomTooltip />}
+          cursor={{ stroke: "#cbd5e1", strokeWidth: 1, strokeDasharray: "3 3" }}
         />
 
         {visibleTopics.map((topic) => {
-          const colorIdx = (topics || []).indexOf(topic) // stabiler Index aus "topics"
+          const colorIdx = (topics || []).indexOf(topic)
+          const color = topicColor(Math.max(colorIdx, 0))
           return (
             <Line
               key={topic}
               type="monotone"
               dataKey={topic}
-              stroke={topicColor(Math.max(colorIdx, 0))}
-              strokeWidth={2.5}
-              dot={{ r: 4, strokeWidth: 0, fill: topicColor(Math.max(colorIdx, 0)) }}
-              activeDot={{ r: 6, strokeWidth: 0 }}
+              stroke={color}
+              strokeWidth={1.75}
+              dot={false}
+              activeDot={{ r: 4, fill: color, stroke: "#fff", strokeWidth: 2 }}
               connectNulls={false}
               name={prettifyTopicKey(topic)}
             />
           )
         })}
 
-        {/* Dashed gap bridge lines for each visible topic */}
+        {/* Dashed gap bridge lines for each visible topic — deutlich sichtbar */}
         {visibleTopics.map((topic) => {
           const colorIdx = (topics || []).indexOf(topic)
           return (
@@ -617,9 +624,9 @@ export const TopicRatingCard = memo(function TopicRatingCard({ companyId, onFilt
               type="monotone"
               dataKey={`${topic}__gap`}
               stroke={topicColor(Math.max(colorIdx, 0))}
-              strokeWidth={2}
-              strokeDasharray="6 4"
-              strokeOpacity={0.5}
+              strokeWidth={1.75}
+              strokeDasharray="5 3"
+              strokeOpacity={0.7}
               dot={false}
               activeDot={false}
               connectNulls={false}
@@ -659,9 +666,9 @@ export const TopicRatingCard = memo(function TopicRatingCard({ companyId, onFilt
 
   return (
     <>
-      {/* Card */}
+      {/* Card — flex-col + h-full damit Stats am Boden sitzen */}
       <div
-        className="group bg-white border border-slate-200 rounded-lg overflow-hidden shadow-xs hover:shadow-sm transition-shadow cursor-pointer"
+        className="group bg-white border border-slate-200 rounded-lg overflow-hidden shadow-xs hover:shadow-sm transition-shadow cursor-pointer flex flex-col h-full"
         onClick={() => setModalOpen(true)}
       >
         <ChartCardHeader
@@ -673,8 +680,8 @@ export const TopicRatingCard = memo(function TopicRatingCard({ companyId, onFilt
           actions={<FilterDropdowns compact />}
         />
 
-        <div className="px-4 pt-4 pb-4 flex flex-col h-full">
-          <div id="topic-rating-chart-export" className="relative h-[220px] w-full border-0 outline-none">
+        <div className="px-4 pt-4 pb-4 flex flex-col flex-1 min-h-0">
+          <div id="topic-rating-chart-export" className="relative h-[220px] w-full border-0 outline-none flex-shrink-0">
             {emptyMessage && !showOverlay ? (
               <div className="h-full flex items-center justify-center">
                 <p className="text-[13px] text-slate-500">{emptyMessage}</p>
@@ -692,6 +699,29 @@ export const TopicRatingCard = memo(function TopicRatingCard({ companyId, onFilt
               </div>
             )}
           </div>
+
+          {/* Externe Legende — gleiche Struktur wie Timeline-ChartLegend (mt-4) */}
+          {visibleTopics.length > 0 && !emptyMessage && (
+            <div className="mt-4 flex items-center justify-center gap-x-4 gap-y-1 flex-wrap text-[11px]">
+              {visibleTopics.slice(0, 6).map((topic) => {
+                const colorIdx = (topics || []).indexOf(topic)
+                return (
+                  <span key={topic} className="inline-flex items-center gap-1.5">
+                    <span
+                      className="inline-block w-3 h-1 rounded-full flex-none"
+                      style={{ background: topicColor(Math.max(colorIdx, 0)) }}
+                    />
+                    <span className="text-slate-600 truncate max-w-[120px]">
+                      {prettifyTopicKey(topic)}
+                    </span>
+                  </span>
+                )
+              })}
+              {visibleTopics.length > 6 && (
+                <span className="text-slate-400">+ {visibleTopics.length - 6}</span>
+              )}
+            </div>
+          )}
 
           {gapNotes.length > 0 && (
             <p className="text-[11px] text-slate-500 text-center mt-2 italic flex items-center justify-center gap-1.5">
@@ -784,6 +814,24 @@ export const TopicRatingCard = memo(function TopicRatingCard({ companyId, onFilt
                 </div>
               )}
             </div>
+
+            {/* Externe Legende im Modal */}
+            {visibleTopics.length > 0 && !emptyMessage && (
+              <div className="mt-3 flex items-center justify-center gap-x-4 gap-y-1 flex-wrap text-[12px] flex-shrink-0">
+                {visibleTopics.map((topic) => {
+                  const colorIdx = (topics || []).indexOf(topic)
+                  return (
+                    <span key={topic} className="inline-flex items-center gap-1.5">
+                      <span
+                        className="inline-block w-3.5 h-1 rounded-full flex-none"
+                        style={{ background: topicColor(Math.max(colorIdx, 0)) }}
+                      />
+                      <span className="text-slate-600">{prettifyTopicKey(topic)}</span>
+                    </span>
+                  )
+                })}
+              </div>
+            )}
 
             {/* Erweiterte Summary-Stats unter dem Chart */}
             {topicStats && (

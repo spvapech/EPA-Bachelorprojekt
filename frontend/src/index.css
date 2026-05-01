@@ -545,17 +545,20 @@ h1 { font-size: 3.2em; line-height: 1.1; }
 }
 
 /* ---- Collapse-row — smooth height via grid-template-rows ---- */
+/* Closing: height collapses immediately after a small delay (so opacity fades first) */
 .collapse-row {
   display: grid;
   grid-template-rows: 0fr;
-  transition: grid-template-rows 280ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  transition: grid-template-rows 320ms cubic-bezier(0.4, 0, 0.2, 1) 180ms;
 }
 .collapse-row > .collapse-inner {
   overflow: hidden;
   min-height: 0;
 }
+/* Opening: height expands first (no delay), then content fades in (handled inline) */
 .collapse-row.is-open {
   grid-template-rows: 1fr;
+  transition: grid-template-rows 320ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* ---- Tabular nums utility ---- */

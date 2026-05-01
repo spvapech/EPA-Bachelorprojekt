@@ -1,418 +1,358 @@
 import * as React from "react"
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import {
-    Dialog,
-    DialogContent,
-    DialogHeader,
-    DialogTitle,
-} from "@/components/ui/dialog"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { 
-    X, 
-    Calendar, 
-    User, 
-    Star, 
-    ThumbsUp, 
-    ThumbsDown, 
-    Lightbulb, 
-    Briefcase, 
-    FileText,
-    ChevronLeft,
-    ChevronRight
+  Calendar, User, Star,
+  ThumbsUp, ThumbsDown, Lightbulb,
+  Briefcase, FileText, ChevronLeft, ChevronRight, MessageSquare,
 } from "lucide-react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 
-export default function ReviewDetailModal({ 
-    open, 
-    onOpenChange, 
-    reviewDetail, 
-    allReviewDetails = [], 
-    currentIndex = 0,
-    onNavigate 
-}) {
-    if (!reviewDetail || !reviewDetail.fullReview) return null
+/* ─── Helpers ─── */
+const fmt = (n, d = 1) =>
+  Number.isFinite(Number(n)) ? Number(n).toFixed(d).replace(".", ",") : "—"
 
-    const { fullReview } = reviewDetail
-    const hasMultipleReviews = allReviewDetails.length > 1
-    const canGoPrevious = currentIndex > 0
-    const canGoNext = currentIndex < allReviewDetails.length - 1
+const formatDate = (dateString) => {
+  if (!dateString) return "Unbekannt"
+  try {
+    return new Date(dateString).toLocaleDateString("de-DE", {
+      year: "numeric", month: "long", day: "numeric",
+    })
+  } catch { return "Unbekannt" }
+}
 
-    const handlePrevious = () => {
-        if (canGoPrevious && onNavigate) {
-            onNavigate(currentIndex - 1)
-        }
-    }
+const formatStatus = (status) => {
+  if (!status) return null
+  const s = String(status).trim()
+  if (s === "1" || s === "1.0") return "Angestellt"
+  if (s === "0" || s === "0.0") return "Ex-Angestellt"
+  const normalized = s.toLowerCase().replace(/\s+/g, "-")
+  if (/^ex-?angestell/i.test(normalized)) return "Ex-Angestellt"
+  return s
+}
 
-    const handleNext = () => {
-        if (canGoNext && onNavigate) {
-            onNavigate(currentIndex + 1)
-        }
-    }
+const ratingTone = (s) => {
+  const n = Number(s)
+  if (!Number.isFinite(n)) return {
+    text: "text-slate-700", bar: "bg-slate-300", bg: "bg-slate-50",
+    border: "border-slate-200", hoverBorder: "hover:border-slate-300",
+    gradient: "bg-white", labelText: "text-slate-600",
+  }
+  if (n >= 3.5) return {
+    text: "text-emerald-700", bar: "bg-emerald-500", bg: "bg-emerald-50",
+    border: "border-emerald-200", hoverBorder: "hover:border-emerald-400",
+    gradient: "bg-gradient-to-r from-emerald-50/70 to-white",
+    labelText: "text-emerald-700",
+  }
+  if (n >= 2.5) return {
+    text: "text-amber-700", bar: "bg-amber-500", bg: "bg-amber-50",
+    border: "border-amber-200", hoverBorder: "hover:border-amber-400",
+    gradient: "bg-gradient-to-r from-amber-50/70 to-white",
+    labelText: "text-amber-700",
+  }
+  return {
+    text: "text-rose-700", bar: "bg-rose-500", bg: "bg-rose-50",
+    border: "border-rose-200", hoverBorder: "hover:border-rose-400",
+    gradient: "bg-gradient-to-r from-rose-50/70 to-white",
+    labelText: "text-rose-700",
+  }
+}
 
-    // Format text with line breaks
-    const formatText = (text) => {
-        if (!text) return null
-        return text.split('\n').map((line, index) => (
-            <span key={index}>
-                {line}
-                {index < text.split('\n').length - 1 && <br />}
+const ratingCategories = [
+  { key: "arbeitsatmosphaere",         label: "Arbeitsatmosphäre" },
+  { key: "image",                       label: "Image" },
+  { key: "work_life_balance",           label: "Work-Life Balance" },
+  { key: "karriere_weiterbildung",      label: "Karriere/Weiterbildung" },
+  { key: "gehalt_sozialleistungen",     label: "Gehalt/Sozialleistungen" },
+  { key: "kollegenzusammenhalt",        label: "Kollegenzusammenhalt" },
+  { key: "umwelt_sozialbewusstsein",    label: "Umwelt-/Sozialbewusstsein" },
+  { key: "vorgesetztenverhalten",       label: "Vorgesetztenverhalten" },
+  { key: "kommunikation",               label: "Kommunikation" },
+  { key: "interessante_aufgaben",       label: "Interessante Aufgaben" },
+  { key: "umgang_mit_aelteren_kollegen", label: "Umgang mit älteren Kollegen" },
+  { key: "arbeitsbedingungen",          label: "Arbeitsbedingungen" },
+  { key: "gleichberechtigung",          label: "Gleichberechtigung" },
+]
+
+/* ─── Star rendering ─── */
+function StarRating({ rating, size = "md" }) {
+  if (rating === null || rating === undefined) {
+    return <span className="text-[12px] text-slate-400 italic">Nicht bewertet</span>
+  }
+  const rounded = Math.round(rating * 2) / 2
+  const fullStars = Math.floor(rounded)
+  const hasHalf = rounded % 1 !== 0
+  const empty = 5 - fullStars - (hasHalf ? 1 : 0)
+  const px = size === "sm" ? 12 : size === "lg" ? 20 : 16
+
+  return (
+    <div className="inline-flex items-center gap-0.5">
+      {[...Array(fullStars)].map((_, i) => (
+        <Star key={`f${i}`} style={{ width: px, height: px }} className="fill-amber-400 text-amber-400" strokeWidth={1.5} />
+      ))}
+      {hasHalf && (
+        <span className="relative inline-block" style={{ width: px, height: px }}>
+          <Star style={{ width: px, height: px }} className="absolute inset-0 fill-slate-200 text-slate-300" strokeWidth={1.5} />
+          <span className="absolute inset-0 overflow-hidden" style={{ width: "50%" }}>
+            <Star style={{ width: px, height: px }} className="fill-amber-400 text-amber-400" strokeWidth={1.5} />
+          </span>
+        </span>
+      )}
+      {[...Array(empty)].map((_, i) => (
+        <Star key={`e${i}`} style={{ width: px, height: px }} className="fill-slate-200 text-slate-300" strokeWidth={1.5} />
+      ))}
+    </div>
+  )
+}
+
+/* ─── Section block (gleich wie TopicDetailModal) ─── */
+function Section({ icon, title, eyebrow, tone = "neutral", action, children }) {
+  const toneMap = {
+    good:    { iconBg: "bg-emerald-50",   iconText: "text-emerald-600", border: "border-emerald-200", titleColor: "text-emerald-700" },
+    bad:     { iconBg: "bg-rose-50",      iconText: "text-rose-600",    border: "border-rose-200",    titleColor: "text-rose-700" },
+    info:    { iconBg: "bg-blue-50",      iconText: "text-blue-600",    border: "border-blue-200",    titleColor: "text-blue-700" },
+    warn:    { iconBg: "bg-amber-50",     iconText: "text-amber-600",   border: "border-amber-200",   titleColor: "text-amber-700" },
+    neutral: { iconBg: "bg-slate-100",    iconText: "text-slate-600",   border: "border-slate-200",   titleColor: "text-slate-900" },
+  }
+  const t = toneMap[tone] ?? toneMap.neutral
+  return (
+    <section className={`bg-white border ${t.border} rounded-lg overflow-hidden shadow-xs`}>
+      <header className="px-4 py-3 border-b border-slate-200 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5 min-w-0">
+          {icon && (
+            <span className={`w-7 h-7 rounded-md grid place-items-center flex-none ${t.iconBg} ${t.iconText} [&_svg]:w-[14px] [&_svg]:h-[14px]`}>
+              {icon}
             </span>
-        ))
-    }
+          )}
+          <div className="min-w-0">
+            {eyebrow && (
+              <p className="m-0 mb-0.5 font-mono text-[10px] tracking-[0.06em] uppercase text-slate-500 leading-none">{eyebrow}</p>
+            )}
+            <h3 className={`m-0 text-[14px] leading-5 font-semibold tracking-tight ${t.titleColor}`}>{title}</h3>
+          </div>
+        </div>
+        {action && <div className="flex-shrink-0">{action}</div>}
+      </header>
+      <div className="p-4">{children}</div>
+    </section>
+  )
+}
 
-    // Format date
-    const formatDate = (dateString) => {
-        if (!dateString) return "Unbekannt"
-        try {
-            const date = new Date(dateString)
-            return date.toLocaleDateString("de-DE", {
-                year: "numeric",
-                month: "long",
-                day: "numeric"
-            })
-        } catch {
-            return "Unbekannt"
-        }
-    }
+/* ============================================================================
+   ReviewDetailModal
+   ============================================================================ */
+export default function ReviewDetailModal({
+  open, onOpenChange, reviewDetail, allReviewDetails = [], currentIndex = 0, onNavigate,
+}) {
+  if (!reviewDetail || !reviewDetail.fullReview) return null
 
-    // Maps numeric status values and common variants to readable labels
-    const formatStatus = (status) => {
-        if (!status) return null
-        const s = String(status).trim()
+  const { fullReview } = reviewDetail
+  const hasMultiple = allReviewDetails.length > 1
+  const canPrev = currentIndex > 0
+  const canNext = currentIndex < allReviewDetails.length - 1
+  const overall = Number(fullReview.durchschnittsbewertung)
+  const overallTone = ratingTone(overall)
 
-        // Numeric encoding
-        if (s === "1" || s === "1.0") return "Angestellt"
-        if (s === "0" || s === "0.0") return "Ex-Angestellt"
+  const goPrev = () => canPrev && onNavigate?.(currentIndex - 1)
+  const goNext = () => canNext && onNavigate?.(currentIndex + 1)
 
-        // Normalize common textual variants (e.g. "Ex-Angestellter", "Ex Angestellter", "ex-angestellt")
-        const normalized = s.toLowerCase().replace(/\s+/g, "-")
-        if (/^ex-?angestell/i.test(normalized) || /^ex-angestell/i.test(normalized)) {
-            return "Ex-Angestellt"
-        }
+  const formatText = (text) => {
+    if (!text) return null
+    return text.split("\n").map((line, i, arr) => (
+      <span key={i}>
+        {line}
+        {i < arr.length - 1 && <br />}
+      </span>
+    ))
+  }
 
-        return s
-    }
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent
+        className="overflow-hidden flex flex-col p-0 gap-0"
+        style={{ width: "82vw", maxWidth: "82vw", height: "88vh", maxHeight: "88vh" }}
+      >
+        {/* Tonaler Akzentbalken oben (basierend auf Gesamtbewertung) */}
+        <span aria-hidden="true" className={`block h-[3px] w-full ${overallTone.bar}`} />
 
-    // Get badge variant based on status
-    const getStatusBadgeVariant = (status) => {
-        const statusLower = status?.toLowerCase() || ""
-        if (statusLower.includes("manager") || statusLower.includes("führungskraft")) {
-            return "default"
-        }
-        if (statusLower.includes("employee") || statusLower.includes("angestellt")) {
-            return "secondary"
-        }
-        if (statusLower.includes("student") || statusLower.includes("praktikant")) {
-            return "outline"
-        }
-        return "outline"
-    }
-
-    // Render star rating - improved version with better visibility
-    const renderStarRating = (rating, size = "md") => {
-        if (rating === null || rating === undefined) {
-            return <span className="text-slate-400 text-sm font-medium">Nicht bewertet</span>
-        }
-        
-        const roundedRating = Math.round(rating * 2) / 2 // Round to nearest 0.5
-        const fullStars = Math.floor(roundedRating)
-        const hasHalfStar = roundedRating % 1 !== 0
-        const emptyStars = 5 - fullStars - (hasHalfStar ? 1 : 0)
-
-        // Size configurations
-        const sizeClasses = {
-            sm: { star: "h-4 w-4", text: "text-sm", gap: "gap-0.5" },
-            md: { star: "h-5 w-5", text: "text-base", gap: "gap-1" },
-            lg: { star: "h-6 w-6", text: "text-lg", gap: "gap-1.5" }
-        }
-        const config = sizeClasses[size]
-
-        return (
-            <div className={`flex items-center ${config.gap}`}>
-                {[...Array(fullStars)].map((_, i) => (
-                    <Star 
-                        key={`full-${i}`} 
-                        className={`${config.star} fill-amber-400 text-amber-500 drop-shadow-sm`}
-                        strokeWidth={1.5}
-                    />
-                ))}
-                {hasHalfStar && (
-                    <div className="relative inline-block">
-                        <Star 
-                            className={`${config.star} fill-slate-200 text-slate-300`}
-                            strokeWidth={1.5}
-                        />
-                        <div className="absolute inset-0 overflow-hidden" style={{ width: "50%" }}>
-                            <Star 
-                                className={`${config.star} fill-amber-400 text-amber-500 drop-shadow-sm`}
-                                strokeWidth={1.5}
-                            />
-                        </div>
-                    </div>
-                )}
-                {[...Array(emptyStars)].map((_, i) => (
-                    <Star 
-                        key={`empty-${i}`} 
-                        className={`${config.star} fill-slate-200 text-slate-300`}
-                        strokeWidth={1.5}
-                    />
-                ))}
-                <span className={`ml-2 ${config.text} font-bold text-slate-800 bg-slate-100 px-2 py-0.5 rounded`}>
-                    {rating.toFixed(1)}
+        {/* ── Header ── */}
+        <div className="px-5 py-4 pr-14 border-b border-slate-200 flex items-start justify-between gap-3 flex-shrink-0">
+          <div className="flex items-start gap-3 min-w-0 flex-1">
+            <span className={`w-9 h-9 rounded-md grid place-items-center flex-none mt-0.5 ${overallTone.bg} ${overallTone.text} [&_svg]:w-[18px] [&_svg]:h-[18px]`}>
+              <MessageSquare />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="m-0 mb-0.5 font-mono text-[10px] tracking-[0.06em] uppercase text-slate-500 leading-none">
+                EINZEL-REVIEW · DETAIL
+              </p>
+              <DialogTitle className="m-0 text-[18px] leading-6 font-semibold tracking-tight text-slate-900 line-clamp-2">
+                {fullReview.titel || "Review Details"}
+              </DialogTitle>
+              <div className="m-0 mt-1.5 text-[11px] text-slate-500 inline-flex items-center gap-x-3 gap-y-1 flex-wrap">
+                <span className="inline-flex items-center gap-1 [&_svg]:w-3 [&_svg]:h-3">
+                  <Calendar />
+                  {formatDate(fullReview.datum)}
                 </span>
+                <span className="text-slate-300">·</span>
+                <span className="inline-flex items-center gap-1 [&_svg]:w-3 [&_svg]:h-3">
+                  <User />
+                  {fullReview.sourceType || "Unbekannt"}
+                </span>
+                {fullReview.status && (
+                  <>
+                    <span className="text-slate-300">·</span>
+                    <span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-700 font-medium text-[10.5px] uppercase tracking-wider">
+                      {formatStatus(fullReview.status)}
+                    </span>
+                  </>
+                )}
+              </div>
             </div>
-        )
-    }
+          </div>
 
-    // Rating categories with German labels
-    const ratingCategories = [
-        { key: "arbeitsatmosphaere", label: "Arbeitsatmosphäre" },
-        { key: "image", label: "Image" },
-        { key: "work_life_balance", label: "Work-Life Balance" },
-        { key: "karriere_weiterbildung", label: "Karriere/Weiterbildung" },
-        { key: "gehalt_sozialleistungen", label: "Gehalt/Sozialleistungen" },
-        { key: "kollegenzusammenhalt", label: "Kollegenzusammenhalt" },
-        { key: "umwelt_sozialbewusstsein", label: "Umwelt-/Sozialbewusstsein" },
-        { key: "vorgesetztenverhalten", label: "Vorgesetztenverhalten" },
-        { key: "kommunikation", label: "Kommunikation" },
-        { key: "interessante_aufgaben", label: "Interessante Aufgaben" },
-        { key: "umgang_mit_aelteren_kollegen", label: "Umgang mit älteren Kollegen" },
-        { key: "arbeitsbedingungen", label: "Arbeitsbedingungen" },
-        { key: "gleichberechtigung", label: "Gleichberechtigung" }
-    ]
+          {/* Navigation */}
+          {hasMultiple && (
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <span className="font-mono text-[11px] tnum text-slate-500">
+                {currentIndex + 1} / {allReviewDetails.length}
+              </span>
+              <div className="inline-flex">
+                <button
+                  onClick={goPrev}
+                  disabled={!canPrev}
+                  className="h-7 w-7 inline-flex items-center justify-center rounded-l-md border border-slate-300 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900 disabled:opacity-40 disabled:cursor-not-allowed [&_svg]:w-3.5 [&_svg]:h-3.5"
+                  title="Vorherige Review"
+                >
+                  <ChevronLeft />
+                </button>
+                <button
+                  onClick={goNext}
+                  disabled={!canNext}
+                  className="h-7 w-7 inline-flex items-center justify-center rounded-r-md border border-l-0 border-slate-300 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900 disabled:opacity-40 disabled:cursor-not-allowed [&_svg]:w-3.5 [&_svg]:h-3.5"
+                  title="Nächste Review"
+                >
+                  <ChevronRight />
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
 
-    return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="!max-w-[75vw] !w-[75vw] !h-[85vh] !max-h-[85vh] flex flex-col p-0 !translate-x-[-50%] !translate-y-[-50%] !top-[50%] !left-[50%] rounded-2xl !shadow-none overflow-hidden border border-slate-200">
-                {/* Sticky Header */}
-                <DialogHeader className="sticky top-0 z-10 bg-white border-b border-slate-200 p-6 pb-4">
-                    <div className="flex items-center justify-between gap-4">
-                        {/* Navigation Buttons - Left */}
-                        <div className="flex items-center gap-2">
-                            {hasMultipleReviews && (
-                                <>
-                                    <Button
-                                        variant="outline"
-                                        size="icon"
-                                        onClick={handlePrevious}
-                                        disabled={!canGoPrevious}
-                                        className="h-9 w-9 rounded-full"
-                                        title="Vorherige Review"
-                                    >
-                                        <ChevronLeft className="h-5 w-5" />
-                                    </Button>
-                                    <span className="text-sm font-medium text-slate-600 min-w-[60px] text-center">
-                                        {currentIndex + 1} / {allReviewDetails.length}
-                                    </span>
-                                    <Button
-                                        variant="outline"
-                                        size="icon"
-                                        onClick={handleNext}
-                                        disabled={!canGoNext}
-                                        className="h-9 w-9 rounded-full"
-                                        title="Nächste Review"
-                                    >
-                                        <ChevronRight className="h-5 w-5" />
-                                    </Button>
-                                </>
-                            )}
-                        </div>
+        {/* ── Body (scrollable) ── */}
+        <div className="flex-1 overflow-y-auto bg-slate-50">
+          <div className="p-5 space-y-4">
 
-                        {/* Title and Info - Center */}
-                        <div className="flex-1">
-                            <DialogTitle className="text-2xl font-bold mb-2">
-                                {fullReview.titel || "Review Details"}
-                            </DialogTitle>
-                            <div className="flex items-center gap-4 text-sm text-slate-600">
-                                <div className="flex items-center gap-2">
-                                    <Calendar className="h-4 w-4" />
-                                    <span>{formatDate(fullReview.datum)}</span>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <User className="h-4 w-4" />
-                                    <span>{fullReview.sourceType || "Unbekannt"}</span>
-                                    {fullReview.status && (
-                                        <>
-                                            <span className="text-slate-400">•</span>
-                                            <Badge variant={getStatusBadgeVariant(formatStatus(fullReview.status))}>
-                                                {formatStatus(fullReview.status)}
-                                            </Badge>
-                                        </>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Close Button - Right */}
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => onOpenChange(false)}
-                            className="h-8 w-8 rounded-full hover:bg-slate-100"
-                            title="Schließen"
-                        >
-                            <X className="h-5 w-5" />
-                        </Button>
+            {/* Gesamtbewertung — prominent */}
+            {Number.isFinite(overall) && (
+              <div className={`bg-white border ${overallTone.border} rounded-lg overflow-hidden shadow-xs`}>
+                <div className="px-5 py-4 flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span className={`w-10 h-10 rounded-md grid place-items-center flex-none ${overallTone.bg} ${overallTone.text} [&_svg]:w-5 [&_svg]:h-5`}>
+                      <Star className="fill-current" />
+                    </span>
+                    <div>
+                      <p className="m-0 mb-0.5 font-mono text-[10px] tracking-[0.06em] uppercase text-slate-500 leading-none">
+                        GESAMTBEWERTUNG
+                      </p>
+                      <StarRating rating={overall} size="lg" />
                     </div>
-                </DialogHeader>
-
-                {/* Scrollable Content */}
-                <div className="overflow-y-auto px-6 pb-6">
-                    <div className="space-y-6 mt-4">
-                        {/* Overall Rating */}
-                        {fullReview.durchschnittsbewertung && (
-                            <Card className="border-2 border-amber-200 bg-gradient-to-br from-amber-50 to-white">
-                                <CardHeader className="pb-3">
-                                    <CardTitle className="text-lg font-semibold flex items-center gap-2">
-                                        <Star className="h-5 w-5 fill-amber-400 text-amber-500" />
-                                        Gesamtbewertung
-                                    </CardTitle>
-                                </CardHeader>
-                                <CardContent>
-                                    <div className="flex items-center justify-between">
-                                        {renderStarRating(fullReview.durchschnittsbewertung, "lg")}
-                                        <div className="text-right">
-                                            <div className="text-4xl font-bold text-amber-600">
-                                                {fullReview.durchschnittsbewertung.toFixed(1)}
-                                            </div>
-                                            <div className="text-xs text-slate-500 font-medium">von 5.0</div>
-                                        </div>
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        )}
-
-                        {/* Review Texts */}
-                        <div className="space-y-4">
-                            {fullReview.gut_am_arbeitgeber && (
-                                <Card>
-                                    <CardHeader className="pb-3">
-                                        <CardTitle className="text-lg font-semibold text-green-700 flex items-center gap-2">
-                                            <ThumbsUp className="h-5 w-5" />
-                                            Gut am Arbeitgeber finde ich
-                                        </CardTitle>
-                                    </CardHeader>
-                                    <CardContent>
-                                        <p className="text-slate-700 leading-relaxed whitespace-pre-wrap">
-                                            {formatText(fullReview.gut_am_arbeitgeber)}
-                                        </p>
-                                    </CardContent>
-                                </Card>
-                            )}
-
-                            {fullReview.schlecht_am_arbeitgeber && (
-                                <Card>
-                                    <CardHeader className="pb-3">
-                                        <CardTitle className="text-lg font-semibold text-red-700 flex items-center gap-2">
-                                            <ThumbsDown className="h-5 w-5" />
-                                            Schlecht am Arbeitgeber finde ich
-                                        </CardTitle>
-                                    </CardHeader>
-                                    <CardContent>
-                                        <p className="text-slate-700 leading-relaxed whitespace-pre-wrap">
-                                            {formatText(fullReview.schlecht_am_arbeitgeber)}
-                                        </p>
-                                    </CardContent>
-                                </Card>
-                            )}
-
-                            {fullReview.verbesserungsvorschlaege && (
-                                <Card>
-                                    <CardHeader className="pb-3">
-                                        <CardTitle className="text-lg font-semibold text-blue-700 flex items-center gap-2">
-                                            <Lightbulb className="h-5 w-5" />
-                                            Verbesserungsvorschläge
-                                        </CardTitle>
-                                    </CardHeader>
-                                    <CardContent>
-                                        <p className="text-slate-700 leading-relaxed whitespace-pre-wrap">
-                                            {formatText(fullReview.verbesserungsvorschlaege)}
-                                        </p>
-                                    </CardContent>
-                                </Card>
-                            )}
-
-                            {fullReview.stellenbeschreibung && (
-                                <Card>
-                                    <CardHeader className="pb-3">
-                                        <CardTitle className="text-lg font-semibold flex items-center gap-2">
-                                            <FileText className="h-5 w-5 text-slate-600" />
-                                            Stellenbeschreibung
-                                        </CardTitle>
-                                    </CardHeader>
-                                    <CardContent>
-                                        <p className="text-slate-700 leading-relaxed whitespace-pre-wrap">
-                                            {formatText(fullReview.stellenbeschreibung)}
-                                        </p>
-                                    </CardContent>
-                                </Card>
-                            )}
-
-                            {fullReview.jobbeschreibung && (
-                                <Card>
-                                    <CardHeader className="pb-3">
-                                        <CardTitle className="text-lg font-semibold flex items-center gap-2">
-                                            <Briefcase className="h-5 w-5 text-slate-600" />
-                                            Jobbeschreibung
-                                        </CardTitle>
-                                    </CardHeader>
-                                    <CardContent>
-                                        <p className="text-slate-700 leading-relaxed whitespace-pre-wrap">
-                                            {formatText(fullReview.jobbeschreibung)}
-                                        </p>
-                                    </CardContent>
-                                </Card>
-                            )}
-                        </div>
-
-                        {/* Star Ratings Grid */}
-                        {fullReview.ratings && Object.values(fullReview.ratings).some(r => r !== null && r !== undefined) && (
-                            <Card className="border-slate-200">
-                                <CardHeader className="pb-4 bg-gradient-to-r from-slate-50 to-white border-b border-slate-100">
-                                    <CardTitle className="text-lg font-semibold flex items-center gap-2">
-                                        <div className="flex">
-                                            <Star className="h-4 w-4 fill-amber-400 text-amber-500 -mr-1" />
-                                            <Star className="h-4 w-4 fill-amber-400 text-amber-500 -mr-1" />
-                                            <Star className="h-4 w-4 fill-amber-400 text-amber-500" />
-                                        </div>
-                                        Detaillierte Sternebewertungen
-                                    </CardTitle>
-                                </CardHeader>
-                                <CardContent className="pt-4">
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                        {ratingCategories.map(({ key, label }) => {
-                                            const rating = fullReview.ratings[key]
-                                            if (rating === null || rating === undefined) return null
-                                            
-                                            // Color based on rating
-                                            const getBgColor = (r) => {
-                                                if (r >= 4.0) return "bg-gradient-to-r from-green-50 to-emerald-50 border-green-200"
-                                                if (r >= 3.0) return "bg-gradient-to-r from-blue-50 to-sky-50 border-blue-200"
-                                                if (r >= 2.0) return "bg-gradient-to-r from-orange-50 to-amber-50 border-orange-200"
-                                                return "bg-gradient-to-r from-red-50 to-rose-50 border-red-200"
-                                            }
-                                            
-                                            return (
-                                                <div
-                                                    key={key}
-                                                    className={`flex flex-col gap-2 p-4 rounded-lg border ${getBgColor(rating)} transition-all hover:shadow-md cursor-pointer`}
-                                                >
-                                                    <span className="text-sm font-semibold text-slate-800">
-                                                        {label}
-                                                    </span>
-                                                    <div className="flex items-center justify-between">
-                                                        {renderStarRating(rating, "sm")}
-                                                    </div>
-                                                </div>
-                                            )
-                                        })}
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        )}
-                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className={`m-0 text-[36px] font-semibold tnum tracking-tight leading-none ${overallTone.text}`}>
+                      {fmt(overall, 1)}
+                    </p>
+                    <p className="m-0 mt-1 text-[11px] text-slate-500 tnum">von 5,0</p>
+                  </div>
                 </div>
-            </DialogContent>
-        </Dialog>
-    )
+                {/* Tonaler Fortschrittsbalken am unteren Rand */}
+                <div className="h-1 bg-slate-100">
+                  <div className={`h-full ${overallTone.bar}`} style={{ width: `${(overall / 5) * 100}%` }} />
+                </div>
+              </div>
+            )}
+
+            {/* Review-Texte: Gut / Schlecht / Verbesserungen */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {fullReview.gut_am_arbeitgeber && (
+                <Section icon={<ThumbsUp />} eyebrow="POSITIV" title="Gut am Arbeitgeber" tone="good">
+                  <p className="m-0 text-[13px] text-slate-700 leading-relaxed whitespace-pre-wrap">
+                    {formatText(fullReview.gut_am_arbeitgeber)}
+                  </p>
+                </Section>
+              )}
+
+              {fullReview.schlecht_am_arbeitgeber && (
+                <Section icon={<ThumbsDown />} eyebrow="NEGATIV" title="Schlecht am Arbeitgeber" tone="bad">
+                  <p className="m-0 text-[13px] text-slate-700 leading-relaxed whitespace-pre-wrap">
+                    {formatText(fullReview.schlecht_am_arbeitgeber)}
+                  </p>
+                </Section>
+              )}
+            </div>
+
+            {fullReview.verbesserungsvorschlaege && (
+              <Section icon={<Lightbulb />} eyebrow="VORSCHLÄGE" title="Verbesserungsvorschläge" tone="info">
+                <p className="m-0 text-[13px] text-slate-700 leading-relaxed whitespace-pre-wrap">
+                  {formatText(fullReview.verbesserungsvorschlaege)}
+                </p>
+              </Section>
+            )}
+
+            {/* Job-/Stellenbeschreibung */}
+            {(fullReview.stellenbeschreibung || fullReview.jobbeschreibung) && (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {fullReview.stellenbeschreibung && (
+                  <Section icon={<FileText />} eyebrow="POSITION" title="Stellenbeschreibung">
+                    <p className="m-0 text-[13px] text-slate-700 leading-relaxed whitespace-pre-wrap">
+                      {formatText(fullReview.stellenbeschreibung)}
+                    </p>
+                  </Section>
+                )}
+                {fullReview.jobbeschreibung && (
+                  <Section icon={<Briefcase />} eyebrow="JOB" title="Jobbeschreibung">
+                    <p className="m-0 text-[13px] text-slate-700 leading-relaxed whitespace-pre-wrap">
+                      {formatText(fullReview.jobbeschreibung)}
+                    </p>
+                  </Section>
+                )}
+              </div>
+            )}
+
+            {/* Detaillierte Sterne-Bewertungen — KPI-Karten-Look */}
+            {fullReview.ratings && Object.values(fullReview.ratings).some((r) => r != null) && (
+              <Section icon={<Star />} eyebrow="KATEGORIEN" title="Detaillierte Bewertungen">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                  {ratingCategories.map(({ key, label }) => {
+                    const rating = fullReview.ratings[key]
+                    if (rating === null || rating === undefined) return null
+                    const t = ratingTone(rating)
+                    return (
+                      <div
+                        key={key}
+                        className={[
+                          "relative flex items-center justify-between gap-3 pl-4 pr-3 py-2.5 rounded-md border overflow-hidden transition-all",
+                          t.border, t.hoverBorder, t.gradient, "hover:shadow-sm",
+                        ].join(" ")}
+                      >
+                        {/* Linker Akzentbalken — gleich wie KPI-Karten */}
+                        <span aria-hidden="true" className={`absolute left-0 top-0 bottom-0 w-[3px] ${t.bar}`} />
+
+                        <span className={`text-[12.5px] font-medium truncate ${t.labelText}`} title={label}>
+                          {label}
+                        </span>
+                        <div className="flex items-center gap-2 flex-none">
+                          <StarRating rating={rating} size="sm" />
+                          <span className={`font-semibold tnum text-[14px] min-w-[32px] text-right ${t.text}`}>
+                            {fmt(rating, 1)}
+                          </span>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </Section>
+            )}
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
 }
