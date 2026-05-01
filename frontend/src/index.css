@@ -115,48 +115,157 @@
    Dark-mode overrides
    ============================================================ */
 .dark {
-  --color-bg:            #0f172a;
-  --color-bg-card:       #1e293b;
-  --color-fg:            #f1f5f9;
-  --color-fg-muted:      #94a3b8;
-  --color-fg-subtle:     #475569;
-  --color-fg-disabled:   #334155;
-  --color-border:        #1e293b;
+  /* Semantic tokens — Dark surfaces */
+  --color-bg:            #0b1220;   /* page background */
+  --color-bg-card:       #131a2b;   /* card surface */
+  --color-fg:            #e2e8f0;   /* primary text */
+  --color-fg-muted:      #94a3b8;   /* muted text */
+  --color-fg-subtle:     #64748b;   /* subtle text */
+  --color-fg-disabled:   #475569;
+  --color-border:        #1e293b;   /* hairlines */
   --color-border-strong: #334155;
+  --color-border-focus:  #818cf8;   /* indigo-400 — etwas heller in Dark */
   --color-grid:          #1e293b;
+  --color-axis:          #475569;
 
-  --slate-0:   #0f172a;
-  --slate-50:  #1e293b;
-  --slate-100: #334155;
-  --slate-200: #475569;
+  /* Slate-Skala für Dark — invertiert die Helligkeit */
+  --slate-0:   #131a2b;   /* Card bg */
+  --slate-50:  #0f172a;   /* Page bg / hover */
+  --slate-100: #1e293b;
+  --slate-150: #1e293b;
+  --slate-200: #334155;
+  --slate-300: #475569;
+  /* Mid + High bleiben sich treu, werden für Text genutzt: */
+  --slate-400: #64748b;
+  --slate-500: #94a3b8;
+  --slate-600: #cbd5e1;
+  --slate-700: #e2e8f0;
+  --slate-800: #f1f5f9;
+  --slate-900: #f8fafc;
 
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
+  /* Tonal-Akzente bleiben — funktionieren auch auf Dark gut */
+  /* (emerald, rose, amber, blue Tints sind hell genug) */
+
+  /* shadcn/Tailwind v4 mappings */
+  --background: #0b1220;
+  --foreground: #e2e8f0;
+  --card: #131a2b;
+  --card-foreground: #e2e8f0;
+  --popover: #131a2b;
+  --popover-foreground: #e2e8f0;
+  --primary: #e2e8f0;
+  --primary-foreground: #0b1220;
+  --secondary: #1e293b;
+  --secondary-foreground: #e2e8f0;
+  --muted: #1e293b;
+  --muted-foreground: #94a3b8;
+  --accent: #1e293b;
+  --accent-foreground: #e2e8f0;
   --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --border: #1e293b;
+  --input: #1e293b;
+  --ring: #475569;
+  --sidebar: #131a2b;
+  --sidebar-foreground: #e2e8f0;
+  --sidebar-primary: #6366f1;
+  --sidebar-primary-foreground: #f8fafc;
+  --sidebar-accent: #1e293b;
+  --sidebar-accent-foreground: #e2e8f0;
+  --sidebar-border: #1e293b;
+  --sidebar-ring: #475569;
 }
+
+/* ============================================================
+   Dark-mode Tailwind utility overrides
+   Komponenten nutzen meist hartcodierte slate-Werte (bg-white,
+   text-slate-900, border-slate-200, …). Diese spiegeln wir hier
+   für Dark gezielt — dadurch passt sich nahezu alles automatisch an.
+   ============================================================ */
+.dark {
+  color-scheme: dark;
+}
+
+/* --- Surfaces (Backgrounds) --- */
+.dark .bg-white         { background-color: #131a2b !important; }
+.dark .bg-slate-50      { background-color: #0f172a !important; }
+.dark .bg-slate-100     { background-color: #1e293b !important; }
+
+/* Hover-States */
+.dark .hover\:bg-white:hover  { background-color: #1e293b !important; }
+.dark .hover\:bg-slate-50:hover  { background-color: #1e293b !important; }
+.dark .hover\:bg-slate-100:hover { background-color: #334155 !important; }
+
+/* Backdrop für Refresh-Overlay */
+.dark .bg-white\/70  { background-color: rgb(19 26 43 / 0.7)  !important; }
+.dark .bg-white\/80  { background-color: rgb(19 26 43 / 0.8)  !important; }
+.dark .bg-white\/50  { background-color: rgb(19 26 43 / 0.5)  !important; }
+
+/* --- Borders --- */
+.dark .border-slate-100 { border-color: #1e293b !important; }
+.dark .border-slate-200 { border-color: #1e293b !important; }
+.dark .border-slate-300 { border-color: #334155 !important; }
+.dark .border-l-slate-300 { border-left-color: #334155 !important; }
+.dark .divide-slate-100 > * + * { border-color: #1e293b !important; }
+
+/* --- Text Colors --- */
+.dark .text-slate-900   { color: #f1f5f9 !important; }
+.dark .text-slate-800   { color: #e2e8f0 !important; }
+.dark .text-slate-700   { color: #cbd5e1 !important; }
+.dark .text-slate-600   { color: #94a3b8 !important; }
+.dark .text-slate-500   { color: #94a3b8 !important; }
+.dark .text-slate-400   { color: #64748b !important; }
+.dark .text-slate-300   { color: #475569 !important; }
+
+/* Hover-Text */
+.dark .hover\:text-slate-900:hover { color: #f1f5f9 !important; }
+.dark .hover\:text-slate-800:hover { color: #e2e8f0 !important; }
+.dark .hover\:text-slate-700:hover { color: #cbd5e1 !important; }
+.dark .group:hover .group-hover\:text-slate-700 { color: #cbd5e1 !important; }
+
+/* --- Tonal Pills (subtiler in Dark — leicht abdunkeln) --- */
+.dark .bg-emerald-50  { background-color: rgb(16 185 129 / 0.10) !important; }
+.dark .bg-rose-50     { background-color: rgb(244 63 94 / 0.10)  !important; }
+.dark .bg-amber-50    { background-color: rgb(245 158 11 / 0.10) !important; }
+.dark .bg-blue-50     { background-color: rgb(59 130 246 / 0.10) !important; }
+
+.dark .border-emerald-200 { border-color: rgb(16 185 129 / 0.30) !important; }
+.dark .border-rose-200    { border-color: rgb(244 63 94 / 0.30)  !important; }
+.dark .border-amber-200   { border-color: rgb(245 158 11 / 0.30) !important; }
+.dark .border-blue-200    { border-color: rgb(59 130 246 / 0.30) !important; }
+.dark .border-emerald-300 { border-color: rgb(16 185 129 / 0.45) !important; }
+.dark .border-rose-300    { border-color: rgb(244 63 94 / 0.45)  !important; }
+.dark .border-amber-300   { border-color: rgb(245 158 11 / 0.45) !important; }
+
+/* Tonal Text — etwas heller in Dark für Kontrast */
+.dark .text-emerald-700 { color: #34d399 !important; }
+.dark .text-rose-700    { color: #fb7185 !important; }
+.dark .text-amber-700   { color: #fbbf24 !important; }
+.dark .text-blue-700    { color: #60a5fa !important; }
+.dark .text-emerald-800 { color: #6ee7b7 !important; }
+.dark .text-rose-800    { color: #fda4af !important; }
+.dark .text-rose-900    { color: #fecdd3 !important; }
+
+/* --- Focus-Rings + Shadows (subtiler in Dark) --- */
+.dark .shadow-xs { box-shadow: 0 1px 0 0 rgb(255 255 255 / 0.04) !important; }
+.dark .shadow-sm { box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.4)      !important; }
+.dark .shadow-md { box-shadow: 0 4px 12px 0 rgb(0 0 0 / 0.5)     !important; }
+
+/* --- Gradient-Backgrounds für KPI-Tiles (transparenter in Dark) --- */
+.dark .from-emerald-50\/70 { --tw-gradient-from: rgb(16 185 129 / 0.10) !important; }
+.dark .from-amber-50\/70   { --tw-gradient-from: rgb(245 158 11 / 0.10) !important; }
+.dark .from-rose-50\/70    { --tw-gradient-from: rgb(244 63 94 / 0.10)  !important; }
+.dark .to-white            { --tw-gradient-to:   transparent             !important; }
+.dark .from-\[\#f5f9ff\]   { --tw-gradient-from: rgb(99 102 241 / 0.08) !important; }
+
+/* --- Slate-bg-Pillen invertieren, damit Inhalt lesbar bleibt --- */
+.dark .bg-slate-900   { background-color: #e2e8f0 !important; color: #0b1220; }
+.dark .text-white     { /* bleibt weiss auf bg-slate-900 → wird zu dark-text */ }
+.dark .bg-slate-900.text-white,
+.dark .bg-slate-900 .text-white { color: #0b1220 !important; }
+
+/* --- Recharts-Grid in Dark --- */
+.dark .recharts-cartesian-grid line { stroke: #1e293b !important; }
+.dark .recharts-cartesian-axis-line { stroke: #334155 !important; }
 
 /* ============================================================
    Base reset

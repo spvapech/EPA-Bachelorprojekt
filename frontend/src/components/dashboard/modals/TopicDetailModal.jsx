@@ -18,10 +18,22 @@ const fmt = (n, d = 1) =>
 
 const ratingTone = (s) => {
   const n = Number(s)
-  if (!Number.isFinite(n)) return { text: "text-slate-700", bar: "bg-slate-300", bg: "bg-slate-50", border: "border-slate-200" }
-  if (n >= 3.5) return { text: "text-emerald-700", bar: "bg-emerald-500", bg: "bg-emerald-50", border: "border-emerald-200" }
-  if (n >= 2.5) return { text: "text-amber-700",   bar: "bg-amber-500",   bg: "bg-amber-50",   border: "border-amber-200" }
-  return            { text: "text-rose-700",    bar: "bg-rose-500",    bg: "bg-rose-50",    border: "border-rose-200" }
+  if (!Number.isFinite(n)) return {
+    text: "text-slate-700", bar: "bg-slate-300", bg: "bg-slate-50",
+    border: "border-slate-200", hex: "#94a3b8", label: "Keine Daten",
+  }
+  if (n >= 3.5) return {
+    text: "text-emerald-700", bar: "bg-emerald-500", bg: "bg-emerald-50",
+    border: "border-emerald-200", hex: "#10b981", label: "Gut",
+  }
+  if (n >= 2.5) return {
+    text: "text-amber-700", bar: "bg-amber-500", bg: "bg-amber-50",
+    border: "border-amber-200", hex: "#f59e0b", label: "Mittel",
+  }
+  return {
+    text: "text-rose-700", bar: "bg-rose-500", bg: "bg-rose-50",
+    border: "border-rose-200", hex: "#f43f5e", label: "Kritisch",
+  }
 }
 
 const sentimentMeta = (sentiment) => {
@@ -203,11 +215,12 @@ function ChartTooltip({ active, payload, label }) {
         <p className="font-mono text-[10px] tracking-[0.05em] uppercase text-slate-400 mb-1.5">{label}</p>
         <p className="text-amber-400 inline-flex items-center gap-1.5">
           <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-          Keine Daten
+          Interpolierter Wert
         </p>
         {point.ratingGap != null && (
-          <p className="text-slate-500 mt-0.5 text-[11px]">
-            interpoliert: <span className="text-slate-300 font-medium tnum">{fmt(point.ratingGap, 2)}</span>
+          <p className="flex items-center justify-between gap-3 mt-1">
+            <span className="text-slate-400">Wert</span>
+            <span className="font-semibold tnum text-amber-300">{fmt(point.ratingGap, 2)}</span>
           </p>
         )}
       </div>
@@ -477,8 +490,8 @@ export default function TopicDetailModal({ open, onOpenChange, topic, onBackToTa
                         <ComposedChart data={processedTimelineData} margin={{ top: 8, right: 16, left: 0, bottom: 5 }}>
                           <defs>
                             <linearGradient id="topicRatingGradient" x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="0%"   stopColor={meta.color} stopOpacity={0.18} />
-                              <stop offset="100%" stopColor={meta.color} stopOpacity={0.0} />
+                              <stop offset="0%"   stopColor={tone.hex} stopOpacity={0.20} />
+                              <stop offset="100%" stopColor={tone.hex} stopOpacity={0.0} />
                             </linearGradient>
                           </defs>
                           <CartesianGrid strokeDasharray="2 4" stroke="#f1f5f9" vertical={false} />
@@ -506,11 +519,11 @@ export default function TopicDetailModal({ open, onOpenChange, topic, onBackToTa
                           <Area
                             type="monotone"
                             dataKey="rating"
-                            stroke={meta.color}
+                            stroke={tone.hex}
                             strokeWidth={2}
                             fill="url(#topicRatingGradient)"
                             dot={false}
-                            activeDot={{ r: 4, fill: meta.color, stroke: "#fff", strokeWidth: 2 }}
+                            activeDot={{ r: 4, fill: tone.hex, stroke: "#fff", strokeWidth: 2 }}
                             connectNulls={false}
                           />
                           {timelineHasGaps && (

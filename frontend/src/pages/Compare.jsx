@@ -22,7 +22,33 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { CompanySearchSelect } from "@/components/CompanySearchSelect"
 import { exportCompareAsPDF } from "@/utils/pdfExport"
+import { Compare as CompareIcon, Star as StarIcon, Tag, TrendUp as TrendUpIcon } from "../icons"
 import { API_URL } from "../config"
+
+/* ─── Design-System Section component ─── */
+function DSSection({ icon, eyebrow, title, action, children, className = "" }) {
+  return (
+    <section className={`bg-white border border-slate-200 rounded-lg overflow-hidden shadow-xs ${className}`}>
+      <header className="px-4 py-3 border-b border-slate-200 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5 min-w-0">
+          {icon && (
+            <span className="w-7 h-7 rounded-md grid place-items-center flex-none bg-slate-100 text-slate-600 [&_svg]:w-[14px] [&_svg]:h-[14px]">
+              {icon}
+            </span>
+          )}
+          <div className="min-w-0">
+            {eyebrow && (
+              <p className="m-0 mb-0.5 font-mono text-[10px] tracking-[0.06em] uppercase text-slate-500 leading-none">{eyebrow}</p>
+            )}
+            <h3 className="m-0 text-[14px] leading-5 font-semibold tracking-tight text-slate-900">{title}</h3>
+          </div>
+        </div>
+        {action && <div className="flex-shrink-0" onClick={(e) => e.stopPropagation()}>{action}</div>}
+      </header>
+      <div className="p-4">{children}</div>
+    </section>
+  )
+}
 
 // Color palette for company selection
 const COLOR_PALETTE = [
@@ -665,84 +691,84 @@ const ComparePage = () => {
     }
 
     return (
-        <div className="min-h-screen bg-slate-50">
-            {/* Header */}
-            <div className="px-6 py-4 flex items-center gap-4 sticky top-0 z-30 text-white" style={{ background: 'linear-gradient(to right, #05223e, #0a3158)' }}>
-                <Button
-                    variant="ghost"
-                    size="icon"
+        <div className="min-h-screen bg-slate-50 flex flex-col">
+            {/* Topbar — Design-System Stil */}
+            <div className="h-12 min-h-[48px] border-b border-slate-200 bg-white flex items-center px-5 gap-3 sticky top-0 z-30 flex-shrink-0">
+                <button
                     onClick={() => navigate(-1)}
-                    className="shrink-0 text-white hover:bg-white/10"
+                    title="Zurück"
+                    className="h-7 w-7 rounded-md grid place-items-center text-slate-500 hover:bg-slate-100 hover:text-slate-900 [&_svg]:w-3.5 [&_svg]:h-3.5"
                 >
-                    <ArrowLeft className="h-5 w-5" />
-                </Button>
-                <div className="flex-1">
-                    <h1 className="text-2xl font-extrabold tracking-tight text-white">
-                        Firmenvergleich
-                    </h1>
-                    <p className="text-sm text-slate-300">
-                        Vergleichen Sie bis zu {MAX_COMPANIES} Firmen nebeneinander
-                    </p>
+                    <ArrowLeft />
+                </button>
+                <div className="h-5 w-px bg-slate-200" />
+                <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                    <span className="w-7 h-7 rounded-md grid place-items-center flex-none bg-slate-100 text-slate-600 [&_svg]:w-[14px] [&_svg]:h-[14px]">
+                        <CompareIcon />
+                    </span>
+                    <div className="min-w-0">
+                        <p className="m-0 mb-0.5 font-mono text-[10px] tracking-[0.06em] uppercase text-slate-500 leading-none">
+                            ANALYSE · FIRMENVERGLEICH
+                        </p>
+                        <h1 className="m-0 text-[14px] leading-5 font-semibold tracking-tight text-slate-900">
+                            Vergleich · {activeSlots.length}/{MAX_COMPANIES} Firmen
+                        </h1>
+                    </div>
                 </div>
                 {activeSlots.length >= 2 && (
                     <button
                         onClick={handleExportPDF}
                         disabled={exporting}
-                        className={`shrink-0 relative group h-14 w-14 rounded-2xl flex items-center justify-center border shadow-lg cursor-pointer ${
-                            exporting 
-                                ? 'bg-gray-400 border-gray-300 cursor-not-allowed' 
-                                : 'bg-gradient-to-br from-[#026fb6] to-[#025a94] hover:from-[#0380d0] hover:to-[#026fb6] border-[#026fb6]/60 hover:border-[#026fb6] hover:shadow-xl hover:scale-105'
-                        }`}
-                        title={exporting ? "PDF wird erstellt..." : "Vergleich als PDF exportieren"}
+                        className={[
+                            "h-8 px-3 inline-flex items-center gap-1.5 rounded-md text-[12px] font-medium border",
+                            "[&_svg]:flex-none [&_svg]:w-3.5 [&_svg]:h-3.5",
+                            "transition-colors",
+                            exporting
+                                ? "bg-slate-200 text-slate-400 border-slate-200 cursor-not-allowed"
+                                : "bg-slate-900 text-white border-slate-900 hover:bg-slate-800"
+                        ].join(" ")}
                     >
-                        {exporting ? (
-                            <Loader2 className="h-7 w-7 text-white animate-spin" />
-                        ) : (
-                            <>
-                                <Download className="h-7 w-7 text-white" />
-                                <span className="absolute -right-1 -top-1 flex h-3 w-3">
-                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#026fb6] opacity-75"></span>
-                                    <span className="relative inline-flex rounded-full h-3 w-3 bg-[#026fb6]"></span>
-                                </span>
-                            </>
-                        )}
+                        {exporting ? <Loader2 className="animate-spin" /> : <Download />}
+                        {exporting ? "Exportiere…" : "PDF Export"}
                     </button>
                 )}
             </div>
 
-            <div className="px-6 py-6 max-w-[1400px] mx-auto space-y-6">
+            <div className="flex-1 px-5 py-5 max-w-[1400px] w-full mx-auto space-y-4">
+
                 {/* Company selectors */}
-                <Card className="rounded-2xl shadow-sm">
-                    <CardHeader className="pb-3">
-                        <CardTitle className="text-lg font-bold text-slate-800">
-                            Firmen auswählen
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <DSSection icon={<Building2 />} eyebrow="AUSWAHL" title="Firmen vergleichen">
+                    <p className="text-[12px] text-slate-500 mb-4 -mt-1">
+                        Wählen Sie bis zu {MAX_COMPANIES} Firmen aus, um sie nebeneinander zu vergleichen.
+                    </p>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                             {slots.map((slot, index) => {
                                 const color = getSlotColor(index)
                                 return (
                                 <div
                                     key={index}
-                                    className={`relative rounded-xl border-2 p-4 transition-all ${
+                                    className={[
+                                        "relative rounded-md border p-3 transition-all overflow-hidden",
                                         slot.id
-                                            ? `${color.bg} ${color.border}`
-                                            : "border-dashed border-slate-300 bg-white"
-                                    }`}
+                                            ? "border-slate-200 bg-white"
+                                            : "border-dashed border-slate-300 bg-slate-50",
+                                    ].join(" ")}
                                 >
-                                    {/* Color indicator + picker */}
-                                    <div className="flex items-center gap-2 mb-3">
+                                    {/* Tonaler Akzentbalken links wenn besetzt */}
+                                    {slot.id && (
+                                        <span aria-hidden="true" className="absolute left-0 top-0 bottom-0 w-[3px]" style={{ background: color.hex }} />
+                                    )}
+                                    {/* Header row: Color picker + label + close */}
+                                    <div className="flex items-center gap-2 mb-2.5">
                                         <div className="relative" ref={colorPickerSlot === index ? colorPickerRef : null}>
                                             <button
                                                 onClick={() => setColorPickerSlot(colorPickerSlot === index ? null : index)}
-                                                className="w-5 h-5 rounded-full shrink-0 ring-2 ring-white shadow-sm hover:scale-110 transition-transform cursor-pointer"
+                                                className="w-4 h-4 rounded-full shrink-0 ring-2 ring-white shadow-sm hover:scale-110 transition-transform cursor-pointer"
                                                 style={{ backgroundColor: color.hex }}
                                                 title="Farbe ändern"
                                             />
-                                            {/* Color picker popover */}
                                             {colorPickerSlot === index && (
-                                                <div className="absolute top-7 left-0 z-50 bg-white rounded-xl shadow-xl border border-slate-200 p-2 flex gap-1.5 flex-wrap w-[160px] animate-in fade-in zoom-in-95 duration-150">
+                                                <div className="absolute top-6 left-0 z-50 bg-white rounded-md shadow-lg border border-slate-200 p-2 flex gap-1.5 flex-wrap w-[170px] animate-in fade-in zoom-in-95 duration-150">
                                                     {COLOR_PALETTE.map((c, ci) => {
                                                         const usedByOther = slots.some((s, si) => si !== index && s.colorIndex === ci)
                                                         return (
@@ -750,13 +776,14 @@ const ComparePage = () => {
                                                                 key={ci}
                                                                 onClick={() => !usedByOther && updateSlotColor(index, ci)}
                                                                 disabled={usedByOther}
-                                                                className={`w-7 h-7 rounded-full transition-all ${
-                                                                    slot.colorIndex === ci 
-                                                                        ? 'ring-2 ring-offset-1 ring-slate-800 scale-110' 
+                                                                className={[
+                                                                    "w-6 h-6 rounded-full transition-all",
+                                                                    slot.colorIndex === ci
+                                                                        ? "ring-2 ring-offset-1 ring-slate-900 scale-110"
                                                                         : usedByOther
-                                                                        ? 'opacity-25 cursor-not-allowed'
-                                                                        : 'hover:scale-110 cursor-pointer'
-                                                                }`}
+                                                                            ? "opacity-25 cursor-not-allowed"
+                                                                            : "hover:scale-110 cursor-pointer",
+                                                                ].join(" ")}
                                                                 style={{ backgroundColor: c.hex }}
                                                                 title={usedByOther ? `${c.label} (vergeben)` : c.label}
                                                             />
@@ -765,27 +792,28 @@ const ComparePage = () => {
                                                 </div>
                                             )}
                                         </div>
-                                        <span className={`text-sm font-semibold ${color.text}`}>
-                                            Firma {index + 1}
+                                        <span className="font-mono text-[10px] tracking-[0.06em] uppercase text-slate-500">
+                                            FIRMA {index + 1}
                                         </span>
                                         {slot.id && (
                                             <button
                                                 onClick={() => clearSlot(index)}
-                                                className="ml-auto p-1 rounded-full hover:bg-black/10 transition-colors"
+                                                className="ml-auto h-6 w-6 rounded-md grid place-items-center text-slate-400 hover:text-slate-900 hover:bg-slate-100 transition-colors"
+                                                title="Firma entfernen"
                                             >
-                                                <X className="h-4 w-4 text-slate-500" />
+                                                <X className="h-3.5 w-3.5" />
                                             </button>
                                         )}
                                     </div>
 
                                     {slot.id ? (
-                                        <div className="flex items-center gap-2">
-                                            <Building2 className="h-5 w-5 text-slate-500" />
-                                            <span className="font-semibold text-slate-800 truncate">
+                                        <div className="flex items-center gap-2 min-h-[28px]">
+                                            <Building2 className="h-4 w-4 text-slate-400 flex-none" />
+                                            <span className="text-[13px] font-semibold text-slate-900 truncate">
                                                 {slot.name}
                                             </span>
                                             {loadingIds.has(slot.id) && (
-                                                <Loader2 className="h-4 w-4 animate-spin text-slate-400" />
+                                                <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-400 flex-none" />
                                             )}
                                         </div>
                                     ) : (
@@ -797,6 +825,7 @@ const ComparePage = () => {
                                             }
                                             onCreateNew={null}
                                             variant="light"
+                                            compact
                                         />
                                     )}
                                 </div>
@@ -807,36 +836,42 @@ const ComparePage = () => {
                             {slots.length < MAX_COMPANIES && (
                                 <button
                                     onClick={addSlot}
-                                    className="flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-[#026fb6]/30 p-4 text-[#026fb6]/50 hover:text-[#026fb6] hover:border-[#026fb6]/60 transition-colors min-h-[100px]"
+                                    className="flex flex-col items-center justify-center gap-2 rounded-md border border-dashed border-slate-300 p-4 text-slate-500 hover:text-slate-900 hover:bg-slate-50 hover:border-slate-400 transition-all min-h-[100px]"
                                 >
-                                    <Plus className="h-6 w-6" />
-                                    <span className="text-sm font-medium">Firma hinzufügen</span>
+                                    <Plus className="h-5 w-5" />
+                                    <span className="text-[12px] font-medium">Firma hinzufügen</span>
                                 </button>
                             )}
                         </div>
-                    </CardContent>
-                </Card>
+                </DSSection>
 
                 {/* Show content only when at least 2 companies selected */}
                 {activeSlots.length < 2 ? (
-                    <div className="flex flex-col items-center justify-center py-20 text-slate-400 gap-4">
-                        <Building2 className="h-16 w-16" />
-                        <p className="text-lg font-medium">
-                            Wählen Sie mindestens 2 Firmen aus, um den Vergleich zu starten
-                        </p>
+                    <div className="bg-white border border-slate-200 rounded-lg shadow-xs flex flex-col items-center justify-center py-20 gap-3">
+                        <span className="w-14 h-14 rounded-full grid place-items-center bg-slate-100 text-slate-400 [&_svg]:w-7 [&_svg]:h-7">
+                            <CompareIcon />
+                        </span>
+                        <div className="text-center">
+                            <p className="text-[14px] font-semibold text-slate-700 m-0">
+                                Mindestens 2 Firmen auswählen
+                            </p>
+                            <p className="text-[12px] text-slate-500 mt-1 m-0">
+                                Wählen Sie oben mindestens zwei Firmen, um den Vergleich zu starten.
+                            </p>
+                        </div>
                     </div>
                 ) : (
                     <>
                         {/* KPI Cards comparison */}
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                             {/* Ø Score comparison */}
-                            <Card className="rounded-2xl shadow-sm">
-                                <CardHeader className="pb-2">
-                                    <CardTitle className="text-base font-bold text-slate-800">
+                            <Card className="rounded-lg border border-slate-200 bg-white shadow-xs overflow-hidden">
+                                <CardHeader className="px-4 py-3 border-b border-slate-200">
+                                    <CardTitle className="text-[14px] font-semibold text-slate-900 tracking-tight">
                                         Ø Score
                                     </CardTitle>
                                 </CardHeader>
-                                <CardContent className="space-y-3">
+                                <CardContent className="p-4 space-y-3">
                                     {activeSlots.map((slot, i) => {
                                         const score =
                                             companyData[slot.id]?.ratings?.avg_overall
@@ -877,13 +912,13 @@ const ComparePage = () => {
                             </Card>
 
                             {/* Trend comparison */}
-                            <Card className="rounded-2xl shadow-sm">
-                                <CardHeader className="pb-2">
-                                    <CardTitle className="text-base font-bold text-slate-800">
+                            <Card className="rounded-lg border border-slate-200 bg-white shadow-xs overflow-hidden">
+                                <CardHeader className="px-4 py-3 border-b border-slate-200">
+                                    <CardTitle className="text-[14px] font-semibold text-slate-900 tracking-tight">
                                         Trend
                                     </CardTitle>
                                 </CardHeader>
-                                <CardContent className="space-y-3">
+                                <CardContent className="p-4 space-y-3">
                                     {activeSlots.map((slot, i) => {
                                         const trend = companyData[slot.id]?.trend
                                         return (
@@ -939,13 +974,13 @@ const ComparePage = () => {
                             </Card>
 
                             {/* Most Critical comparison */}
-                            <Card className="rounded-2xl shadow-sm">
-                                <CardHeader className="pb-2">
-                                    <CardTitle className="text-sm font-bold text-slate-800">
+                            <Card className="rounded-lg border border-slate-200 bg-white shadow-xs overflow-hidden">
+                                <CardHeader className="px-4 py-3 border-b border-slate-200">
+                                    <CardTitle className="text-[14px] font-semibold text-slate-900 tracking-tight">
                                         Most Critical
                                     </CardTitle>
                                 </CardHeader>
-                                <CardContent className="space-y-3">
+                                <CardContent className="p-4 space-y-3">
                                     {activeSlots.map((slot, i) => {
                                         const mc = companyData[slot.id]?.mostCritical
                                         return (
@@ -982,13 +1017,13 @@ const ComparePage = () => {
                             </Card>
 
                             {/* Negative Topic comparison */}
-                            <Card className="rounded-2xl shadow-sm">
-                                <CardHeader className="pb-2">
-                                    <CardTitle className="text-base font-bold text-slate-800">
+                            <Card className="rounded-lg border border-slate-200 bg-white shadow-xs overflow-hidden">
+                                <CardHeader className="px-4 py-3 border-b border-slate-200">
+                                    <CardTitle className="text-[14px] font-semibold text-slate-900 tracking-tight">
                                         Negative Topic
                                     </CardTitle>
                                 </CardHeader>
-                                <CardContent className="space-y-3">
+                                <CardContent className="p-4 space-y-3">
                                     {activeSlots.map((slot, i) => {
                                         const nt = companyData[slot.id]?.negativeTopic
                                         const ntName = getNegativeTopicName(nt)
@@ -1021,13 +1056,13 @@ const ComparePage = () => {
 
                         {/* Zusammenfassung (Summary) */}
                         {summaryData && (
-                            <Card className="rounded-2xl shadow-sm">
-                                <CardHeader className="pb-2">
-                                    <CardTitle className="text-base font-bold text-slate-800">
+                            <Card className="rounded-lg border border-slate-200 bg-white shadow-xs overflow-hidden">
+                                <CardHeader className="px-4 py-3 border-b border-slate-200">
+                                    <CardTitle className="text-[14px] font-semibold text-slate-900 tracking-tight">
                                         Zusammenfassung
                                     </CardTitle>
                                 </CardHeader>
-                                <CardContent>
+                                <CardContent className="p-4">
                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                                         {/* Gesamtführer */}
                                         <div className="flex gap-3">
@@ -1138,9 +1173,9 @@ const ComparePage = () => {
                         )}
 
                         {/* Category Ratings comparison - Radar / Bar charts in one card with toggle */}
-                        <Card className="rounded-2xl shadow-sm">
-                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                <CardTitle className="text-base font-bold text-slate-800">
+                        <Card className="rounded-lg border border-slate-200 bg-white shadow-xs overflow-hidden">
+                            <CardHeader className="px-4 py-3 border-b border-slate-200 flex flex-row items-center justify-between space-y-0">
+                                <CardTitle className="text-[14px] font-semibold text-slate-900 tracking-tight">
                                     Kategorievergleich
                                 </CardTitle>
                                 <div className="flex rounded-lg border border-slate-200 bg-slate-100/80 p-0.5">
@@ -1168,7 +1203,7 @@ const ComparePage = () => {
                                     </button>
                                 </div>
                             </CardHeader>
-                            <CardContent>
+                            <CardContent className="p-4">
                                 <div
                                     id="compare-radar-chart-export"
                                     className={categoryChartView === "radar" ? "block" : "hidden"}
@@ -1254,13 +1289,13 @@ const ComparePage = () => {
 
                         {/* Timeline comparison */}
                         {timelineOverlay.length > 0 && (
-                            <Card className="rounded-2xl shadow-sm">
-                                <CardHeader>
-                                    <CardTitle className="text-base font-bold text-slate-800">
+                            <Card className="rounded-lg border border-slate-200 bg-white shadow-xs overflow-hidden">
+                                <CardHeader className="px-4 py-3 border-b border-slate-200">
+                                    <CardTitle className="text-[14px] font-semibold text-slate-900 tracking-tight">
                                         Bewertungsverlauf im Vergleich
                                     </CardTitle>
                                 </CardHeader>
-                                <CardContent>
+                                <CardContent className="p-4">
                                     <div id="compare-timeline-chart-export">
                                     <ResponsiveContainer width="100%" height={350}>
                                         <LineChart
@@ -1373,9 +1408,9 @@ const ComparePage = () => {
                         )}
 
                         {/* Detailed category comparison table */}
-                        <Card className="rounded-2xl shadow-sm">
-                            <CardHeader>
-                                <CardTitle className="text-base font-bold text-slate-800">
+                        <Card className="rounded-lg border border-slate-200 bg-white shadow-xs overflow-hidden">
+                            <CardHeader className="px-4 py-3 border-b border-slate-200">
+                                <CardTitle className="text-[14px] font-semibold text-slate-900 tracking-tight">
                                     Detailvergleich nach Kategorien
                                 </CardTitle>
                             </CardHeader>

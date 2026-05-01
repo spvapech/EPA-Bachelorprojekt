@@ -504,11 +504,12 @@ export const TimelineCard = memo(function TimelineCard({ companyId, onFiltersCha
                     <>
                         <p className="text-amber-400 inline-flex items-center gap-1.5">
                             <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-                            Keine Daten
+                            Interpolierter Wert
                         </p>
                         {dataPoint?.historicalGap != null && (
-                            <p className="text-slate-500 mt-1 tnum">
-                                interpoliert: <span className="text-slate-300 font-medium">{fmtV(dataPoint.historicalGap)}</span>
+                            <p className="flex items-center justify-between gap-3 mt-1">
+                                <span className="text-slate-400">Wert</span>
+                                <span className="font-semibold tnum text-amber-300">{fmtV(dataPoint.historicalGap)}</span>
                             </p>
                         )}
                     </>

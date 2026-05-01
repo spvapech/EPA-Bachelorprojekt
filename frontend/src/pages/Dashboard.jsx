@@ -14,8 +14,9 @@ import MostCriticalModal from "../components/dashboard/modals/MostCriticalModal"
 import NegativTopicModal from "../components/dashboard/modals/NegativTopicModal"
 
 import {
-  Dashboard as DashboardIcon, Compare, Download, Building, Home, Search, Loader,
+  Dashboard as DashboardIcon, Compare, Download, Building, Home, Search, Loader, Sun, Moon,
 } from "../icons"
+import { useTheme } from "../hooks/useTheme"
 import { API_URL } from "../config"
 import { exportKPIsAsPDF } from "../utils/pdfExport"
 import { waitForMultipleCharts, validateChart, waitForImagesInElement } from "../utils/chartValidator"
@@ -313,6 +314,9 @@ export default function Dashboard() {
   const handleTopicOverviewDataChange   = useCallback((d) => setTopicOverviewData(d), [])
   const handleTopicOverviewLoadingChange = useCallback((v) => setDashboardLoadingStates((p) => ({ ...p, topicOverview: v })), [])
 
+  /* ---- Theme ---- */
+  const { isDark, toggle: toggleTheme } = useTheme()
+
   /* ================================================================
      RENDER
      ================================================================ */
@@ -372,6 +376,14 @@ export default function Dashboard() {
             >
               {exportingPDF ? <Loader /> : <Download />}
               {exportingPDF ? "Exportiere…" : "PDF Export"}
+            </button>
+            <button
+              className="ds-nav-link"
+              onClick={toggleTheme}
+              title={isDark ? "Zu Hell wechseln" : "Zu Dunkel wechseln"}
+            >
+              {isDark ? <Sun /> : <Moon />}
+              {isDark ? "Hell" : "Dunkel"}
             </button>
           </div>
         </aside>
