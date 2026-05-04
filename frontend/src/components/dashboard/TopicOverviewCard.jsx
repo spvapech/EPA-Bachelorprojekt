@@ -1,349 +1,281 @@
 import * as React from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from "@/components/ui/table"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { useState, useEffect, memo, forwardRef, useImperativeHandle } from "react"
+import { useState, useEffect, useMemo, memo, forwardRef, useImperativeHandle } from "react"
+import { AlertTriangle, ArrowRight } from "lucide-react"
+import { ChartCardHeader, SourceToggle } from "./ChartHeader"
+import { Tag } from "../../icons"
 import TopicDetailModal from "./modals/TopicDetailModal"
 import TopicTableModal from "./modals/TopicTableModal"
-import { FileText } from "lucide-react"
 import { API_URL } from "@/config"
 
-// Memoized TopicOverviewCard für bessere Performance
-export const TopicOverviewCard = memo(forwardRef(function TopicOverviewCard({ companyId = 1, onDataChange, onLoadingChange }, ref) {
-    const [topicsData, setTopicsData] = useState([])
-    const [loading, setLoading] = useState(true)
-    const [error, setError] = useState(null)
-    const [selectedTopic, setSelectedTopic] = useState(null)
-    const [detailModalOpen, setDetailModalOpen] = useState(false)
-    const [tableModalOpen, setTableModalOpen] = useState(false)
-    const [sourceFilter, setSourceFilter] = useState(null) // null = both, 'employee', 'candidates'
-    const [isModalOpen, setIsModalOpen] = useState(false) // Track if any modal is open
-    
-    // Kommuniziere Loading-State nach außen
-    useEffect(() => {
-        if (onLoadingChange) {
-            onLoadingChange(loading);
-        }
-    }, [loading, onLoadingChange]);
+const SOURCE_OPTIONS = [
+  { value: "all",        label: "Alle",        color: "#64748b" },
+  { value: "employee",   label: "Mitarbeiter", color: "#3b82f6" },
+  { value: "candidates", label: "Bewerber",    color: "#10b981" },
+]
 
-    // Daten von API laden
-    useEffect(() => {
-        const fetchTopics = async () => {
-            try {
-                // Nur beim ersten Laden oder wenn kein Modal offen ist, Loading-State setzen
-                if (topicsData.length === 0) {
-                    setLoading(true)
-                }
-                setError(null)
-                
-                // Build URL with optional source filter
-                let url = `${API_URL}/analytics/company/${companyId}/topic-overview`
-                if (sourceFilter) {
-                    url += `?source=${sourceFilter}`
-                }
-                
-                const response = await fetch(url)
-                
-                if (!response.ok) {
-                    throw new Error(`API Error: ${response.status}`)
-                }
-                
-                const data = await response.json()
-                setTopicsData(data.topics || [])
-            } catch (err) {
-                console.error('Error fetching topics:', err)
-                setError(err.message)
-                setTopicsData([])
-            } finally {
-                setLoading(false)
-            }
-        }
+const SOURCE_LABEL = {
+  all:        "Alle Quellen",
+  employee:   "Mitarbeiter",
+  candidates: "Bewerber",
+}
 
-        if (companyId) {
-            fetchTopics()
-        }
-    }, [companyId, sourceFilter]) // Re-fetch when sourceFilter changes
-    
-    // Export data nach außen (für PDF Export)
-    useEffect(() => {
-        if (onDataChange && !loading) {
-            const totalTopics = topicsData.length;
-            const avgRating = totalTopics > 0 
-                ? (topicsData.reduce((sum, t) => sum + t.avgRating, 0) / totalTopics).toFixed(1)
-                : 0;
-            const totalMentions = topicsData.reduce((sum, t) => sum + t.frequency, 0);
-            
-            onDataChange({
-                topics: topicsData,
-                sourceFilter,
-                stats: {
-                    totalTopics,
-                    avgRating,
-                    totalMentions
-                }
-            });
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [topicsData, sourceFilter, loading]);
-    
-    // Track modal state
-    useEffect(() => {
-        setIsModalOpen(tableModalOpen || detailModalOpen)
-    }, [tableModalOpen, detailModalOpen])
+const fmt = (n, d = 1) => Number.isFinite(Number(n)) ? Number(n).toFixed(d).replace(".", ",") : "—"
 
-    // Expose openTopicByName to parent via ref
-    useImperativeHandle(ref, () => ({
-        openTopicByName: (name) => {
-            const found = topicsData.find(t => 
-                t.topic?.toLowerCase() === name?.toLowerCase()
-            )
-            if (found) {
-                setSelectedTopic(found)
-                setDetailModalOpen(true)
-            } else {
-                // Fallback: open table modal
-                setTableModalOpen(true)
-            }
-        }
-    }), [topicsData])
+// Tonale Klassen (gleich wie in den anderen Karten)
+const scoreColorClass = (s) =>
+  !Number.isFinite(s)        ? "text-slate-700"
+  : s >= 3.5                  ? "text-emerald-700"
+  : s >= 2.5                  ? "text-amber-700"
+                              : "text-rose-700"
 
-    const handleCardClick = () => {
-        setTableModalOpen(true)
+const scoreBoxClass = (s) =>
+  !Number.isFinite(s)        ? "bg-slate-50 border-slate-200"
+  : s >= 3.5                  ? "bg-emerald-50 border-emerald-200"
+  : s >= 2.5                  ? "bg-amber-50 border-amber-200"
+                              : "bg-rose-50 border-rose-200"
+
+export const TopicOverviewCard = memo(forwardRef(function TopicOverviewCard(
+  { companyId = 1, onDataChange, onLoadingChange },
+  ref
+) {
+  const [topicsData,       setTopicsData]       = useState([])
+  const [loading,          setLoading]          = useState(true)
+  const [refreshing,       setRefreshing]       = useState(false)
+  const [error,            setError]            = useState(null)
+  const [selectedTopic,    setSelectedTopic]    = useState(null)
+  const [detailModalOpen,  setDetailModalOpen]  = useState(false)
+  const [tableModalOpen,   setTableModalOpen]   = useState(false)
+  const [sourceFilter,     setSourceFilter]     = useState("all")
+  const [isModalOpen,      setIsModalOpen]      = useState(false)
+
+  // Loading-State nach außen kommunizieren
+  useEffect(() => {
+    if (onLoadingChange) onLoadingChange(loading)
+  }, [loading, onLoadingChange])
+
+  // Daten laden
+  useEffect(() => {
+    if (!companyId) return
+
+    const fetchTopics = async () => {
+      const isFirst = topicsData.length === 0
+      isFirst ? setLoading(true) : setRefreshing(true)
+      try {
+        setError(null)
+        let url = `${API_URL}/analytics/company/${companyId}/topic-overview`
+        if (sourceFilter && sourceFilter !== "all") url += `?source=${sourceFilter}`
+        const res = await fetch(url)
+        if (!res.ok) throw new Error(`API Error: ${res.status}`)
+        const data = await res.json()
+        setTopicsData(data.topics || [])
+      } catch (err) {
+        console.error("Error fetching topics:", err)
+        setError(err.message)
+        setTopicsData([])
+      } finally {
+        setLoading(false)
+        setRefreshing(false)
+      }
     }
 
-    const handleTopicSelect = (topic) => {
-        setSelectedTopic(topic)
-        setTableModalOpen(false)
+    fetchTopics()
+  }, [companyId, sourceFilter])
+
+  // Stats
+  const stats = useMemo(() => {
+    const total = topicsData.length
+    if (!total) return null
+    const avg = topicsData.reduce((s, t) => s + (Number(t.avgRating) || 0), 0) / total
+    const mentions = topicsData.reduce((s, t) => s + (Number(t.frequency) || 0), 0)
+    const limited = topicsData.filter((t) => t.statistical_meta?.risk_level === "limited").length
+    return { total, avg, mentions, limited }
+  }, [topicsData])
+
+  // Daten an Parent für PDF Export
+  useEffect(() => {
+    if (onDataChange && !loading) {
+      onDataChange({
+        topics: topicsData,
+        sourceFilter: sourceFilter === "all" ? null : sourceFilter,
+        stats: stats ? {
+          totalTopics:   stats.total,
+          avgRating:     stats.avg.toFixed(1),
+          totalMentions: stats.mentions,
+        } : { totalTopics: 0, avgRating: 0, totalMentions: 0 }
+      })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [topicsData, sourceFilter, loading])
+
+  useEffect(() => { setIsModalOpen(tableModalOpen || detailModalOpen) }, [tableModalOpen, detailModalOpen])
+
+  useImperativeHandle(ref, () => ({
+    openTopicByName: (name) => {
+      const found = topicsData.find((t) => t.topic?.toLowerCase() === name?.toLowerCase())
+      if (found) {
+        setSelectedTopic(found)
         setDetailModalOpen(true)
-    }
-
-    const handleBackToTable = () => {
-        setDetailModalOpen(false)
+      } else {
         setTableModalOpen(true)
+      }
     }
-    
-    // Funktion zum Neuladen eines Topics mit der aktuellen Datenquelle
-    const reloadTopicWithSource = async (topicName, newSourceFilter) => {
-        try {
-            // Build URL mit neuem Source-Filter
-            let url = `${API_URL}/analytics/company/${companyId}/topic-overview`
-            if (newSourceFilter) {
-                url += `?source=${newSourceFilter}`
-            }
-            
-            const response = await fetch(url)
-            
-            if (!response.ok) {
-                throw new Error(`API Error: ${response.status}`)
-            }
-            
-            const data = await response.json()
-            
-            // Finde das spezifische Topic aus den neuen Daten
-            const updatedTopic = (data.topics || []).find(t => t.topic === topicName)
-            
-            if (updatedTopic) {
-                setSelectedTopic(updatedTopic)
-            }
-        } catch (err) {
-            console.error('Error reloading topic:', err)
-        }
-    }
-    
-    // Handler für Source-Filter-Änderung im Detail-Modal
-    const handleDetailSourceFilterChange = async (newSourceFilter) => {
-        if (selectedTopic) {
-            // Speichere den Topic-Namen vor dem Update
-            const topicName = selectedTopic.topic
-            
-            // Update den globalen Filter
-            setSourceFilter(newSourceFilter)
-            
-            // Lade das Topic mit der neuen Quelle neu
-            await reloadTopicWithSource(topicName, newSourceFilter)
-        }
-    }
+  }), [topicsData])
 
-    const getSentimentBadgeVariant = (sentiment) => {
-        switch (sentiment) {
-            case "Positiv":
-                return "default"
-            case "Neutral":
-                return "secondary"
-            case "Negativ":
-                return "destructive"
-            default:
-                return "outline"
-        }
-    }
+  const handleCardClick = () => setTableModalOpen(true)
+  const handleTopicSelect = (topic) => {
+    setSelectedTopic(topic)
+    setTableModalOpen(false)
+    setDetailModalOpen(true)
+  }
+  const handleBackToTable = () => {
+    setDetailModalOpen(false)
+    setTableModalOpen(true)
+  }
 
-    // Statistiken für die Übersichtskarte
-    const totalTopics = topicsData.length
-    const avgRating = totalTopics > 0 
-        ? (topicsData.reduce((sum, t) => sum + t.avgRating, 0) / totalTopics).toFixed(1)
-        : 0
-    const totalMentions = topicsData.reduce((sum, t) => sum + t.frequency, 0)
+  const reloadTopicWithSource = async (topicName, newSourceFilter) => {
+    try {
+      let url = `${API_URL}/analytics/company/${companyId}/topic-overview`
+      if (newSourceFilter && newSourceFilter !== "all") url += `?source=${newSourceFilter}`
+      const res = await fetch(url)
+      if (!res.ok) throw new Error(`API Error: ${res.status}`)
+      const data = await res.json()
+      const updated = (data.topics || []).find((t) => t.topic === topicName)
+      if (updated) setSelectedTopic(updated)
+    } catch (err) { console.error("Error reloading topic:", err) }
+  }
 
-    // Loading State
-    if (loading) {
-        return (
-            <Card className="rounded-3xl shadow-sm">
-                <CardHeader className="pb-2 pt-4">
-                    <CardTitle className="text-lg font-bold text-slate-800">
-                        Topic Übersicht
-                    </CardTitle>
-                </CardHeader>
-                <CardContent className="pb-4">
-                    <div className="flex items-center justify-center h-20">
-                        <p className="text-slate-500">Lade Topic-Daten...</p>
-                    </div>
-                </CardContent>
-            </Card>
-        )
-    }
+  const handleDetailSourceFilterChange = async (newFilter) => {
+    if (!selectedTopic) return
+    const topicName = selectedTopic.topic
+    setSourceFilter(newFilter || "all")
+    await reloadTopicWithSource(topicName, newFilter)
+  }
 
-    // Empty State
-    if (topicsData.length === 0) {
-        return (
-            <Card className="rounded-3xl shadow-sm">
-                <CardHeader className="pb-2 pt-4">
-                    <CardTitle className="text-lg font-bold text-slate-800">
-                        Topic Übersicht
-                    </CardTitle>
-                </CardHeader>
-                <CardContent className="pb-4">
-                    <div className="flex items-center justify-center h-20">
-                        <p className="text-slate-500">
-                            {error ? `Fehler: ${error}` : 'Keine Topics gefunden'}
-                        </p>
-                    </div>
-                </CardContent>
-            </Card>
-        )
-    }
+  // Empty / Error message für den Body
+  const emptyMessage =
+    !companyId          ? "Keine Firma ausgewählt"
+    : error             ? `Fehler: ${error}`
+    : !topicsData.length && !loading ? "Keine Topics gefunden"
+    : null
 
-    return (
-        <>
-            <Card 
-                className="rounded-3xl shadow-sm hover:shadow-md transition-shadow cursor-pointer"
-                onClick={handleCardClick}
-            >
-                <CardHeader className="pb-2 pt-4">
-                    <CardTitle className="text-lg font-bold text-slate-800">
-                        Topic Übersicht
-                    </CardTitle>
-                </CardHeader>
-                <CardContent className="pb-4">
-                    {/* Datenquellen Filter */}
-                    <div className="flex gap-2 mb-4" onClick={(e) => e.stopPropagation()}>
-                        <Button
-                            variant="outline"
-                            onClick={() => setSourceFilter(null)}
-                            size="sm"
-                            className={`flex-1 cursor-pointer ${
-                                sourceFilter === null 
-                                    ? 'bg-blue-500 text-white hover:bg-blue-600 border-blue-500' 
-                                    : 'hover:bg-slate-100'
-                            }`}
-                        >
-                            Alle
-                        </Button>
-                        <Button
-                            variant="outline"
-                            onClick={() => setSourceFilter('employee')}
-                            size="sm"
-                            className={`flex-1 cursor-pointer ${
-                                sourceFilter === 'employee' 
-                                    ? 'bg-blue-500 text-white hover:bg-blue-600 border-blue-500' 
-                                    : 'hover:bg-slate-100'
-                            }`}
-                        >
-                            Mitarbeiter
-                        </Button>
-                        <Button
-                            variant="outline"
-                            onClick={() => setSourceFilter('candidates')}
-                            size="sm"
-                            className={`flex-1 cursor-pointer ${
-                                sourceFilter === 'candidates' 
-                                    ? 'bg-green-500 text-white hover:bg-green-600 border-green-500' 
-                                    : 'hover:bg-slate-100'
-                            }`}
-                        >
-                            Bewerber
-                        </Button>
-                    </div>
-                    
-                    {/* Statistical Warning Banner */}
-                    {topicsData.some(t => t.statistical_meta?.risk_level === 'limited') && (
-                        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-                            <div className="flex items-start gap-2">
-                                <span className="text-red-600 text-lg">⚠️</span>
-                                <div className="flex-1">
-                                    <p className="text-sm font-semibold text-red-800">
-                                        Achtung: Einige Topics haben begrenzte Datenbasis
-                                    </p>
-                                    <p className="text-xs text-red-700 mt-1">
-                                        {topicsData.filter(t => t.statistical_meta?.risk_level === 'limited').length} Topic(s) 
-                                        mit weniger als 30 Reviews - Ergebnisse mit Vorsicht interpretieren
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-                    
-                    <div>
-                        <div className="grid grid-cols-3 gap-4">
-                            <div>
-                                <p className="text-xs text-slate-600 mb-0.5">Total Topics</p>
-                                <p className="text-2xl font-bold text-slate-900">{totalTopics}</p>
-                            </div>
-                            <div>
-                                <p className="text-xs text-slate-600 mb-0.5">Ø Rating</p>
-                                <p className="text-2xl font-bold text-slate-900">{avgRating}</p>
-                            </div>
-                            <div>
-                                <p className="text-xs text-slate-600 mb-0.5">Total Mentions</p>
-                                <p className="text-2xl font-bold text-slate-900">{totalMentions}</p>
-                            </div>
-                        </div>
-                        <p className="text-xs text-slate-500 mt-3 text-center">
-                            Klicken Sie hier, um alle Topics anzuzeigen
-                        </p>
-                    </div>
-                </CardContent>
-            </Card>
+  const showOverlay = loading || refreshing
+  const overlayLabel = loading ? "Lade Topic-Daten…" : "Daten werden aktualisiert…"
 
-            {/* Table Modal */}
-            <TopicTableModal
-                open={tableModalOpen}
-                onOpenChange={setTableModalOpen}
-                topics={topicsData}
-                onTopicSelect={handleTopicSelect}
-                sourceFilter={sourceFilter}
-                onSourceFilterChange={setSourceFilter}
-            />
+  return (
+    <>
+      <div
+        className="group bg-white border border-slate-200 rounded-lg overflow-hidden shadow-xs hover:shadow-sm transition-shadow cursor-pointer"
+        onClick={handleCardClick}
+      >
+        <ChartCardHeader
+          icon={<Tag />}
+          eyebrow="TOPIC-ÜBERSICHT"
+          title="Themenbereiche"
+          subtitle={`${SOURCE_LABEL[sourceFilter] ?? "Alle Quellen"}${stats ? ` · ${stats.total} Topics` : ""}`}
+          expandable
+          actions={
+            <div onClick={(e) => e.stopPropagation()}>
+              <SourceToggle
+                value={sourceFilter}
+                onChange={setSourceFilter}
+                options={SOURCE_OPTIONS}
+              />
+            </div>
+          }
+        />
 
-            {/* Detail Modal */}
-            {selectedTopic && (
-                <TopicDetailModal
-                    open={detailModalOpen}
-                    onOpenChange={setDetailModalOpen}
-                    topic={selectedTopic}
-                    onBackToTable={handleBackToTable}
-                    sourceFilter={sourceFilter}
-                    onSourceFilterChange={handleDetailSourceFilterChange}
-                    companyId={companyId}
-                />
-            )}
-        </>
-    )
+        <div className="px-4 pt-4 pb-4 relative">
+          {/* Empty / Loading-Anzeige */}
+          {emptyMessage && !showOverlay ? (
+            <div className="py-12 flex items-center justify-center">
+              <p className="text-[13px] text-slate-500">{emptyMessage}</p>
+            </div>
+          ) : (
+            <>
+              {/* Statistical Warning Banner */}
+              {stats?.limited > 0 && (
+                <div className="mb-4 px-3 py-2 rounded-md bg-rose-50 border border-rose-200 flex items-start gap-2">
+                  <AlertTriangle className="h-4 w-4 text-rose-600 flex-shrink-0 mt-0.5" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[12px] font-semibold text-rose-800 leading-tight">
+                      Begrenzte Datenbasis bei {stats.limited} Topic{stats.limited !== 1 ? "s" : ""}
+                    </p>
+                    <p className="text-[11px] text-rose-700 mt-0.5 leading-tight">
+                      Weniger als 30 Reviews — Ergebnisse mit Vorsicht interpretieren
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Stats-Grid — gleicher Stil wie TopicRating-Modal-Stats */}
+              {stats && (
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="text-center px-3 py-2.5 bg-slate-50 rounded-md border border-slate-200">
+                    <p className="font-mono text-[10px] tracking-[0.06em] uppercase text-slate-500 mb-1">Topics</p>
+                    <p className="text-[20px] font-semibold tnum text-slate-900">{stats.total}</p>
+                  </div>
+                  <div className={`text-center px-3 py-2.5 rounded-md border ${scoreBoxClass(stats.avg)}`}>
+                    <p className="font-mono text-[10px] tracking-[0.06em] uppercase text-slate-500 mb-1">Ø Rating</p>
+                    <p className={`text-[20px] font-semibold tnum ${scoreColorClass(stats.avg)}`}>
+                      {fmt(stats.avg, 2)}
+                    </p>
+                  </div>
+                  <div className="text-center px-3 py-2.5 bg-slate-50 rounded-md border border-slate-200">
+                    <p className="font-mono text-[10px] tracking-[0.06em] uppercase text-slate-500 mb-1">Erwähnungen</p>
+                    <p className="text-[20px] font-semibold tnum text-slate-900">
+                      {Number(stats.mentions).toLocaleString("de-DE")}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* CTA-Footer */}
+              <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
+                <span className="text-[11px] text-slate-500">
+                  Karte anklicken zeigt alle Topics in einer Tabelle
+                </span>
+                <span className="inline-flex items-center gap-1 text-[11px] font-medium text-blue-700 group-hover:text-blue-800">
+                  Alle Topics
+                  <ArrowRight className="h-3 w-3" />
+                </span>
+              </div>
+            </>
+          )}
+
+          {/* Refresh-Overlay */}
+          {showOverlay && (
+            <div className="absolute inset-0 bg-white/70 flex items-center justify-center rounded-md pointer-events-none">
+              <div className="flex items-center gap-2">
+                <div className="animate-spin rounded-full h-5 w-5 border-2 border-slate-200 border-t-slate-600"></div>
+                <p className="text-slate-600 text-[12px]">{overlayLabel}</p>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Table Modal */}
+      <TopicTableModal
+        open={tableModalOpen}
+        onOpenChange={setTableModalOpen}
+        topics={topicsData}
+        onTopicSelect={handleTopicSelect}
+        sourceFilter={sourceFilter === "all" ? null : sourceFilter}
+        onSourceFilterChange={(s) => setSourceFilter(s || "all")}
+      />
+
+      {/* Detail Modal */}
+      {selectedTopic && (
+        <TopicDetailModal
+          open={detailModalOpen}
+          onOpenChange={setDetailModalOpen}
+          topic={selectedTopic}
+          onBackToTable={handleBackToTable}
+          sourceFilter={sourceFilter === "all" ? null : sourceFilter}
+          onSourceFilterChange={handleDetailSourceFilterChange}
+          companyId={companyId}
+        />
+      )}
+    </>
+  )
 }))

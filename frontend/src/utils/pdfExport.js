@@ -11,28 +11,81 @@ import html2canvas from 'html2canvas';
  * Optimiert für Datenpräsentation und Geschäftsberichte.
  */
 
-// ─── Farb-Palette (konsistent im ganzen Dokument) ───────────────────────────
+// ─── Design-System Farb-Palette (deckt sich mit AGB-Analysis UI) ────────────
+// Slate-Skala + tonale Akzente — gleich wie im Dashboard.
 const COLORS = {
-    primary:     [37,  99, 235],   // blue-600
-    primaryDark: [30,  64, 175],   // blue-800
-    primaryLight:[219, 234, 254],  // blue-100
-    accent:      [14, 165, 233],   // sky-500
-    dark:        [15,  23,  42],   // slate-900
-    darkAlt:     [30,  41,  59],   // slate-800
-    text:        [51,  65,  85],   // slate-700
-    textMuted:   [100, 116, 139],  // slate-500
-    textLight:   [148, 163, 184],  // slate-400
-    border:      [226, 232, 240],  // slate-200
-    bgLight:     [248, 250, 252],  // slate-50
-    white:       [255, 255, 255],
-    green:       [22, 163,  74],   // green-600
-    greenLight:  [220, 252, 231],  // green-100
-    red:         [220,  38,  38],  // red-600
-    redLight:    [254, 226, 226],  // red-100
-    orange:      [234, 88,  12],   // orange-600
-    orangeLight: [255, 237, 213],  // orange-100
-    yellow:      [202, 138,  4],   // yellow-600
-    yellowLight: [254, 249, 195],  // yellow-100
+    // Slate (neutrale Skala)
+    slate0:    [255, 255, 255],
+    slate50:   [248, 250, 252],
+    slate100:  [241, 245, 249],
+    slate150:  [233, 238, 244],
+    slate200:  [226, 232, 240],
+    slate300:  [203, 213, 225],
+    slate400:  [148, 163, 184],
+    slate500:  [100, 116, 139],
+    slate600:  [71, 85, 105],
+    slate700:  [51, 65, 85],
+    slate800:  [30, 41, 59],
+    slate900:  [15, 23, 42],
+
+    // Tonale Akzente (gleich wie KPI-Tile-Tones)
+    emerald50:  [236, 253, 245],
+    emerald500: [16, 185, 129],
+    emerald600: [5, 150, 105],
+    emerald700: [4, 120, 87],
+    rose50:     [255, 241, 242],
+    rose500:    [244, 63, 94],
+    rose600:    [225, 29, 72],
+    rose700:    [190, 18, 60],
+    amber50:    [255, 251, 235],
+    amber500:   [245, 158, 11],
+    amber600:   [217, 119, 6],
+    amber700:   [180, 83, 9],
+    blue50:     [239, 246, 255],
+    blue500:    [59, 130, 246],
+    blue600:    [37, 99, 235],
+    blue700:    [29, 78, 216],
+    indigo500:  [99, 102, 241],
+    indigo600:  [79, 70, 229],
+
+    // Legacy aliases (rückwärtskompatibel mit altem Code)
+    get primary()      { return this.indigo500; },
+    get primaryDark()  { return this.indigo600; },
+    get primaryLight() { return this.blue50; },
+    get accent()       { return this.blue500; },
+    get dark()         { return this.slate900; },
+    get darkAlt()      { return this.slate800; },
+    get text()         { return this.slate700; },
+    get textMuted()    { return this.slate500; },
+    get textLight()    { return this.slate400; },
+    get border()       { return this.slate200; },
+    get bgLight()      { return this.slate50; },
+    get white()        { return this.slate0; },
+    get green()        { return this.emerald600; },
+    get greenLight()   { return this.emerald50; },
+    get red()          { return this.rose600; },
+    get redLight()     { return this.rose50; },
+    get orange()       { return this.amber600; },
+    get orangeLight()  { return this.amber50; },
+    get yellow()       { return this.amber500; },
+    get yellowLight()  { return this.amber50; },
+};
+
+// ─── Tonale Logik (gleich wie KPIGrid.jsx) ──────────────────────────────────
+const scoreTone = (score) => {
+    const n = Number(score);
+    if (!Number.isFinite(n)) return 'neutral';
+    if (n >= 3.5) return 'good';
+    if (n >= 2.5) return 'warn';
+    return 'bad';
+};
+
+const TONE_PALETTE = {
+    good:    { accent: COLORS.emerald500, bg: COLORS.emerald50, text: COLORS.emerald700, value: COLORS.emerald600 },
+    warn:    { accent: COLORS.amber500,   bg: COLORS.amber50,   text: COLORS.amber700,   value: COLORS.amber600 },
+    bad:     { accent: COLORS.rose500,    bg: COLORS.rose50,    text: COLORS.rose700,    value: COLORS.rose600 },
+    info:    { accent: COLORS.blue500,    bg: COLORS.blue50,    text: COLORS.blue700,    value: COLORS.blue600 },
+    neutral: { accent: COLORS.slate300,   bg: COLORS.slate50,   text: COLORS.slate600,   value: COLORS.slate900 },
 };
 
 // ─── Layout-Konstanten (A4: 210 x 297 mm) ──────────────────────────────────
@@ -342,79 +395,138 @@ const addFooter = (doc, pageNum, totalPages, companyName) => {
     doc.text(`${pageNum} / ${totalPages}`, PAGE.contentRight, y, { align: 'right' });
 };
 
-// ─── Helper: Abschnittstitel ────────────────────────────────────────────────
-const addSectionTitle = (doc, title, yPos, subtitle = null) => {
-    // Akzentlinie links
-    doc.setFillColor(...COLORS.primary);
-    doc.rect(PAGE.marginLeft, yPos - 5, 3, subtitle ? 16 : 10, 'F');
+// ─── Helper: Abschnittstitel (mit optionalem Eyebrow) ──────────────────────
+const addSectionTitle = (doc, title, yPos, subtitle = null, eyebrow = null) => {
+    let curY = yPos;
 
-    // Titel
-    doc.setFontSize(16);
+    // Eyebrow (mono, uppercase, slate-500)
+    if (eyebrow) {
+        doc.setFontSize(7);
+        doc.setFont('courier', 'bold');
+        doc.setTextColor(...COLORS.slate500);
+        doc.text(String(eyebrow).toUpperCase(), PAGE.marginLeft, curY);
+        curY += 4;
+    }
+
+    // Titel — slate-900, semibold
+    doc.setFontSize(15);
     doc.setFont('helvetica', 'bold');
-    doc.setTextColor(...COLORS.dark);
-    doc.text(title, PAGE.marginLeft + 8, yPos);
+    doc.setTextColor(...COLORS.slate900);
+    doc.text(title, PAGE.marginLeft, curY + 1);
 
-    let nextY = yPos + 6;
+    let nextY = curY + 7;
 
     if (subtitle) {
-        doc.setFontSize(9.5);
+        doc.setFontSize(9);
         doc.setFont('helvetica', 'normal');
-        doc.setTextColor(...COLORS.textMuted);
-        doc.text(subtitle, PAGE.marginLeft + 8, nextY);
-        nextY += 6;
+        doc.setTextColor(...COLORS.slate500);
+        doc.text(subtitle, PAGE.marginLeft, nextY);
+        nextY += 4;
     }
 
-    return nextY + 4;
+    // Feine Trennlinie unter dem Titel
+    doc.setDrawColor(...COLORS.border);
+    doc.setLineWidth(0.2);
+    doc.line(PAGE.marginLeft, nextY + 1, PAGE.contentRight, nextY + 1);
+
+    return nextY + 6;
 };
 
-// ─── Helper: KPI-Karte zeichnen ─────────────────────────────────────────────
-const drawKPICard = (doc, x, y, width, height, { label, value, valueColor, badge = null, badgeColor = null }) => {
-    // Karten-Hintergrund
-    doc.setFillColor(...COLORS.white);
+// ─── Helper: KPI-Karte zeichnen — Adaptive Layout für PDF ─────────────────
+// Layout (von oben nach unten):
+//   ┌────────────────────────┐
+//   │▎ Ø Score                │  ← Label (tonal, links)
+//   │                          │
+//   │  4,0                     │  ← Big Value (volle Breite)
+//   │  ┌───┐                   │  ← Badge-Pill UNTER dem Wert (eigene Zeile)
+//   │  │/5 │                   │
+//   │  └───┘                   │
+//   │                          │
+//   │  alle Quellen            │  ← Footer
+//   └────────────────────────┘
+//
+// • Kein "Details →" mehr (Print, nicht klickbar)
+// • Badge unter Wert → kein Platz-Konflikt bei langen Topic-Namen
+// • Step-Down-Schriftgröße + Hart-Kürzen für absolute Sicherheit
+// tone: 'good' | 'warn' | 'bad' | 'neutral' | 'info'
+const drawKPICard = (doc, x, y, width, height, {
+    label, value, footer = null, badge = null, tone = 'neutral',
+    valueColor, badgeColor,
+}) => {
+    const t = TONE_PALETTE[tone] ?? TONE_PALETTE.neutral;
+    const innerX = x + 6;
+    const innerR = x + width - 6;
+    const innerW = innerR - innerX;
+
+    // ── Karten-Hintergrund (subtiler tonaler Bg) ──
+    doc.setFillColor(...t.bg);
     doc.setDrawColor(...COLORS.border);
-    doc.setLineWidth(0.4);
+    doc.setLineWidth(0.3);
     doc.roundedRect(x, y, width, height, 3, 3, 'FD');
 
-    // Oberer Akzentstreifen
-    doc.setFillColor(...COLORS.primary);
-    doc.roundedRect(x, y, width, 3, 3, 3, 'F');
-    doc.setFillColor(...COLORS.white);
-    doc.rect(x, y + 2, width, 2, 'F');
+    // Tonaler Akzentbalken links
+    doc.setFillColor(...t.accent);
+    doc.rect(x, y, 2, height, 'F');
 
-    // Label
-    doc.setFontSize(7.5);
+    // Helper: text → ggf. mit Ellipsis kürzen
+    const fitText = (text, maxW) => {
+        if (doc.getTextWidth(text) <= maxW) return text;
+        let trunc = text;
+        while (trunc.length > 1 && doc.getTextWidth(trunc + '\u2026') > maxW) {
+            trunc = trunc.slice(0, -1);
+        }
+        return trunc + '\u2026';
+    };
+
+    // ── Label (oben, tonal) ──
+    doc.setFontSize(8.5);
     doc.setFont('helvetica', 'bold');
-    doc.setTextColor(...COLORS.textMuted);
-    doc.text(label.toUpperCase(), x + width / 2, y + 10, { align: 'center' });
+    doc.setTextColor(...t.text);
+    doc.text(fitText(String(label), innerW), innerX, y + 7);
 
-    // Wert
+    // ── Big Value: nutzt volle Karten-Breite ──
+    const rawValue = String(value);
+    let valueFontSize = 22;
     doc.setFont('helvetica', 'bold');
-    doc.setTextColor(...(valueColor || COLORS.dark));
+    doc.setFontSize(valueFontSize);
+    while (valueFontSize > 9 && doc.getTextWidth(rawValue) > innerW) {
+        valueFontSize -= 1;
+        doc.setFontSize(valueFontSize);
+    }
+    const displayValue = fitText(rawValue, innerW);
 
-    // Automatischer Textumbruch für lange Werte
-    const maxW = width - 6;
-    doc.setFontSize(15);
-    let lines = doc.splitTextToSize(String(value), maxW);
-    if (lines.length > 2) {
-        doc.setFontSize(9);
-        lines = doc.splitTextToSize(String(value), maxW);
-    } else if (lines.length > 1) {
-        doc.setFontSize(10);
-        lines = doc.splitTextToSize(String(value), maxW);
+    const valueBaselineY = y + height * 0.42 + valueFontSize * 0.18;
+    doc.setTextColor(...t.value);
+    doc.text(displayValue, innerX, valueBaselineY);
+
+    // ── Badge-Pill UNTER dem Wert (eigene Zeile) ──
+    if (badge) {
+        const badgeText = String(badge);
+        doc.setFontSize(7.5);
+        doc.setFont('helvetica', 'bold');
+        const badgeDisplay = fitText(badgeText, innerW - 6);
+
+        const padX = 3.5;
+        const bW = doc.getTextWidth(badgeDisplay) + padX * 2;
+        const bH = 5.4;
+        const bX = innerX;
+        const bY = valueBaselineY + 3;
+
+        doc.setFillColor(...t.bg);
+        doc.setDrawColor(...t.accent);
+        doc.setLineWidth(0.3);
+        doc.roundedRect(bX, bY, bW, bH, 2.7, 2.7, 'FD');
+
+        doc.setTextColor(...t.text);
+        doc.text(badgeDisplay, bX + bW / 2, bY + 3.8, { align: 'center' });
     }
 
-    const lineH = lines.length > 1 ? 4.5 : 0;
-    const baseY = y + height / 2 + (badge ? 2 : 4);
-    lines.forEach((line, i) => {
-        doc.text(line, x + width / 2, baseY + (i * lineH) - ((lines.length - 1) * lineH / 2), { align: 'center' });
-    });
-
-    // Badge (z.B. Score bei Most Critical)
-    if (badge) {
-        doc.setFontSize(8);
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(...(badgeColor || COLORS.textMuted));
-        doc.text(String(badge), x + width / 2, y + height - 5, { align: 'center' });
+    // ── Footer (klein, slate-500, am unteren Rand) ──
+    if (footer) {
+        doc.setFontSize(7.5);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(...COLORS.slate500);
+        doc.text(fitText(String(footer), innerW), innerX, y + height - 5);
     }
 };
 
@@ -448,21 +560,21 @@ const drawFilterBox = (doc, yPos, filters, statsEntries = []) => {
     doc.setLineWidth(0.3);
     doc.roundedRect(boxX, yPos, boxW, boxH, 2, 2, 'FD');
 
-    // Linke Spalte: Filter
+    // Linke Spalte: Filter (eyebrow in mono)
     let leftY = yPos + 6;
-    doc.setFontSize(7.5);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(...COLORS.primary);
+    doc.setFontSize(7);
+    doc.setFont('courier', 'bold');
+    doc.setTextColor(...COLORS.slate500);
     doc.text('FILTER', boxX + 6, leftY);
     leftY += lineH + 1;
 
     filterEntries.forEach(([label, value]) => {
         doc.setFontSize(8);
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(...COLORS.text);
-        doc.text(`${label}:`, boxX + 8, leftY);
         doc.setFont('helvetica', 'normal');
-        doc.setTextColor(...COLORS.textMuted);
+        doc.setTextColor(...COLORS.slate500);
+        doc.text(`${label}`, boxX + 8, leftY);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(...COLORS.slate900);
         doc.text(value, boxX + 32, leftY);
         leftY += lineH;
     });
@@ -476,19 +588,19 @@ const drawFilterBox = (doc, yPos, filters, statsEntries = []) => {
         doc.line(midX, yPos + 4, midX, yPos + boxH - 4);
 
         let rightY = yPos + 6;
-        doc.setFontSize(7.5);
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(...COLORS.primary);
+        doc.setFontSize(7);
+        doc.setFont('courier', 'bold');
+        doc.setTextColor(...COLORS.slate500);
         doc.text('STATISTIKEN', midX + 6, rightY);
         rightY += lineH + 1;
 
         statsEntries.forEach(([label, value, color]) => {
             doc.setFontSize(8);
-            doc.setFont('helvetica', 'bold');
-            doc.setTextColor(...COLORS.text);
-            doc.text(`${label}:`, midX + 8, rightY);
             doc.setFont('helvetica', 'normal');
-            doc.setTextColor(...(color || COLORS.textMuted));
+            doc.setTextColor(...COLORS.slate500);
+            doc.text(`${label}`, midX + 8, rightY);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(...(color || COLORS.slate900));
             doc.text(String(value), midX + 38, rightY);
             rightY += lineH;
         });
@@ -565,198 +677,192 @@ export const exportKPIsAsPDF = async (kpiData) => {
     console.log('\u2705 Charts extrahiert:', { timeline: !!timelineImg, topicRating: !!topicRatingImg });
 
     // ═════════════════════════════════════════════════════════════════════════
-    // SEITE 1: TITELSEITE
+    // SEITE 1: TITELSEITE — Dark Hero + Executive Summary (2×2)
     // ═════════════════════════════════════════════════════════════════════════
 
-    // Dunkler Header-Bereich (obere 42% der Seite)
-    const headerH = 125;
-    doc.setFillColor(...COLORS.dark);
-    doc.rect(0, 0, PAGE.width, headerH, 'F');
+    // Dark Hero-Bereich (obere ~38% der Seite)
+    const heroH = 110;
+    doc.setFillColor(...COLORS.slate900);
+    doc.rect(0, 0, PAGE.width, heroH, 'F');
 
-    // Subtiler Gradient-Effekt
-    doc.setFillColor(...COLORS.darkAlt);
-    doc.rect(0, headerH - 25, PAGE.width, 25, 'F');
+    // Tonaler Akzentbalken oben (indigo)
+    doc.setFillColor(...COLORS.indigo500);
+    doc.rect(0, 0, PAGE.width, 3, 'F');
 
-    // Akzentlinie oben
-    doc.setFillColor(...COLORS.primary);
-    doc.rect(0, 0, PAGE.width, 2.5, 'F');
-
-    // Kleines Logo-Icon (abstrakt: Balken-Diagramm)
-    const logoX = PAGE.width / 2;
-    const logoY = 38;
-    doc.setFillColor(...COLORS.primary);
-    doc.roundedRect(logoX - 14, logoY, 5, 18, 1, 1, 'F');
-    doc.setFillColor(...COLORS.accent);
-    doc.roundedRect(logoX - 6, logoY - 6, 5, 24, 1, 1, 'F');
-    doc.setFillColor(...COLORS.primary);
-    doc.roundedRect(logoX + 2, logoY - 3, 5, 21, 1, 1, 'F');
-    doc.setFillColor(...COLORS.accent);
-    doc.roundedRect(logoX + 10, logoY + 4, 5, 14, 1, 1, 'F');
-
-    // Haupttitel
-    doc.setFontSize(30);
+    // Brand-Mark (weißes Quadrat mit "A" — wie im Dashboard-Rail)
+    const brandY = 22;
+    const brandX = PAGE.width / 2;
+    doc.setFillColor(...COLORS.slate0);
+    doc.roundedRect(brandX - 9, brandY, 18, 18, 3, 3, 'F');
+    doc.setFontSize(15);
     doc.setFont('helvetica', 'bold');
-    doc.setTextColor(...COLORS.white);
-    doc.text('Analytics Report', PAGE.width / 2, 82, { align: 'center' });
+    doc.setTextColor(...COLORS.slate900);
+    doc.text('A', brandX, brandY + 13, { align: 'center' });
 
-    // Firmenname
-    doc.setFontSize(18);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(...COLORS.primaryLight);
-    doc.text(companyName, PAGE.width / 2, 95, { align: 'center' });
+    // Eyebrow (mono, hell)
+    doc.setFontSize(8);
+    doc.setFont('courier', 'bold');
+    doc.setTextColor(150, 163, 184); // slate-400 hellaufgehellt für Dark-Bg
+    doc.text('AGB-ANALYSIS · ANALYTICS REPORT', PAGE.width / 2, brandY + 28, { align: 'center' });
 
-    // Dekorative Linie
-    doc.setDrawColor(...COLORS.primary);
-    doc.setLineWidth(0.8);
-    doc.line(PAGE.width / 2 - 30, 102, PAGE.width / 2 + 30, 102);
+    // Haupttitel — Firmenname (groß, weiß)
+    doc.setFontSize(28);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...COLORS.slate0);
+    let titleDisplay = String(companyName);
+    while (titleDisplay.length > 1 && doc.getTextWidth(titleDisplay) > PAGE.contentWidth - 20) {
+        titleDisplay = titleDisplay.slice(0, -1);
+    }
+    if (titleDisplay !== String(companyName)) titleDisplay = titleDisplay.slice(0, -1) + '\u2026';
+    doc.text(titleDisplay, PAGE.width / 2, brandY + 47, { align: 'center' });
 
-    // Datum
-    const now = new Date();
-    const dateStr = now.toLocaleDateString('de-DE', {
-        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
-    });
-    const timeStr = now.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
-
+    // Subtitle — leicht heller blau-grau
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
-    doc.setTextColor(...COLORS.textLight);
-    doc.text(`${dateStr}, ${timeStr} Uhr`, PAGE.width / 2, 113, { align: 'center' });
+    doc.setTextColor(190, 200, 220);
+    doc.text('Übersicht aller Bewertungen, Topics und Trends', PAGE.width / 2, brandY + 56, { align: 'center' });
 
-    // ─── Executive Summary Box ──────────────────────────────────────────
-    const sumY = headerH + 15;
-    const sumW = PAGE.contentWidth;
-    const sumH = 68;
-    const sumX = PAGE.marginLeft;
+    // Dünne Trennlinie unter dem Titel
+    doc.setDrawColor(...COLORS.indigo500);
+    doc.setLineWidth(0.5);
+    doc.line(PAGE.width / 2 - 18, brandY + 62, PAGE.width / 2 + 18, brandY + 62);
 
-    doc.setFillColor(...COLORS.white);
-    doc.setDrawColor(...COLORS.border);
-    doc.setLineWidth(0.4);
-    doc.roundedRect(sumX, sumY, sumW, sumH, 4, 4, 'FD');
+    // Datum (mono, hell)
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('de-DE', {
+        day: '2-digit', month: 'long', year: 'numeric'
+    });
+    const timeStr = now.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+    doc.setFontSize(8);
+    doc.setFont('courier', 'normal');
+    doc.setTextColor(150, 163, 184);
+    doc.text(`${dateStr.toUpperCase()} · ${timeStr} UHR`, PAGE.width / 2, brandY + 70, { align: 'center' });
 
-    // Linker Akzentstreifen
-    doc.setFillColor(...COLORS.primary);
-    doc.roundedRect(sumX, sumY, 3, sumH, 4, 4, 'F');
-    doc.setFillColor(...COLORS.white);
-    doc.rect(sumX + 2, sumY, 3, sumH, 'F');
+    // ─── Executive Summary — 4 horizontale Karten (gleich wie Dashboard) ──
+    const exY = heroH + 14;
 
-    // Summary-Titel
-    doc.setFontSize(13);
+    // Eyebrow + Titel
+    doc.setFontSize(7);
+    doc.setFont('courier', 'bold');
+    doc.setTextColor(...COLORS.slate500);
+    doc.text('EXECUTIVE SUMMARY', PAGE.marginLeft, exY);
+
+    doc.setFontSize(14);
     doc.setFont('helvetica', 'bold');
-    doc.setTextColor(...COLORS.dark);
-    doc.text('Executive Summary', sumX + 12, sumY + 11);
+    doc.setTextColor(...COLORS.slate900);
+    doc.text('Kennzahlen', PAGE.marginLeft, exY + 7);
 
-    // Trennlinie unter Titel
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(...COLORS.slate500);
+    doc.text('Karte anklicken öffnet Detailansicht', PAGE.contentRight, exY + 7, { align: 'right' });
+
     doc.setDrawColor(...COLORS.border);
     doc.setLineWidth(0.2);
-    doc.line(sumX + 12, sumY + 14, sumX + sumW - 10, sumY + 14);
+    doc.line(PAGE.marginLeft, exY + 10, PAGE.contentRight, exY + 10);
 
-    // Summary-Inhalte als 2x2-Grid
-    const gridX1 = sumX + 14;
-    const gridX2 = sumX + sumW / 2 + 5;
-    let gridY = sumY + 22;
-    const gridLineH = 12;
+    // 4 horizontale Karten — größere Höhe (52mm) für lange Topic-Namen
+    const exGridY = exY + 16;
+    const exGap = 4;
+    const exCardW = (PAGE.contentWidth - 3 * exGap) / 4;
+    const exCardH = 52;
 
-    // Gesamtbewertung
-    doc.setFontSize(8.5);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(...COLORS.textMuted);
-    doc.text('GESAMTBEWERTUNG', gridX1, gridY);
-    doc.setFontSize(16);
-    doc.setFont('helvetica', 'bold');
-    const scoreColor = avgScore > 3 ? COLORS.green : avgScore >= 2 ? COLORS.dark : COLORS.red;
-    doc.setTextColor(...scoreColor);
-    doc.text(avgScore !== '-' ? `${avgScore} / 5.0` : '\u2013', gridX1, gridY + 8);
+    // 1. Ø Score
+    const _scoreNumT = avgScore !== '-' ? Number(avgScore) : NaN;
+    drawKPICard(doc, PAGE.marginLeft, exGridY, exCardW, exCardH, {
+        label: 'Ø Score', value: avgScore !== '-' ? String(avgScore).replace('.', ',') : '\u2013',
+        badge: '/ 5', tone: Number.isFinite(_scoreNumT) ? scoreTone(_scoreNumT) : 'neutral',
+        footer: 'alle Quellen',
+    });
 
-    // Trend
-    doc.setFontSize(8.5);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(...COLORS.textMuted);
-    doc.text('ENTWICKLUNG', gridX2, gridY);
-    doc.setFontSize(16);
-    doc.setFont('helvetica', 'bold');
+    // 2. Trend 12M
+    let _tValT = '\u2013', _tToneT = 'neutral', _tFootT = 'vs. Vorjahr', _tBadgeT = null;
     if (trend?.avgDelta) {
         const tv = parseFloat(trend.avgDelta);
-        const tColor = tv > 0.05 ? COLORS.green : tv < -0.05 ? COLORS.red : COLORS.textMuted;
-        doc.setTextColor(...tColor);
-        doc.text(`${tv > 0 ? '+' : ''}${trend.avgDelta}`, gridX2, gridY + 8);
-    } else {
-        doc.setTextColor(...COLORS.textLight);
-        doc.text('\u2013', gridX2, gridY + 8);
+        _tValT = `${tv > 0 ? '+' : ''}${trend.avgDelta.replace('.', ',')}`;
+        _tToneT = tv > 0.05 ? 'good' : tv < -0.05 ? 'bad' : 'neutral';
+        _tBadgeT = tv > 0.05 ? 'steigend' : tv < -0.05 ? 'sinkend' : 'stabil';
     }
+    drawKPICard(doc, PAGE.marginLeft + (exCardW + exGap), exGridY, exCardW, exCardH, {
+        label: 'Trend 12M', value: _tValT, badge: _tBadgeT, tone: _tToneT, footer: _tFootT,
+    });
 
-    gridY += gridLineH + 14;
+    // 3. Most Critical
+    const _critValT = mostCritical?.topicName && mostCritical.topicName !== '-'
+        ? mostCritical.topicName : '\u2013';
+    const _critBadgeT = mostCritical?.score ? `${String(mostCritical.score).replace('.', ',')} / 5` : null;
+    const _critToneT = mostCritical
+        ? (Number(mostCritical.score) >= 3.5 ? 'good' : Number(mostCritical.score) >= 2.5 ? 'warn' : 'bad')
+        : 'neutral';
+    drawKPICard(doc, PAGE.marginLeft + 2 * (exCardW + exGap), exGridY, exCardW, exCardH, {
+        label: 'Most Critical', value: _critValT, badge: _critBadgeT, tone: _critToneT,
+        footer: 'niedrigster Topic-Score',
+    });
 
-    // Kritischer Bereich
-    doc.setFontSize(8.5);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(...COLORS.textMuted);
-    doc.text('KRITISCHER BEREICH', gridX1, gridY);
-    doc.setFontSize(11);
-    doc.setFont('helvetica', 'bold');
-    if (mostCritical && mostCritical.topicName !== '-') {
-        doc.setTextColor(...COLORS.red);
-        const critName = mostCritical.topicName.length > 28 ? mostCritical.topicName.substring(0, 28) + '\u2026' : mostCritical.topicName;
-        doc.text(critName, gridX1, gridY + 7);
-    } else {
-        doc.setTextColor(...COLORS.textLight);
-        doc.text('\u2013', gridX1, gridY + 7);
-    }
+    // 4. Negative Topic
+    const _negValT = (negativeTopic && negativeTopic !== '-') ? negativeTopic : '\u2013';
+    drawKPICard(doc, PAGE.marginLeft + 3 * (exCardW + exGap), exGridY, exCardW, exCardH, {
+        label: 'Negative Topic', value: _negValT,
+        tone: (negativeTopic && negativeTopic !== '-') ? 'bad' : 'neutral',
+        footer: 'höchste Negativrate',
+    });
 
-    // Verbesserungspotenzial
-    doc.setFontSize(8.5);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(...COLORS.textMuted);
-    doc.text('VERBESSERUNGSPOTENZIAL', gridX2, gridY);
-    doc.setFontSize(11);
-    doc.setFont('helvetica', 'bold');
-    if (negativeTopic && negativeTopic !== '-') {
-        doc.setTextColor(...COLORS.orange);
-        const negText = negativeTopic.length > 28 ? negativeTopic.substring(0, 28) + '\u2026' : negativeTopic;
-        doc.text(negText, gridX2, gridY + 7);
-    } else {
-        doc.setTextColor(...COLORS.textLight);
-        doc.text('\u2013', gridX2, gridY + 7);
-    }
+    // ─── Inhaltsverzeichnis (am unteren Rand) ──────────────────────────
+    const tocY = exGridY + exCardH + 22;
 
-    // ─── Inhaltsverzeichnis ─────────────────────────────────────────────
-    const tocY = sumY + sumH + 18;
-    doc.setFontSize(11);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(...COLORS.dark);
-    doc.text('Inhalt', PAGE.marginLeft + 12, tocY);
+    // Eyebrow
+    doc.setFontSize(7);
+    doc.setFont('courier', 'bold');
+    doc.setTextColor(...COLORS.slate500);
+    doc.text('INHALT', PAGE.marginLeft, tocY);
 
+    // Titel
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...COLORS.slate900);
+    doc.text('Auf den folgenden Seiten', PAGE.marginLeft, tocY + 7);
+
+    // Trennlinie
     doc.setDrawColor(...COLORS.border);
     doc.setLineWidth(0.2);
-    doc.line(PAGE.marginLeft + 12, tocY + 2, PAGE.marginLeft + 80, tocY + 2);
+    doc.line(PAGE.marginLeft, tocY + 10, PAGE.contentRight, tocY + 10);
 
-    let tocItemY = tocY + 10;
+    let tocItemY = tocY + 18;
     let pageCounter = 2;
     const tocItems = [];
 
-    tocItems.push(['KPI-\u00dcbersicht & Timeline', pageCounter]);
+    tocItems.push(['KPI-Übersicht & Timeline', pageCounter]);
     if (topicRatingImg) { pageCounter++; tocItems.push(['Topic-Bewertungen', pageCounter]); }
-    if (topicOverviewData?.topics?.length) { pageCounter++; tocItems.push(['Topic-\u00dcbersicht (Tabelle)', pageCounter]); }
+    if (topicOverviewData?.topics?.length) { pageCounter++; tocItems.push(['Topic-Übersicht (Tabelle)', pageCounter]); }
 
     tocItems.forEach(([title, page], idx) => {
-        doc.setFontSize(10);
+        // Index in mono
+        doc.setFontSize(9);
+        doc.setFont('courier', 'normal');
+        doc.setTextColor(...COLORS.slate400);
+        doc.text(String(idx + 1).padStart(2, '0'), PAGE.marginLeft, tocItemY);
+
+        // Titel
+        doc.setFontSize(11);
         doc.setFont('helvetica', 'normal');
-        doc.setTextColor(...COLORS.text);
-        doc.text(`${idx + 1}.`, PAGE.marginLeft + 14, tocItemY);
-        doc.text(title, PAGE.marginLeft + 22, tocItemY);
+        doc.setTextColor(...COLORS.slate800);
+        doc.text(title, PAGE.marginLeft + 11, tocItemY);
 
         // Gepunktete Linie
-        doc.setDrawColor(...COLORS.textLight);
+        doc.setDrawColor(...COLORS.slate300);
         doc.setLineWidth(0.15);
         doc.setLineDashPattern([0.5, 1.5], 0);
         const textW = doc.getTextWidth(title);
-        doc.line(PAGE.marginLeft + 24 + textW, tocItemY - 0.5, PAGE.contentRight - 16, tocItemY - 0.5);
+        doc.line(PAGE.marginLeft + 13 + textW, tocItemY - 1, PAGE.contentRight - 14, tocItemY - 1);
         doc.setLineDashPattern([], 0);
 
-        doc.setFont('helvetica', 'bold');
-        doc.setTextColor(...COLORS.primary);
-        doc.text(String(page), PAGE.contentRight - 10, tocItemY, { align: 'right' });
+        // Seitenzahl
+        doc.setFont('courier', 'bold');
+        doc.setFontSize(10);
+        doc.setTextColor(...COLORS.indigo600);
+        doc.text(String(page).padStart(2, '0'), PAGE.contentRight, tocItemY, { align: 'right' });
 
-        tocItemY += 7;
+        tocItemY += 9;
     });
 
 
@@ -770,52 +876,67 @@ export const exportKPIsAsPDF = async (kpiData) => {
     doc.setFillColor(...COLORS.bgLight);
     doc.rect(0, 0, PAGE.width, PAGE.height, 'F');
 
-    let y = addSectionTitle(doc, 'KPI-\u00dcbersicht', PAGE.marginTop + 5, 'Zentrale Kennzahlen des Unternehmens auf einen Blick');
+    let y = addSectionTitle(
+        doc,
+        'Kennzahlen',
+        PAGE.marginTop + 5,
+        'Score, Trend und kritische Themen auf einen Blick',
+        'Übersicht'
+    );
 
-    // 4 KPI-Karten in einer Reihe (volle Breite nutzen)
-    const cardGap = 5;
+    // 4 KPI-Karten in einer Reihe — gleiche Höhe wie auf der Titelseite (52mm)
+    const cardGap = 4;
     const cardCount = 4;
     const cardW = (PAGE.contentWidth - (cardCount - 1) * cardGap) / cardCount;
-    const cardH = 38;
+    const cardH = 52;
     const cardStartX = PAGE.marginLeft;
 
-    // Ø Score
-    const scoreVal = avgScore !== '-' ? String(avgScore) : '\u2013';
-    const sColor = avgScore > 3 ? COLORS.green : avgScore >= 2 ? COLORS.dark : avgScore !== '-' ? COLORS.red : COLORS.textLight;
+    // Ø Score — tonal nach Wert
+    const scoreNum = avgScore !== '-' ? Number(avgScore) : NaN;
+    const scoreVal = avgScore !== '-' ? String(avgScore).replace('.', ',') : '\u2013';
+    const scoreCardTone = Number.isFinite(scoreNum) ? scoreTone(scoreNum) : 'neutral';
     drawKPICard(doc, cardStartX, y, cardW, cardH, {
-        label: '\u00d8 Score', value: scoreVal, valueColor: sColor,
+        label: '\u00d8 Score', value: scoreVal, badge: '/ 5',
+        tone: scoreCardTone, footer: 'alle Quellen',
     });
 
     // Trend
-    let trendVal = '\u2013';
-    let tColor = COLORS.textLight;
+    let trendVal = '\u2013', trendCardTone = 'neutral', trendFooter = 'vs. Vorjahr', trendBadge = null;
     if (trend?.avgDelta) {
         const tv = parseFloat(trend.avgDelta);
-        trendVal = `${tv > 0 ? '+' : ''}${trend.avgDelta}`;
-        tColor = tv > 0.05 ? COLORS.green : tv < -0.05 ? COLORS.red : COLORS.textMuted;
+        trendVal = `${tv > 0 ? '+' : ''}${trend.avgDelta.replace('.', ',')}`;
+        trendCardTone = tv > 0.05 ? 'good' : tv < -0.05 ? 'bad' : 'neutral';
+        trendBadge = tv > 0.05 ? 'steigend' : tv < -0.05 ? 'sinkend' : 'stabil';
     }
     drawKPICard(doc, cardStartX + cardW + cardGap, y, cardW, cardH, {
-        label: 'Trend', value: trendVal, valueColor: tColor,
+        label: 'Trend 12M', value: trendVal, badge: trendBadge,
+        tone: trendCardTone, footer: trendFooter,
     });
 
-    // Most Critical
+    // Most Critical — Tone nach Score
     const critVal = (mostCritical && mostCritical.topicName !== '-') ? mostCritical.topicName : '\u2013';
-    const critBadge = (mostCritical && mostCritical.score) ? String(mostCritical.score) : null;
+    const critBadge = (mostCritical && mostCritical.score) ? `${String(mostCritical.score).replace('.', ',')} / 5` : null;
+    const critCardTone = mostCritical
+        ? (Number(mostCritical.score) >= 3.5 ? 'good' : Number(mostCritical.score) >= 2.5 ? 'warn' : 'bad')
+        : 'neutral';
     drawKPICard(doc, cardStartX + 2 * (cardW + cardGap), y, cardW, cardH, {
-        label: 'Most Critical', value: critVal, valueColor: COLORS.red, badge: critBadge, badgeColor: COLORS.red,
+        label: 'Most Critical', value: critVal, badge: critBadge,
+        tone: critCardTone, footer: 'niedrigster Topic-Score',
     });
 
     // Negative Topic
     const negVal = (negativeTopic && negativeTopic !== '-') ? negativeTopic : '\u2013';
     drawKPICard(doc, cardStartX + 3 * (cardW + cardGap), y, cardW, cardH, {
-        label: 'Neg. Topic', value: negVal, valueColor: COLORS.orange,
+        label: 'Negative Topic', value: negVal,
+        tone: (negativeTopic && negativeTopic !== '-') ? 'bad' : 'neutral',
+        footer: 'höchste Negativrate',
     });
 
     y += cardH + 10;
 
     // ─── Timeline-Chart direkt auf der KPI-Seite ────────────────────────
     if (timelineImg) {
-        y = addSectionTitle(doc, 'Timeline-Analyse', y, 'Entwicklung der Bewertungen \u00fcber die Zeit');
+        y = addSectionTitle(doc, 'Timeline', y, 'Historische Bewertungen + Prognose der nächsten Monate', 'Zeitreihe · Historie & Prognose');
 
         // Filter-Box
         if (timelineFilters) {
@@ -852,8 +973,8 @@ export const exportKPIsAsPDF = async (kpiData) => {
         doc.setFillColor(...COLORS.bgLight);
         doc.rect(0, 0, PAGE.width, PAGE.height, 'F');
 
-        let y2 = addSectionTitle(doc, 'Topic-Bewertungen', PAGE.marginTop + 5,
-            'Durchschnittliche Bewertung der verschiedenen Themenbereiche');
+        let y2 = addSectionTitle(doc, 'Topics im Detail', PAGE.marginTop + 5,
+            'Durchschnittliche Bewertung pro Themen-Cluster über Zeit', 'Topic-Bewertungen');
 
         // Filter-Box
         if (topicRatingFilters) {
@@ -883,8 +1004,8 @@ export const exportKPIsAsPDF = async (kpiData) => {
         doc.setFillColor(...COLORS.bgLight);
         doc.rect(0, 0, PAGE.width, PAGE.height, 'F');
 
-        let yT = addSectionTitle(doc, 'Topic-\u00dcbersicht', PAGE.marginTop + 5,
-            'Detaillierte Aufstellung aller identifizierten Themenbereiche');
+        let yT = addSectionTitle(doc, 'Topic-Übersicht', PAGE.marginTop + 5,
+            'Alle identifizierten Topics mit Sentiment, Rating und Datenqualität', 'Topic-Cluster · Tabelle');
 
         // Datenquellen-Info
         const sourceL = topicOverviewData.sourceFilter === 'employee' ? 'Mitarbeiter'
@@ -942,15 +1063,20 @@ export const exportKPIsAsPDF = async (kpiData) => {
         ];
         const rowH = 7.5;
 
-        // Tabellen-Header zeichnen
+        // Tabellen-Header zeichnen — Linear-style: helle Slate-Background, kleine mono uppercase
         const drawTableHeader = (atY) => {
-            doc.setFillColor(...COLORS.dark);
-            doc.roundedRect(PAGE.marginLeft, atY - 4.5, PAGE.contentWidth, rowH + 1, 1.5, 1.5, 'F');
+            doc.setFillColor(...COLORS.slate50);
+            doc.rect(PAGE.marginLeft, atY - 4.5, PAGE.contentWidth, rowH + 1, 'F');
 
-            doc.setFontSize(7.5);
-            doc.setFont('helvetica', 'bold');
-            doc.setTextColor(...COLORS.white);
-            cols.forEach(c => doc.text(c.label, c.x, atY));
+            // Untere Trennlinie
+            doc.setDrawColor(...COLORS.border);
+            doc.setLineWidth(0.3);
+            doc.line(PAGE.marginLeft, atY + rowH - 3.5, PAGE.contentRight, atY + rowH - 3.5);
+
+            doc.setFontSize(7);
+            doc.setFont('courier', 'bold');
+            doc.setTextColor(...COLORS.slate500);
+            cols.forEach(c => doc.text(String(c.label).toUpperCase(), c.x, atY));
 
             return atY + rowH + 2;
         };
@@ -970,35 +1096,42 @@ export const exportKPIsAsPDF = async (kpiData) => {
                 yT = drawTableHeader(yT);
             }
 
-            // Zeilen-Hintergrund
-            if (idx % 2 === 0) {
-                doc.setFillColor(...COLORS.white);
-            } else {
-                doc.setFillColor(241, 245, 249); // slate-100
-            }
+            // Zeilen-Hintergrund \u2014 nur dezente Trennlinie, kein Zebra
+            doc.setFillColor(...COLORS.white);
             doc.rect(PAGE.marginLeft, yT - 4.5, PAGE.contentWidth, rowH, 'F');
+            doc.setDrawColor(...COLORS.slate100);
+            doc.setLineWidth(0.15);
+            doc.line(PAGE.marginLeft, yT + rowH - 4.5, PAGE.contentRight, yT + rowH - 4.5);
 
             doc.setFontSize(7.5);
             doc.setFont('helvetica', 'normal');
 
             // Topic-Name
-            doc.setTextColor(...COLORS.text);
+            doc.setTextColor(...COLORS.slate900);
             const tName = topic.topic.length > 35 ? topic.topic.substring(0, 35) + '\u2026' : topic.topic;
             doc.setFont('helvetica', 'bold');
             doc.text(tName, cols[0].x, yT);
 
-            // Sentiment mit farbigem Punkt
-            doc.setFont('helvetica', 'normal');
+            // Sentiment als tonales Pill-Badge (wie im Dashboard)
+            doc.setFont('helvetica', 'bold');
             const rawSentiment = String(topic.sentiment || 'Neutral').replace(/[^\w\s\u00e4\u00f6\u00fc\u00c4\u00d6\u00dc\u00df-]/g, '').trim();
-            let sentColor = COLORS.textMuted;
-            let sentDotColor = COLORS.textMuted;
-            if (rawSentiment === 'Positiv') { sentColor = COLORS.green; sentDotColor = COLORS.green; }
-            else if (rawSentiment === 'Negativ') { sentColor = COLORS.red; sentDotColor = COLORS.red; }
+            let sentBg = COLORS.slate100;
+            let sentText = COLORS.slate600;
+            let sentDot = COLORS.slate400;
+            if (rawSentiment === 'Positiv') { sentBg = COLORS.emerald50; sentText = COLORS.emerald700; sentDot = COLORS.emerald500; }
+            else if (rawSentiment === 'Negativ') { sentBg = COLORS.rose50; sentText = COLORS.rose700; sentDot = COLORS.rose500; }
+            else if (rawSentiment === 'Gemischt') { sentBg = COLORS.amber50; sentText = COLORS.amber700; sentDot = COLORS.amber500; }
 
-            doc.setFillColor(...sentDotColor);
-            doc.circle(cols[1].x + 1, yT - 1.5, 1.2, 'F');
-            doc.setTextColor(...sentColor);
-            doc.text(rawSentiment || 'Neutral', cols[1].x + 4, yT);
+            const sentLabel = rawSentiment || 'Neutral';
+            const sentBadgeW = doc.getTextWidth(sentLabel) + 8;
+            doc.setFillColor(...sentBg);
+            doc.roundedRect(cols[1].x - 1, yT - 3.5, sentBadgeW, 5, 2.5, 2.5, 'F');
+            doc.setFillColor(...sentDot);
+            doc.circle(cols[1].x + 2, yT - 1, 0.9, 'F');
+            doc.setTextColor(...sentText);
+            doc.setFontSize(7);
+            doc.text(sentLabel, cols[1].x + 4.5, yT);
+            doc.setFontSize(7.5);
 
             // Rating mit Farbe
             const rating = topic.avgRating ? topic.avgRating.toFixed(1) : '\u2013';
@@ -1014,28 +1147,30 @@ export const exportKPIsAsPDF = async (kpiData) => {
             doc.setTextColor(...COLORS.text);
             doc.text(String(topic.frequency || 0), cols[3].x, yT);
 
-            // Datenqualität
+            // Datenqualität — tonale Badge wie im Dashboard
             const riskLevel = topic.statistical_meta?.risk_level;
             let qualText = '\u2013';
-            let qualColor = COLORS.textLight;
+            let qualText_color = COLORS.slate500;
             let qualBg = null;
             switch (riskLevel) {
-                case 'limited':     qualText = 'Begrenzt';       qualColor = COLORS.red;    qualBg = COLORS.redLight;    break;
-                case 'constrained': qualText = 'Eingeschr\u00e4nkt';  qualColor = COLORS.orange; qualBg = COLORS.orangeLight; break;
-                case 'acceptable':  qualText = 'Akzeptabel';     qualColor = COLORS.yellow; qualBg = COLORS.yellowLight; break;
-                case 'solid':       qualText = 'Solide';         qualColor = COLORS.green;  qualBg = COLORS.greenLight;  break;
+                case 'limited':     qualText = 'Begrenzt';        qualText_color = COLORS.rose700;    qualBg = COLORS.rose50;    break;
+                case 'constrained': qualText = 'Eingeschr\u00e4nkt';   qualText_color = COLORS.amber700;   qualBg = COLORS.amber50;   break;
+                case 'acceptable':  qualText = 'Akzeptabel';      qualText_color = COLORS.amber700;   qualBg = COLORS.amber50;   break;
+                case 'solid':       qualText = 'Solide';          qualText_color = COLORS.emerald700; qualBg = COLORS.emerald50; break;
             }
 
-            // Badge-Hintergrund für Qualität
+            // Badge-Hintergrund (pill, rounded-full)
             if (qualBg) {
-                const badgeW = doc.getTextWidth(qualText) + 4;
+                doc.setFontSize(7);
+                doc.setFont('helvetica', 'bold');
+                const badgeW = doc.getTextWidth(qualText) + 4.5;
                 doc.setFillColor(...qualBg);
-                doc.roundedRect(cols[4].x - 1, yT - 3.5, badgeW, 5, 1, 1, 'F');
+                doc.roundedRect(cols[4].x - 1, yT - 3.5, badgeW, 5, 2.5, 2.5, 'F');
             }
-            doc.setTextColor(...qualColor);
+            doc.setTextColor(...qualText_color);
             doc.setFont('helvetica', 'bold');
             doc.setFontSize(7);
-            doc.text(qualText, cols[4].x, yT);
+            doc.text(qualText, cols[4].x + 1.25, yT);
 
             yT += rowH;
         });

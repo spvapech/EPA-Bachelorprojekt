@@ -9,7 +9,7 @@ import {
   ResponsiveContainer,
   Legend,
 } from "recharts"
-import { Filter, ChevronDown, Maximize2 } from "lucide-react"
+import { Filter, ChevronDown, Maximize2, Calendar, Hash, Eye, Check } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -21,6 +21,8 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { useEffect, useMemo, useState, memo } from "react"
 import { API_URL } from "@/config"
+import { ChartCardHeader, SourceToggle, DropdownPicker } from "./ChartHeader"
+import { Star } from "../../icons"
 
 const SOURCE_LABEL = {
   employee: "Mitarbeiter",
@@ -193,10 +195,8 @@ export const TopicRatingCard = memo(function TopicRatingCard({ companyId, onFilt
             const end = `${selectedYear}-12-31`
             url += `&start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`
           } else {
-            // Falls selectedYear noch nicht da ist: wir warten lieber auf den years-effect
-            // und fetchen nicht "alle Monate aller Jahre" (sonst flackert die UI)
-            setTopics([])
-            setRawData([])
+            // Falls selectedYear noch nicht da ist: warte auf years-effect
+            // (nicht topics/rawData wipen — sonst unmountet das Dialog kurz)
             setLoading(false)
             setRefreshing(false)
             return
@@ -349,6 +349,48 @@ export const TopicRatingCard = memo(function TopicRatingCard({ companyId, onFilt
     return Array.from(new Set(notes))
   }, [chartData])
 
+  // ── Summary-Stats unter dem Chart (Topic-weite Aggregation) ──────────────
+  // Berechnet: Datenpunkte, Ø über alle sichtbaren Topics,
+  // bestes / schlechtestes Topic basierend auf dem Durchschnitt.
+  const topicStats = useMemo(() => {
+    if (!chartData?.length || !visibleTopics?.length) return null
+
+    const nonGap = chartData.filter((r) => !r?._isGap)
+    if (!nonGap.length) return null
+
+    const perTopicAvg = {}
+    for (const t of visibleTopics) {
+      const vals = nonGap
+        .map((r) => Number(r?.[t]))
+        .filter((v) => Number.isFinite(v))
+      if (vals.length) {
+        perTopicAvg[t] = vals.reduce((s, v) => s + v, 0) / vals.length
+      }
+    }
+
+    const entries = Object.entries(perTopicAvg)
+    if (!entries.length) return null
+
+    const overall = entries.reduce((s, [, v]) => s + v, 0) / entries.length
+    const best  = entries.reduce((b, c) => (c[1] > b[1] ? c : b), entries[0])
+    const worst = entries.reduce((w, c) => (c[1] < w[1] ? c : w), entries[0])
+
+    return {
+      dataPoints: nonGap.length,
+      avgOverall: overall,
+      visibleCount: visibleTopics.length,
+      bestTopic:  { name: prettifyTopicKey(best[0]),  score: best[1]  },
+      worstTopic: { name: prettifyTopicKey(worst[0]), score: worst[1] },
+    }
+  }, [chartData, visibleTopics])
+
+  // Tonale Klassen wie im Dashboard (good ≥ 3.5, warn 2.5-3.5, bad < 2.5)
+  const scoreColorClass = (s) =>
+    !Number.isFinite(s) ? "text-slate-700"
+      : s >= 3.5 ? "text-emerald-700"
+      : s >= 2.5 ? "text-amber-700"
+      : "text-rose-700"
+
   // Export Filter-State nach außen (für PDF Export)
   useEffect(() => {
     if (onFiltersChange && !loading) {
@@ -371,6 +413,7 @@ export const TopicRatingCard = memo(function TopicRatingCard({ companyId, onFilt
   }, [source, granularity, selectedYear, visibleTopics, chartData, loading]);
 
   // Tooltip
+  // Tooltip — slate-900 dark style mit Mono-Zahlen
   const CustomTooltip = ({ active, payload, label }) => {
     if (!active || !payload?.length) return null
 
@@ -378,34 +421,38 @@ export const TopicRatingCard = memo(function TopicRatingCard({ companyId, onFilt
 
     if (gapInfo) {
       return (
-        <div className="bg-white border border-slate-200 rounded-lg shadow-lg p-3 max-w-[300px]">
-          <p className="font-semibold text-slate-800 mb-1">gab</p>
-          <p className="text-xs text-slate-600">Keine Bewertungen zwischen {gapInfo}.</p>
+        <div className="bg-slate-900 border border-slate-700 rounded-md shadow-lg px-3 py-2 text-[12px] max-w-[260px]">
+          <p className="font-mono text-[10px] tracking-[0.05em] uppercase text-slate-400 mb-1">Lücke</p>
+          <p className="text-amber-400 inline-flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+            Keine Bewertungen
+          </p>
+          <p className="text-slate-500 mt-0.5 text-[11px]">{gapInfo}</p>
         </div>
       )
     }
 
     const items = payload
-      .filter((p) => p.dataKey !== "_gapMarker" && !p.dataKey.endsWith("__gap") && p.value !== null && p.value !== undefined)
+      .filter((p) => p.dataKey !== "_gapMarker" && !p.dataKey.endsWith("__gap") && p.value != null)
       .sort((a, b) => (b.value ?? 0) - (a.value ?? 0))
 
     return (
-      <div className="bg-white border border-slate-200 rounded-lg shadow-lg p-3 max-w-[300px]">
-        <p className="font-semibold text-slate-800 mb-2">{label}</p>
-        <div className="space-y-1">
+      <div className="bg-slate-900 border border-slate-700 rounded-md shadow-lg px-3 py-2 text-[12px] max-w-[300px]">
+        <p className="font-mono text-[10px] tracking-[0.05em] uppercase text-slate-400 mb-1.5">{label}</p>
+        <div className="space-y-0.5">
           {items.map((p) => (
             <div key={p.dataKey} className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2 min-w-0">
+              <div className="flex items-center gap-1.5 min-w-0">
                 <span
-                  className="inline-block h-2.5 w-2.5 rounded-full flex-shrink-0"
+                  className="inline-block h-1.5 w-1.5 rounded-full flex-shrink-0"
                   style={{ backgroundColor: p.stroke }}
                 />
-                <span className="text-xs text-slate-700 truncate">
+                <span className="text-slate-300 truncate">
                   {prettifyTopicKey(p.dataKey)}
                 </span>
               </div>
-              <span className="text-xs font-bold text-slate-900">
-                {Number(p.value).toFixed(2)}
+              <span className="font-semibold tnum text-white">
+                {Number(p.value).toFixed(2).replace(".", ",")}
               </span>
             </div>
           ))}
@@ -415,201 +462,160 @@ export const TopicRatingCard = memo(function TopicRatingCard({ companyId, onFilt
   }
 
   // Filter UI
-  const FilterDropdowns = () => (
-    <div className="flex items-center gap-2 flex-wrap justify-end">
-      {/* Source Toggle Switch */}
-      <button
-        onClick={() => setSource(source === "employee" ? "candidates" : "employee")}
-        className="relative inline-flex items-center bg-slate-100 rounded-full p-1 h-9 cursor-pointer hover:bg-slate-150 transition-colors border border-slate-200 shadow-sm hover:shadow-md"
-      >
-        <div className="flex items-center">
-          <span
-            className={`relative z-10 px-4 py-1 text-sm font-medium transition-colors duration-300 ${
-              source === "employee" ? "text-white" : "text-slate-600"
-            }`}
-          >
-            Mitarbeiter
-          </span>
-          <span
-            className={`relative z-10 px-4 py-1 text-sm font-medium transition-colors duration-300 ${
-              source === "candidates" ? "text-white" : "text-slate-600"
-            }`}
-          >
-            Bewerber
-          </span>
-        </div>
-        {/* Sliding background */}
-        <div
-          className={`absolute top-1 bottom-1 rounded-full transition-all duration-300 ${
-            source === "employee" ? "bg-blue-500" : "bg-green-500"
-          }`}
-          style={{
-            left: source === "employee" ? "4px" : "50%",
-            right: source === "employee" ? "50%" : "4px",
-          }}
-        />
-      </button>
+  const FilterDropdowns = ({ compact = false }) => (
+    <>
+      <SourceToggle
+        value={source}
+        onChange={setSource}
+        compact={compact}
+        options={[
+          { value: "employee",   label: "Mitarbeiter", color: "#3b82f6", icon: true },
+          { value: "candidates", label: "Bewerber",    color: "#10b981", icon: true },
+        ]}
+      />
 
-      {/* Granularity */}
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="outline" className="rounded-full h-9 gap-2">
-            <Filter className="h-4 w-4" />
-            {GRANULARITY_LABEL[granularity]}
-            <ChevronDown className="h-4 w-4" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuItem onClick={() => { 
-            setGranularity("overall")
-            setSelectedYear(null) }}> ges. Zeitraum
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => {
-            setGranularity("year")
-              // selectedYear wird im years-effect automatisch auf "neuestes" gesetzt, falls null
-            }}> Jahr
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      <DropdownPicker
+        label="Zeit"
+        value={GRANULARITY_LABEL[granularity]}
+        icon={<Calendar />}
+        compact={compact}
+        options={[
+          { value: "overall", label: "ges. Zeitraum" },
+          { value: "year",    label: "Jahr" },
+        ]}
+        onChange={(v) => {
+          setGranularity(v)
+          if (v === "overall") setSelectedYear(null)
+        }}
+      />
 
-      {/* Year selector only for month-view */}
       {granularity === "year" && (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" className="rounded-full h-9 gap-2">
-              <Filter className="h-4 w-4" />
-              {selectedYear ? `Jahr ${selectedYear}` : "Jahr wählen"}
-              <ChevronDown className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            {years.length === 0 ? (
-              <DropdownMenuItem disabled>Keine Jahre</DropdownMenuItem>
-            ) : (
-              years.map((y) => (
-                <DropdownMenuItem key={y} onClick={() => setSelectedYear(y)}>
-                  {y}
-                </DropdownMenuItem>
-              ))
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <DropdownPicker
+          label="Jahr"
+          value={selectedYear ? String(selectedYear) : "—"}
+          compact={compact}
+          options={years.map((y) => ({ value: y, label: String(y) }))}
+          onChange={setSelectedYear}
+        />
       )}
 
-      {/* Topic Selector */}
+      {/* Topic multi-select dropdown */}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="outline" className="rounded-full h-9 gap-2">
-            <Filter className="h-4 w-4" />
-            Topics ({visibleTopics.length}/{(topics || []).length})
-            <ChevronDown className="h-4 w-4" />
-          </Button>
+          <button
+            title={`Topics ${visibleTopics.length}/${(topics || []).length}`}
+            className={[
+              "h-7 inline-flex items-center gap-1.5 rounded-md text-[12px] font-medium",
+              "bg-white text-slate-700 border border-slate-300 hover:bg-slate-50",
+              compact ? "px-2" : "px-2.5",
+              "[&_svg]:flex-none [&_svg]:w-3.5 [&_svg]:h-3.5",
+            ].join(" ")}
+          >
+            <Eye className="text-slate-500" />
+            {!compact && <span className="text-slate-500">Topics:</span>}
+            <span className="text-slate-900 tnum">{visibleTopics.length}/{(topics || []).length}</span>
+            <ChevronDown className="text-slate-400" />
+          </button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-64 max-h-[400px] overflow-y-auto">
-          <div className="p-2">
-            <div className="flex items-center justify-between mb-2 pb-2 border-b">
-              <span className="text-xs font-semibold text-slate-700">Topics auswählen</span>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  if (hiddenTopics.size === 0) {
-                    setHiddenTopics(new Set(topics || []))
-                  } else {
-                    setHiddenTopics(new Set())
-                  }
-                }}
-                className="text-xs text-blue-600 hover:text-blue-700 font-medium"
-              >
-                {hiddenTopics.size === 0 ? 'Alle abwählen' : 'Alle auswählen'}
-              </button>
-            </div>
-            <div className="space-y-1">
-              {(topics || []).map((t, idx) => {
-                const hidden = hiddenTopics.has(t)
-                return (
-                  <button
-                    key={t}
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      setHiddenTopics((prev) => {
-                        const next = new Set(prev)
-                        if (next.has(t)) next.delete(t)
-                        else next.add(t)
-                        return next
-                      })
-                    }}
-                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded hover:bg-slate-50 transition"
+        <DropdownMenuContent align="end" className="w-72 max-h-[420px] overflow-y-auto p-0">
+          <div className="px-3 py-2 border-b border-slate-200 bg-slate-50 flex items-center justify-between sticky top-0">
+            <span className="text-[11px] font-mono uppercase tracking-wider text-slate-500">Topics</span>
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                if (hiddenTopics.size === 0) setHiddenTopics(new Set(topics || []))
+                else setHiddenTopics(new Set())
+              }}
+              className="text-[11px] text-blue-700 hover:text-blue-800 font-medium"
+            >
+              {hiddenTopics.size === 0 ? "Alle abwählen" : "Alle auswählen"}
+            </button>
+          </div>
+          <div className="py-1">
+            {(topics || []).map((t, idx) => {
+              const hidden = hiddenTopics.has(t)
+              return (
+                <button
+                  key={t}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setHiddenTopics((prev) => {
+                      const next = new Set(prev)
+                      if (next.has(t)) next.delete(t)
+                      else next.add(t)
+                      return next
+                    })
+                  }}
+                  className="w-full flex items-center gap-2.5 px-3 py-1.5 hover:bg-slate-50 transition-colors text-left"
+                >
+                  <span
+                    className={[
+                      "w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 transition-colors",
+                      hidden ? "bg-white border-slate-300" : "bg-slate-900 border-slate-900",
+                    ].join(" ")}
                   >
-                    <div
-                      className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 ${
-                        hidden ? 'bg-white border-slate-300' : 'bg-blue-500 border-blue-500'
-                      }`}
-                    >
-                      {!hidden && (
-                        <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                        </svg>
-                      )}
-                    </div>
-                    <div
-                      className="w-3 h-3 rounded-full flex-shrink-0"
-                      style={{ backgroundColor: topicColor(idx) }}
-                    />
-                    <span className="text-xs text-slate-700 text-left flex-1">
-                      {prettifyTopicKey(t)}
-                    </span>
-                  </button>
-                )
-              })}
-            </div>
+                    {!hidden && <Check className="w-3 h-3 text-white" strokeWidth={3} />}
+                  </span>
+                  <span
+                    className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                    style={{ backgroundColor: topicColor(idx) }}
+                  />
+                  <span className={["text-[12px] flex-1 truncate", hidden ? "text-slate-400" : "text-slate-800"].join(" ")}>
+                    {prettifyTopicKey(t)}
+                  </span>
+                </button>
+              )
+            })}
           </div>
         </DropdownMenuContent>
       </DropdownMenu>
-    </div>
+    </>
   )
 
   const TopicChart = ({ height = 200 }) => (
     <ResponsiveContainer width="100%" height={height === "100%" ? "100%" : height}>
-      <LineChart data={chartData} margin={{ left: 0, right: 20, top: 5, bottom: 5 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+      <LineChart data={chartData} margin={{ left: 0, right: 16, top: 8, bottom: 5 }}>
+        <CartesianGrid strokeDasharray="2 4" stroke="#f1f5f9" vertical={false} />
         <XAxis
           dataKey="periodLabel"
-          tick={{ fontSize: 11, fill: "#64748b" }}
+          tick={{ fontSize: 10, fill: "#94a3b8" }}
           tickLine={false}
           axisLine={{ stroke: "#e2e8f0" }}
           interval="preserveStartEnd"
+          tickMargin={8}
         />
         <YAxis
           domain={[0, 5]}
-          tick={{ fontSize: 11, fill: "#64748b" }}
+          tick={{ fontSize: 10, fill: "#94a3b8" }}
           tickLine={false}
           axisLine={false}
+          width={32}
           tickFormatter={(v) => Number(v).toFixed(1)}
         />
-        <Tooltip content={<CustomTooltip />} />
-        <Legend
-          wrapperStyle={{ fontSize: 11, color: "#64748b" }}
-          formatter={(value) => prettifyTopicKey(value)}
+        <Tooltip
+          content={<CustomTooltip />}
+          cursor={{ stroke: "#cbd5e1", strokeWidth: 1, strokeDasharray: "3 3" }}
         />
 
         {visibleTopics.map((topic) => {
-          const colorIdx = (topics || []).indexOf(topic) // stabiler Index aus "topics"
+          const colorIdx = (topics || []).indexOf(topic)
+          const color = topicColor(Math.max(colorIdx, 0))
           return (
             <Line
               key={topic}
               type="monotone"
               dataKey={topic}
-              stroke={topicColor(Math.max(colorIdx, 0))}
-              strokeWidth={2.5}
-              dot={{ r: 4, strokeWidth: 0, fill: topicColor(Math.max(colorIdx, 0)) }}
-              activeDot={{ r: 6, strokeWidth: 0 }}
+              stroke={color}
+              strokeWidth={1.75}
+              dot={false}
+              activeDot={{ r: 4, fill: color, stroke: "#fff", strokeWidth: 2 }}
               connectNulls={false}
               name={prettifyTopicKey(topic)}
             />
           )
         })}
 
-        {/* Dashed gap bridge lines for each visible topic */}
+        {/* Dashed gap bridge lines for each visible topic — deutlich sichtbar */}
         {visibleTopics.map((topic) => {
           const colorIdx = (topics || []).indexOf(topic)
           return (
@@ -618,9 +624,9 @@ export const TopicRatingCard = memo(function TopicRatingCard({ companyId, onFilt
               type="monotone"
               dataKey={`${topic}__gap`}
               stroke={topicColor(Math.max(colorIdx, 0))}
-              strokeWidth={2}
-              strokeDasharray="6 4"
-              strokeOpacity={0.5}
+              strokeWidth={1.75}
+              strokeDasharray="5 3"
+              strokeOpacity={0.7}
               dot={false}
               activeDot={false}
               connectNulls={false}
@@ -648,151 +654,246 @@ export const TopicRatingCard = memo(function TopicRatingCard({ companyId, onFilt
 
 
 
-  // Loading State
-  if (loading) {
-    return (
-      <Card className="rounded-3xl shadow-sm">
-        <CardHeader className="flex flex-row items-center justify-between">
-          <div>
-            <CardTitle className="text-xl font-bold text-slate-800">Topic Bewertungen ⭐</CardTitle>
-            {/* <p className="text-sm text-slate-500 mt-1">Bewertungsanalyse nach Themen</p> */}
-          </div>
-          <FilterDropdowns />
-        </CardHeader>
-        <CardContent className="pb-4 pt-4">
-          <div className="h-[200px] flex items-center justify-center">
-            <div className="flex flex-col items-center gap-2">
-              {/* <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div> */}
-              {/* <p className="text-slate-500">Inhalt wird geladen...</p> */}
-              <p className="text-slate-500">Kein Firma ausgewählt</p>
+  // Single empty/error message used in both card + modal chart areas
+  const emptyMessage =
+    !companyId ? "Keine Firma ausgewählt"
+    : error    ? `Fehler: ${error}`
+    : (!chartData.length || !topics.length) ? "Keine Daten verfügbar"
+    : null
 
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-    )
-  }
-
-  // Error/empty
-  if (error || !chartData.length || !topics.length) {
-    return (
-      <Card className="rounded-3xl shadow-sm">
-        <CardHeader className="flex flex-row items-center justify-between">
-          <div>
-            <CardTitle className="text-xl font-bold text-slate-800">Topic Bewertungen (⭐)</CardTitle>
-            <p className="text-sm text-slate-500 mt-1">Durchschnittliche Sternbewertungen nach Themen</p>
-          </div>
-          <FilterDropdowns />
-        </CardHeader>
-        <CardContent className="pb-4 pt-4">
-          <div className="h-[200px] flex items-center justify-center">
-            <p className="text-slate-500">{error ? `Fehler: ${error}` : "Keine Daten verfügbar"}</p>
-          </div>
-        </CardContent>
-      </Card>
-    )
-  }
+  const showOverlay = loading || refreshing
+  const overlayLabel = loading ? "Daten werden geladen…" : "Daten werden aktualisiert…"
 
   return (
     <>
-      {/* Card */}
-      <Card
-        className="rounded-3xl shadow-sm cursor-pointer hover:shadow-md transition-all duration-200 group"
+      {/* Card — flex-col + h-full damit Stats am Boden sitzen */}
+      <div
+        className="group bg-white border border-slate-200 rounded-lg overflow-hidden shadow-xs hover:shadow-sm transition-shadow cursor-pointer flex flex-col h-full"
         onClick={() => setModalOpen(true)}
       >
-        <CardHeader className="flex flex-row items-center justify-between">
-          <div>
-            <CardTitle className="text-xl font-bold text-slate-800 flex items-center gap-2 whitespace-nowrap">
-              Topic Bewertungen (⭐)
-              <Maximize2 className="h-4 w-4 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity" />
-            </CardTitle>
-            {/* <p className="text-sm text-slate-500 mt-1">Bewertungsanalyse nach Themen</p> */}
-          </div>
+        <ChartCardHeader
+          icon={<Star />}
+          eyebrow="TOPIC-BEWERTUNGEN"
+          title="Topics im Detail"
+          subtitle={`${SOURCE_LABEL[source]} · ${visibleTopics.length}/${(topics || []).length} Topics${granularity === "year" && selectedYear ? ` · ${selectedYear}` : " · ges. Zeitraum"}`}
+          expandable
+          actions={<FilterDropdowns compact />}
+        />
 
-          <div onClick={(e) => e.stopPropagation()}>
-            <FilterDropdowns />
-          </div>
-        </CardHeader>
+        <div className="px-4 pt-4 pb-4 flex flex-col flex-1 min-h-0">
+          <div id="topic-rating-chart-export" className="relative h-[220px] w-full border-0 outline-none flex-shrink-0">
+            {emptyMessage && !showOverlay ? (
+              <div className="h-full flex items-center justify-center">
+                <p className="text-[13px] text-slate-500">{emptyMessage}</p>
+              </div>
+            ) : (
+              <TopicChart height={220} />
+            )}
 
-        <CardContent className="pb-4 pt-4">
-          <div id="topic-rating-chart-export" className="relative h-[200px] w-full border-0 outline-none">
-            <TopicChart height={200} />
-
-            {refreshing && (
-              <div className="absolute inset-0 bg-white/70 flex items-center justify-center rounded-xl">
+            {showOverlay && (
+              <div className="absolute inset-0 bg-white/70 flex items-center justify-center rounded-md pointer-events-none">
                 <div className="flex items-center gap-2">
-                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
-                  <p className="text-slate-600 text-sm">Daten werden geladen...</p>
+                  <div className="animate-spin rounded-full h-5 w-5 border-2 border-slate-200 border-t-slate-600"></div>
+                  <p className="text-slate-600 text-[12px]">{overlayLabel}</p>
                 </div>
               </div>
             )}
           </div>
 
+          {/* Externe Legende — gleiche Struktur wie Timeline-ChartLegend (mt-4) */}
+          {visibleTopics.length > 0 && !emptyMessage && (
+            <div className="mt-4 flex items-center justify-center gap-x-4 gap-y-1 flex-wrap text-[11px]">
+              {visibleTopics.slice(0, 6).map((topic) => {
+                const colorIdx = (topics || []).indexOf(topic)
+                return (
+                  <span key={topic} className="inline-flex items-center gap-1.5">
+                    <span
+                      className="inline-block w-3 h-1 rounded-full flex-none"
+                      style={{ background: topicColor(Math.max(colorIdx, 0)) }}
+                    />
+                    <span className="text-slate-600 truncate max-w-[120px]">
+                      {prettifyTopicKey(topic)}
+                    </span>
+                  </span>
+                )
+              })}
+              {visibleTopics.length > 6 && (
+                <span className="text-slate-400">+ {visibleTopics.length - 6}</span>
+              )}
+            </div>
+          )}
+
           {gapNotes.length > 0 && (
-            <p className="text-xs text-slate-500 text-center mt-2 italic flex items-center justify-center gap-1">
-              <span className="inline-block w-5 h-0 border-t-2 border-dashed border-slate-400"></span>
-              Gestrichelte Linie = Keine Bewertungen vorhanden ({gapNotes.join(", ")})
+            <p className="text-[11px] text-slate-500 text-center mt-2 italic flex items-center justify-center gap-1.5">
+              <span className="inline-block w-5 h-0 border-t border-dashed border-slate-400"></span>
+              Gestrichelte Linie = keine Bewertungen ({gapNotes.join(", ")})
             </p>
           )}
-          <p className="text-xs text-slate-400 text-center mt-2">Klicken zum Vergrößern</p>
-        </CardContent>
-      </Card>
+
+          {/* Spacer drückt Stats + Footer an den Karten-Boden */}
+          <div className="flex-1" />
+
+          {/* Summary-Stats unter dem Chart — identische Struktur wie Timeline-Card */}
+          {topicStats && (() => {
+            const avgTone = topicStats.avgOverall >= 3.5 ? "text-emerald-700"
+                          : topicStats.avgOverall >= 2.5 ? "text-amber-700"
+                          : "text-rose-700";
+            return (
+              <div className="mt-3 pt-3 border-t border-slate-100 grid grid-cols-3 divide-x divide-slate-100">
+                <div className="flex flex-col items-center text-center px-2">
+                  <span className="font-mono text-[10px] tracking-[0.06em] uppercase text-slate-500 mb-1">Datenpunkte</span>
+                  <span className="font-semibold tnum text-[16px] tracking-tight text-slate-900">
+                    {topicStats.dataPoints}
+                  </span>
+                </div>
+                <div className="flex flex-col items-center text-center px-2">
+                  <span className="font-mono text-[10px] tracking-[0.06em] uppercase text-slate-500 mb-1">Ø Score</span>
+                  <span className={`font-semibold tnum text-[16px] tracking-tight ${avgTone}`}>
+                    {topicStats.avgOverall.toFixed(2).replace(".", ",")}
+                  </span>
+                </div>
+                <div className="flex flex-col items-center text-center px-2">
+                  <span className="font-mono text-[10px] tracking-[0.06em] uppercase text-slate-500 mb-1">Topics</span>
+                  <span className="font-semibold tnum text-[16px] tracking-tight text-slate-900">
+                    {topicStats.visibleCount}
+                  </span>
+                </div>
+              </div>
+            );
+          })()}
+
+          <p className="text-[11px] text-slate-400 text-center mt-3">Karte anklicken zum Vergrössern</p>
+        </div>
+      </div>
 
       {/* Modal */}
       <Dialog open={modalOpen} onOpenChange={setModalOpen}>
         <DialogContent
-          className="overflow-hidden flex flex-col"
+          className="overflow-hidden flex flex-col p-0 gap-0"
           style={{ width: "90vw", maxWidth: "90vw", height: "85vh", maxHeight: "85vh" }}
         >
-          <DialogHeader className="flex flex-row items-center justify-between pb-2 flex-shrink-0">
-            <DialogTitle className="text-xl font-bold text-slate-800">Topics durchschnittliche Sternbewertungen ⭐</DialogTitle>
-            <div onClick={(e) => e.stopPropagation()}>
+          <span aria-hidden="true" className="block h-[3px] w-full bg-amber-500" />
+          <div className="px-5 py-4 pr-14 border-b border-slate-200 flex items-start justify-between gap-3 flex-shrink-0">
+            <div className="flex items-start gap-2.5">
+              <span className="w-9 h-9 rounded-md grid place-items-center bg-amber-50 text-amber-600 flex-none">
+                <Star className="w-[18px] h-[18px]" />
+              </span>
+              <div>
+                <p className="m-0 mb-0.5 font-mono text-[10px] tracking-[0.06em] uppercase text-slate-500 leading-none">
+                  TOPIC-BEWERTUNGEN · DETAILANSICHT
+                </p>
+                <DialogTitle className="m-0 text-[18px] leading-6 font-semibold tracking-tight text-slate-900">
+                  Topics im Detail
+                </DialogTitle>
+                <p className="m-0 mt-0.5 text-[11px] text-slate-500">
+                  {SOURCE_LABEL[source]} · {visibleTopics.length}/{(topics || []).length} Topics{granularity === "year" && selectedYear ? ` · ${selectedYear}` : " · ges. Zeitraum"}
+                </p>
+              </div>
+            </div>
+            <div onClick={(e) => e.stopPropagation()} className="flex items-center gap-1.5 flex-wrap justify-end">
               <FilterDropdowns />
             </div>
-          </DialogHeader>
+          </div>
 
-          <div className="flex-1 flex flex-col min-h-0">
+          <div className="flex-1 flex flex-col min-h-0 px-5 py-4">
             <div className="relative flex-1 min-h-0">
-              <TopicChart height="100%" />
+              {emptyMessage && !showOverlay ? (
+                <div className="h-full flex items-center justify-center">
+                  <p className="text-[13px] text-slate-500">{emptyMessage}</p>
+                </div>
+              ) : (
+                <TopicChart height="100%" />
+              )}
 
-              {refreshing && (
-                <div className="absolute inset-0 bg-white/70 flex items-center justify-center rounded-xl">
+              {showOverlay && (
+                <div className="absolute inset-0 bg-white/70 flex items-center justify-center rounded-md pointer-events-none">
                   <div className="flex items-center gap-2">
-                    <div className="animate-spin rounded-full h-7 w-7 border-b-2 border-blue-500"></div>
-                    <p className="text-slate-700 text-sm font-medium">Daten werden geladen...</p>
+                    <div className="animate-spin rounded-full h-6 w-6 border-2 border-slate-200 border-t-slate-600"></div>
+                    <p className="text-slate-700 text-[12px] font-medium">{overlayLabel}</p>
                   </div>
                 </div>
               )}
             </div>
 
-            <div className="mt-3 flex items-center justify-between flex-shrink-0">
+            {/* Externe Legende im Modal */}
+            {visibleTopics.length > 0 && !emptyMessage && (
+              <div className="mt-3 flex items-center justify-center gap-x-4 gap-y-1 flex-wrap text-[12px] flex-shrink-0">
+                {visibleTopics.map((topic) => {
+                  const colorIdx = (topics || []).indexOf(topic)
+                  return (
+                    <span key={topic} className="inline-flex items-center gap-1.5">
+                      <span
+                        className="inline-block w-3.5 h-1 rounded-full flex-none"
+                        style={{ background: topicColor(Math.max(colorIdx, 0)) }}
+                      />
+                      <span className="text-slate-600">{prettifyTopicKey(topic)}</span>
+                    </span>
+                  )
+                })}
+              </div>
+            )}
+
+            {/* Erweiterte Summary-Stats unter dem Chart */}
+            {topicStats && (
+              <div className="mt-4 pt-3 border-t border-slate-200 grid grid-cols-2 md:grid-cols-4 gap-3 flex-shrink-0">
+                <div className="text-center px-3 py-2 bg-slate-50 rounded-md border border-slate-200">
+                  <p className="font-mono text-[10px] tracking-[0.06em] uppercase text-slate-500 mb-1">Datenpunkte</p>
+                  <p className="text-[18px] font-semibold tnum text-slate-900">{topicStats.dataPoints}</p>
+                </div>
+                <div className={`text-center px-3 py-2 rounded-md border ${
+                  topicStats.avgOverall >= 3.5 ? "bg-emerald-50 border-emerald-200"
+                  : topicStats.avgOverall >= 2.5 ? "bg-amber-50 border-amber-200"
+                  : "bg-rose-50 border-rose-200"
+                }`}>
+                  <p className="font-mono text-[10px] tracking-[0.06em] uppercase text-slate-500 mb-1">Ø Score</p>
+                  <p className={`text-[18px] font-semibold tnum ${scoreColorClass(topicStats.avgOverall)}`}>
+                    {topicStats.avgOverall.toFixed(2).replace(".", ",")}
+                  </p>
+                </div>
+                <div className="text-center px-3 py-2 bg-emerald-50 rounded-md border border-emerald-200">
+                  <p className="font-mono text-[10px] tracking-[0.06em] uppercase text-slate-500 mb-1">Bestes Topic</p>
+                  <p className="text-[12px] font-semibold text-emerald-700 truncate" title={topicStats.bestTopic.name}>
+                    {topicStats.bestTopic.name}
+                  </p>
+                  <p className="text-[11px] tnum text-emerald-700 mt-0.5">
+                    Ø {topicStats.bestTopic.score.toFixed(2).replace(".", ",")}
+                  </p>
+                </div>
+                <div className="text-center px-3 py-2 bg-rose-50 rounded-md border border-rose-200">
+                  <p className="font-mono text-[10px] tracking-[0.06em] uppercase text-slate-500 mb-1">Schlechtestes Topic</p>
+                  <p className="text-[12px] font-semibold text-rose-700 truncate" title={topicStats.worstTopic.name}>
+                    {topicStats.worstTopic.name}
+                  </p>
+                  <p className="text-[11px] tnum text-rose-700 mt-0.5">
+                    Ø {topicStats.worstTopic.score.toFixed(2).replace(".", ",")}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            <div className="mt-3 flex items-center justify-between flex-shrink-0 gap-3 flex-wrap">
               <button
                 onClick={() => {
-                  // Setze auf Top 5 zurück: alle außer Top 5 werden hidden
-                  const toHide = (topics || []).filter(t => !top5Topics.includes(t))
+                  const toHide = (topics || []).filter((t) => !top5Topics.includes(t))
                   setHiddenTopics(new Set(toHide))
                 }}
-                className="text-xs text-slate-600 hover:text-slate-900 underline"
+                className="h-7 px-2.5 inline-flex items-center gap-1.5 rounded-md text-[12px] font-medium bg-white text-slate-700 border border-slate-300 hover:bg-slate-50"
               >
                 Top 5 anzeigen
-              </button> 
-              <p>
-                {gapNotes.length > 0 && (
-                <p className="flex items-center justify-center min-h-[30px] gap-1 text-xs text-slate-500 italic">
-                  <span className="inline-block w-5 h-0 border-t-2 border-dashed border-slate-400"></span>
-                  <span>
-                    Gestrichelte Linie = Keine Bewertungen vorhanden ({gapNotes.join(", ")})
-                  </span>
+              </button>
+
+              {gapNotes.length > 0 && (
+                <p className="flex items-center gap-1.5 text-[11px] text-slate-500 italic">
+                  <span className="inline-block w-5 h-0 border-t border-dashed border-slate-400"></span>
+                  Gestrichelte Linie = keine Bewertungen ({gapNotes.join(", ")})
                 </p>
               )}
-              </p>
 
-              <p className="text-xs text-slate-400">
+              <p className="text-[11px] text-slate-400">
                 {SOURCE_LABEL[source]} · {GRANULARITY_LABEL[granularity]}
                 {granularity === "year" && selectedYear ? ` · ${selectedYear}` : ""}
               </p>
             </div>
-            
           </div>
         </DialogContent>
       </Dialog>

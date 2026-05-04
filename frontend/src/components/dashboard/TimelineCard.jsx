@@ -1,5 +1,7 @@
 import * as React from "react"
 import {
+    AreaChart,
+    Area,
     LineChart,
     Line,
     XAxis,
@@ -9,8 +11,9 @@ import {
     ResponsiveContainer,
     ReferenceLine,
     Legend,
+    ComposedChart,
 } from "recharts"
-import { Filter, ChevronDown, Maximize2, X } from "lucide-react"
+import { Filter, ChevronDown, Maximize2, X, Activity, BarChart2, Calendar } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import {
@@ -27,6 +30,8 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { useState, useEffect, useMemo, useCallback, memo } from "react"
 import { API_URL } from "@/config"
+import { ChartCardHeader, SourceToggle, DropdownPicker } from "./ChartHeader"
+import { TrendUp as TrendUpIcon } from "../../icons"
 
 const SOURCE_LABEL = {
     employee: "Mitarbeiter",
@@ -150,6 +155,7 @@ export const TimelineCard = memo(function TimelineCard({ companyId, onFiltersCha
     const [timelineData, setTimelineData] = useState([])
     const [forecastData, setForecastData] = useState([])
     const [loading, setLoading] = useState(true)
+    const [refreshing, setRefreshing] = useState(false)
     const [error, setError] = useState(null)
     const [metric, setMetric] = useState("Ø Score")
     const [source, setSource] = useState("employee")
@@ -206,26 +212,26 @@ export const TimelineCard = memo(function TimelineCard({ companyId, onFiltersCha
         if (!companyId) return
 
         const fetchTimelineData = async () => {
+            // First load → full loading screen; subsequent refetches → silent overlay
+            const isFirst = timelineData.length === 0
+            isFirst ? setLoading(true) : setRefreshing(true)
             try {
-                setLoading(true)
                 setError(null)
 
                 // Calculate days based on granularity
                 let days = 3650 // Default: 10 years for "overall"
-                
+
                 if (granularity === "year") {
                     if (selectedYear) {
                         const now = new Date()
                         const yearStart = new Date(selectedYear, 0, 1)
-                        // Calculate days from today back to the start of the selected year
                         const daysToYearStart = Math.ceil((now - yearStart) / (1000 * 60 * 60 * 24))
-                        // Add buffer to ensure we get all data for that year (full year + extra)
                         days = daysToYearStart + 400
                     } else {
-                        // Wait for selectedYear to be set
                         setTimelineData([])
                         setForecastData([])
                         setLoading(false)
+                        setRefreshing(false)
                         return
                     }
                 }
@@ -241,8 +247,6 @@ export const TimelineCard = memo(function TimelineCard({ companyId, onFiltersCha
                 const data = await response.json()
 
                 let filteredTimeline = data.timeline || []
-                
-                // Filter by selected year if granularity is "year"
                 if (granularity === "year" && selectedYear) {
                     filteredTimeline = filteredTimeline.filter((item) => {
                         const itemYear = parseYear(item.date)
@@ -257,6 +261,7 @@ export const TimelineCard = memo(function TimelineCard({ companyId, onFiltersCha
                 setError(err.message)
             } finally {
                 setLoading(false)
+                setRefreshing(false)
             }
         }
 
@@ -483,353 +488,256 @@ export const TimelineCard = memo(function TimelineCard({ companyId, onFiltersCha
         }
     }, [metric, source, granularity, selectedYear, timelineData, forecastData, trendData]); // onFiltersChange NICHT in Dependencies!
 
-    // Custom tooltip
+    // Custom tooltip — slate-900 dark style mit Mono-Zahlen
     const CustomTooltip = ({ active, payload, label }) => {
-        if (active && payload && payload.length) {
-            const historicalValue = payload.find(p => p.dataKey === "historical")?.value
-            const forecastValue = payload.find(p => p.dataKey === "forecast")?.value
-            const dataPoint = payload[0]?.payload
-            const isMissing = dataPoint?._isMissing
+        if (!active || !payload?.length) return null
+        const historicalValue = payload.find(p => p.dataKey === "historical")?.value
+        const forecastValue = payload.find(p => p.dataKey === "forecast")?.value
+        const dataPoint = payload[0]?.payload
+        const isMissing = dataPoint?._isMissing
+        const fmtV = (v) => metric === "Anzahl" ? Math.round(v) : Number(v).toFixed(2).replace(".", ",")
 
-            if (isMissing) {
-                const gapValue = dataPoint?.historicalGap
-                return (
-                    <div className="bg-white border border-slate-200 rounded-lg shadow-lg p-3">
-                        <p className="font-semibold text-slate-800 mb-1">{label}</p>
-                        <p className="text-xs text-amber-600 flex items-center gap-1">
-                            <span>⚠️</span> Keine Daten vorhanden
+        return (
+            <div className="bg-slate-900 border border-slate-700 rounded-md shadow-lg px-3 py-2 text-[12px] min-w-[140px]">
+                <p className="font-mono text-[10px] tracking-[0.05em] uppercase text-slate-400 mb-1.5">{label}</p>
+                {isMissing ? (
+                    <>
+                        <p className="text-amber-400 inline-flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                            Interpolierter Wert
                         </p>
-                        {gapValue != null && (
-                            <p className="text-xs text-slate-400 mt-1">
-                                Interpolierter Wert: {metric === "Anzahl" ? Math.round(gapValue) : gapValue.toFixed(2)}
+                        {dataPoint?.historicalGap != null && (
+                            <p className="flex items-center justify-between gap-3 mt-1">
+                                <span className="text-slate-400">Wert</span>
+                                <span className="font-semibold tnum text-amber-300">{fmtV(dataPoint.historicalGap)}</span>
                             </p>
                         )}
-                    </div>
-                )
-            }
-
-            return (
-                <div className="bg-white border border-slate-200 rounded-lg shadow-lg p-3">
-                    <p className="font-semibold text-slate-800 mb-1">{label}</p>
-                    {metric === "Trend" && historicalValue !== null && historicalValue !== undefined && (
-                        <>
-                            <p className="text-blue-600 text-sm">
-                                Trend: <span className={`font-bold ${historicalValue >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                    {historicalValue >= 0 ? '+' : ''}{historicalValue.toFixed(2)}
+                    </>
+                ) : (
+                    <>
+                        {historicalValue != null && (
+                            <p className="flex items-center justify-between gap-3">
+                                <span className="inline-flex items-center gap-1.5 text-slate-400">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
+                                    {metric === "Trend" ? "Trend" : "Historisch"}
+                                </span>
+                                <span className={`font-semibold tnum ${
+                                    metric === "Trend"
+                                        ? (historicalValue >= 0 ? "text-emerald-400" : "text-rose-400")
+                                        : "text-white"
+                                }`}>
+                                    {metric === "Trend" && historicalValue >= 0 ? "+" : ""}
+                                    {fmtV(historicalValue)}
                                 </span>
                             </p>
-                            {dataPoint?.score !== null && dataPoint?.score !== undefined && (
-                                <p className="text-slate-600 text-xs mt-1">
-                                    Aktuell: <span className="font-semibold">{dataPoint.score.toFixed(2)}</span>
-                                </p>
-                            )}
-                            {dataPoint?.prevScore !== null && dataPoint?.prevScore !== undefined && (
-                                <p className="text-slate-500 text-xs">
-                                    Vorher: <span className="font-semibold">{dataPoint.prevScore.toFixed(2)}</span>
-                                </p>
-                            )}
-                        </>
-                    )}
-                    {metric !== "Trend" && historicalValue !== null && historicalValue !== undefined && (
-                        <p className="text-blue-600 text-sm">
-                            Historisch: <span className="font-bold">
-                                {metric === "Anzahl" 
-                                    ? Math.round(historicalValue) 
-                                    : historicalValue.toFixed(2)}
-                            </span>
-                        </p>
-                    )}
-                    {forecastValue !== null && forecastValue !== undefined && (
-                        <p className="text-orange-500 text-sm">
-                            {metric === "Trend" ? "Prognose Trend: " : "Prognose: "}
-                            <span className={`font-bold ${metric === "Trend" && forecastValue >= 0 ? 'text-green-600' : metric === "Trend" ? 'text-red-600' : ''}`}>
-                                {metric === "Trend" && forecastValue >= 0 ? '+' : ''}{forecastValue.toFixed(2)}
-                            </span>
-                        </p>
-                    )}
-                    {metric === "Ø Score" && dataPoint?.count && (
-                        <p className="text-slate-500 text-xs mt-1">
-                            Bewertungen: {dataPoint.count}
-                        </p>
-                    )}
-                </div>
-            )
-        }
-        return null
+                        )}
+                        {forecastValue != null && (
+                            <p className="flex items-center justify-between gap-3 mt-1">
+                                <span className="inline-flex items-center gap-1.5 text-slate-400">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-orange-400" />
+                                    Prognose
+                                </span>
+                                <span className={`font-semibold tnum ${
+                                    metric === "Trend"
+                                        ? (forecastValue >= 0 ? "text-emerald-400" : "text-rose-400")
+                                        : "text-orange-300"
+                                }`}>
+                                    {metric === "Trend" && forecastValue >= 0 ? "+" : ""}
+                                    {fmtV(forecastValue)}
+                                </span>
+                            </p>
+                        )}
+                        {metric === "Ø Score" && dataPoint?.count && (
+                            <p className="text-slate-500 mt-1.5 pt-1.5 border-t border-slate-700 tnum text-[11px]">
+                                {dataPoint.count} {dataPoint.count === 1 ? "Bewertung" : "Bewertungen"}
+                            </p>
+                        )}
+                    </>
+                )}
+            </div>
+        )
     }
 
     // Filter dropdowns component (reusable)
-    const FilterDropdowns = () => (
-        <div className="flex items-center gap-2 flex-wrap justify-end">
-            {/* Source Toggle Switch */}
-            <button
-                onClick={() => setSource(source === "employee" ? "candidates" : "employee")}
-                className="relative inline-flex items-center bg-slate-100 rounded-full p-1 h-9 cursor-pointer hover:bg-slate-150 transition-colors border border-slate-200 shadow-sm hover:shadow-md"
-            >
-                <div className="flex items-center">
-                    <span
-                        className={`relative z-10 px-4 py-1 text-sm font-medium transition-colors duration-300 ${
-                            source === "employee" ? "text-white" : "text-slate-600"
-                        }`}
-                    >
-                        Mitarbeiter
-                    </span>
-                    <span
-                        className={`relative z-10 px-4 py-1 text-sm font-medium transition-colors duration-300 ${
-                            source === "candidates" ? "text-white" : "text-slate-600"
-                        }`}
-                    >
-                        Bewerber
-                    </span>
-                </div>
-                {/* Sliding background */}
-                <div
-                    className={`absolute top-1 bottom-1 rounded-full transition-all duration-300 ${
-                        source === "employee" ? "bg-blue-500" : "bg-green-500"
-                    }`}
-                    style={{
-                        left: source === "employee" ? "4px" : "50%",
-                        right: source === "employee" ? "50%" : "4px",
-                    }}
-                />
-            </button>
+    // The Timeline shows historical data + forecast — granularity/year picker
+    // would be misleading here, so only Source + Metric are exposed.
+    const FilterDropdowns = ({ compact = false }) => (
+        <>
+            <SourceToggle
+                value={source}
+                onChange={setSource}
+                compact={compact}
+                options={[
+                    { value: "employee",   label: "Mitarbeiter", color: "#3b82f6", icon: true },
+                    { value: "candidates", label: "Bewerber",    color: "#10b981", icon: true },
+                ]}
+            />
 
-            <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                    <Button
-                        variant="outline"
-                        className="rounded-full h-9 gap-2"
-                    >
-                        <Filter className="h-4 w-4" />
-                        {metric}
-                        <ChevronDown className="h-4 w-4" />
-                    </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => setMetric("Ø Score")}>
-                        Ø Score
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setMetric("Trend")}>
-                        Trend
-                    </DropdownMenuItem>
-                </DropdownMenuContent>
-            </DropdownMenu>
-
-            {/* Granularity */}
-            <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                    <Button
-                        variant="outline"
-                        className="rounded-full h-9 gap-2"
-                    >
-                        <Filter className="h-4 w-4" />
-                        {GRANULARITY_LABEL[granularity]}
-                        <ChevronDown className="h-4 w-4" />
-                    </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => { 
-                        setGranularity("overall")
-                        setSelectedYear(null)
-                    }}>
-                        ges. Zeitraum
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => {
-                        setGranularity("year")
-                        // selectedYear wird im years-effect automatisch auf "neuestes" gesetzt, falls null
-                    }}>
-                        Jahr
-                    </DropdownMenuItem>
-                </DropdownMenuContent>
-            </DropdownMenu>
-
-            {/* Year selector only for year-view */}
-            {granularity === "year" && (
-                <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                        <Button
-                            variant="outline"
-                            className="rounded-full h-9 gap-2"
-                        >
-                            <Filter className="h-4 w-4" />
-                            {selectedYear ? `Jahr ${selectedYear}` : "Jahr wählen"}
-                            <ChevronDown className="h-4 w-4" />
-                        </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                        {years.length === 0 ? (
-                            <DropdownMenuItem disabled>Keine Jahre</DropdownMenuItem>
-                        ) : (
-                            years.map((y) => (
-                                <DropdownMenuItem key={y} onClick={() => setSelectedYear(y)}>
-                                    {y}
-                                </DropdownMenuItem>
-                            ))
-                        )}
-                    </DropdownMenuContent>
-                </DropdownMenu>
-            )}
-        </div>
+            <DropdownPicker
+                label="Metrik"
+                value={metric}
+                icon={<BarChart2 />}
+                compact={compact}
+                options={[
+                    { value: "Ø Score", label: "Ø Score" },
+                    { value: "Trend",   label: "Trend" },
+                ]}
+                onChange={setMetric}
+            />
+        </>
     )
 
-    // Chart component (reusable for card and modal)
+    // Chart component — Modern Area-Chart mit Gradient-Fill (Stripe/Linear-Stil)
     const TimelineChart = ({ height = 200 }) => (
         <ResponsiveContainer width="100%" height={height === "100%" ? "100%" : height}>
-            <LineChart 
-                data={chartData} 
-                margin={{ left: 0, right: 20, top: 5, bottom: 5 }}
+            <ComposedChart
+                data={chartData}
+                margin={{ left: 0, right: 16, top: 8, bottom: 5 }}
             >
-                <CartesianGrid 
-                    strokeDasharray="3 3" 
-                    stroke="#e2e8f0"
-                    vertical={false}
-                />
-                <XAxis 
-                    dataKey="date" 
-                    tick={{ fontSize: 11, fill: "#64748b" }}
+                {/* Gradient-Definitionen für Area-Fills */}
+                <defs>
+                    <linearGradient id="histGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%"   stopColor="#3b82f6" stopOpacity={0.18} />
+                        <stop offset="100%" stopColor="#3b82f6" stopOpacity={0.0} />
+                    </linearGradient>
+                    <linearGradient id="trendGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%"   stopColor="#10b981" stopOpacity={0.18} />
+                        <stop offset="100%" stopColor="#10b981" stopOpacity={0.0} />
+                    </linearGradient>
+                    <linearGradient id="forecastGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%"   stopColor="#f97316" stopOpacity={0.14} />
+                        <stop offset="100%" stopColor="#f97316" stopOpacity={0.0} />
+                    </linearGradient>
+                </defs>
+
+                <CartesianGrid strokeDasharray="2 4" stroke="#f1f5f9" vertical={false} />
+
+                <XAxis
+                    dataKey="date"
+                    tick={{ fontSize: 10, fill: "#94a3b8" }}
                     tickLine={false}
                     axisLine={{ stroke: "#e2e8f0" }}
                     interval="preserveStartEnd"
+                    tickMargin={8}
                 />
-                <YAxis 
+                <YAxis
                     domain={yAxisDomain}
-                    tick={{ fontSize: 11, fill: "#64748b" }}
+                    tick={{ fontSize: 10, fill: "#94a3b8" }}
                     tickLine={false}
                     axisLine={false}
+                    width={32}
                     tickFormatter={(value) => {
                         if (metric === "Anzahl") return Math.round(value).toString()
-                        if (metric === "Trend") return (value >= 0 ? '+' : '') + value.toFixed(1)
+                        if (metric === "Trend") return (value >= 0 ? "+" : "") + value.toFixed(1)
                         return value.toFixed(1)
                     }}
                 />
-                <Tooltip content={<CustomTooltip />} />
-                
-                {/* Reference line at y=0 for Trend mode */}
+                <Tooltip
+                    content={<CustomTooltip />}
+                    cursor={{ stroke: "#cbd5e1", strokeWidth: 1, strokeDasharray: "3 3" }}
+                />
+
+                {/* Reference line at y=0 für Trend */}
                 {metric === "Trend" && (
-                    <ReferenceLine 
-                        y={0} 
-                        stroke="#94a3b8" 
+                    <ReferenceLine y={0} stroke="#cbd5e1" strokeDasharray="2 4" strokeWidth={1} />
+                )}
+
+                {/* Trennlinie historisch ↔ forecast */}
+                {((metric === "Ø Score" && forecastData.length > 0) ||
+                  (metric === "Trend"   && forecastTrendData.length > 0)) && lastHistoricalDate && (
+                    <ReferenceLine
+                        x={lastHistoricalDate}
+                        stroke="#94a3b8"
                         strokeDasharray="3 3"
-                        strokeWidth={1}
+                        strokeWidth={1.5}
                     />
                 )}
 
-                {/* Reference line separating historical and forecast (for Trend mode) */}
-                {metric === "Trend" && lastHistoricalDate && forecastTrendData.length > 0 && (
-                    <ReferenceLine 
-                        x={lastHistoricalDate} 
-                        stroke="#94a3b8" 
-                        strokeDasharray="5 5"
-                        strokeWidth={2}
-                        label={{ 
-                            value: "", 
-                            position: "top",
-                            fill: "#64748b",
-                            fontSize: 11,
-                            fontWeight: 500
-                        }}
-                    />
-                )}
-
-                {/* Reference line separating historical and forecast (only for "Ø Score" mode) */}
-                {metric === "Ø Score" && lastHistoricalDate && forecastData.length > 0 && (
-                    <ReferenceLine 
-                        x={lastHistoricalDate} 
-                        stroke="#94a3b8" 
-                        strokeDasharray="5 5"
-                        strokeWidth={2}
-                        label={{ 
-                            value: "", 
-                            position: "top",
-                            fill: "#64748b",
-                            fontSize: 11,
-                            fontWeight: 500
-                        }}
-                    />
-                )}
-
-                {/* Historical data line - solid blue (not shown for Trend mode) */}
+                {/* === Historische Daten === */}
                 {metric !== "Trend" && (
-                    <Line 
-                        type="monotone" 
-                        dataKey="historical" 
-                        stroke="#3b82f6" 
-                        strokeWidth={3}
-                        dot={{ fill: "#3b82f6", r: 4, strokeWidth: 0 }}
-                        activeDot={{ r: 6, fill: "#2563eb" }}
+                    <Area
+                        type="monotone"
+                        dataKey="historical"
+                        stroke="#3b82f6"
+                        strokeWidth={2}
+                        fill="url(#histGradient)"
+                        dot={false}
+                        activeDot={{ r: 4, fill: "#3b82f6", stroke: "#fff", strokeWidth: 2 }}
                         name="Historisch"
                         connectNulls={false}
                     />
                 )}
 
-                {/* Historical gap line - dashed (when there are missing months) */}
-                {metric !== "Trend" && timelineHasGaps && (
-                    <Line 
-                        type="monotone" 
-                        dataKey="historicalGap" 
-                        stroke="#94a3b8" 
-                        strokeWidth={2}
-                        strokeDasharray="6 4"
-                        strokeOpacity={0.7}
-                        dot={false}
-                        activeDot={false}
-                        connectNulls={false}
-                        legendType="none"
-                    />
-                )}
-
-                {/* Forecast data line - dashed orange (only for "Ø Score" mode) */}
-                {metric === "Ø Score" && (
-                    <Line 
-                        type="monotone" 
-                        dataKey="forecast" 
-                        stroke="#f97316" 
-                        strokeWidth={3}
-                        strokeDasharray="8 4"
-                        dot={{ fill: "#f97316", r: 4, strokeWidth: 0 }}
-                        activeDot={{ r: 6, fill: "#ea580c" }}
-                        name="Prognose"
-                        connectNulls={false}
-                    />
-                )}
-
-                {/* Historical trend line - solid green */}
                 {metric === "Trend" && (
-                    <Line 
-                        type="monotone" 
-                        dataKey="historical" 
-                        stroke="#10b981" 
-                        strokeWidth={3}
-                        dot={{ fill: "#10b981", r: 4, strokeWidth: 0 }}
-                        activeDot={{ r: 6, fill: "#059669" }}
+                    <Area
+                        type="monotone"
+                        dataKey="historical"
+                        stroke="#10b981"
+                        strokeWidth={2}
+                        fill="url(#trendGradient)"
+                        dot={false}
+                        activeDot={{ r: 4, fill: "#10b981", stroke: "#fff", strokeWidth: 2 }}
                         name="Trend Historisch"
                         connectNulls={false}
                     />
                 )}
 
-                {/* Forecast trend line - dashed orange (for Trend mode) */}
+                {/* Gestrichelte Gap-Line bei Lücken — deutlich sichtbar über der Area */}
+                {metric !== "Trend" && timelineHasGaps && (
+                    <Line
+                        type="monotone"
+                        dataKey="historicalGap"
+                        stroke="#94a3b8"
+                        strokeWidth={2}
+                        strokeDasharray="6 4"
+                        strokeOpacity={0.85}
+                        dot={false}
+                        activeDot={false}
+                        connectNulls={false}
+                        legendType="none"
+                        isAnimationActive={false}
+                    />
+                )}
+
+                {/* === Forecast === */}
+                {metric === "Ø Score" && (
+                    <Area
+                        type="monotone"
+                        dataKey="forecast"
+                        stroke="#f97316"
+                        strokeWidth={2}
+                        strokeDasharray="5 3"
+                        fill="url(#forecastGradient)"
+                        dot={false}
+                        activeDot={{ r: 4, fill: "#f97316", stroke: "#fff", strokeWidth: 2 }}
+                        name="Prognose"
+                        connectNulls={false}
+                    />
+                )}
+
                 {metric === "Trend" && forecastTrendData.length > 0 && (
-                    <Line 
-                        type="monotone" 
-                        dataKey="forecast" 
-                        stroke="#f97316" 
-                        strokeWidth={3}
-                        strokeDasharray="8 4"
-                        dot={{ fill: "#f97316", r: 4, strokeWidth: 0 }}
-                        activeDot={{ r: 6, fill: "#ea580c" }}
+                    <Area
+                        type="monotone"
+                        dataKey="forecast"
+                        stroke="#f97316"
+                        strokeWidth={2}
+                        strokeDasharray="5 3"
+                        fill="url(#forecastGradient)"
+                        dot={false}
+                        activeDot={{ r: 4, fill: "#f97316", stroke: "#fff", strokeWidth: 2 }}
                         name="Trend Prognose"
                         connectNulls={false}
                     />
                 )}
-            </LineChart>
+            </ComposedChart>
         </ResponsiveContainer>
     )
 
     // Legend component (reusable)
     const ChartLegend = ({ compact = false }) => (
-        <div className={`${compact ? 'mt-2' : 'mt-4'} flex items-center justify-center gap-6 ${compact ? 'text-xs' : 'text-sm'}`}>
-            <div className="flex items-center gap-2">
-                <div className="h-1 w-6 rounded-full bg-blue-500"></div>
+        <div className={`${compact ? 'mt-2' : 'mt-3'} flex items-center justify-center gap-4 flex-wrap text-[11px]`}>
+            <div className="flex items-center gap-1.5">
+                <div className="h-0.5 w-5 rounded-full bg-blue-500"></div>
                 <span className="text-slate-600">Historisch</span>
             </div>
             {metric === "Trend" && (
@@ -875,190 +783,184 @@ export const TimelineCard = memo(function TimelineCard({ companyId, onFiltersCha
         </div>
     )
 
-    // Summary stats component (reusable)
+    // Summary stats component (reusable) — clean inline numbers
+    const Stat = ({ label, value, tone = "default" }) => {
+        const toneClass = tone === "good" ? "text-emerald-700"
+                        : tone === "bad"  ? "text-rose-700"
+                        : tone === "info" ? "text-blue-700"
+                        : tone === "warn" ? "text-amber-700"
+                        : "text-slate-900";
+        return (
+            <div className="flex flex-col items-center text-center px-2">
+                <span className="font-mono text-[10px] tracking-[0.06em] uppercase text-slate-500 mb-1">{label}</span>
+                <span className={`font-semibold tnum text-[16px] tracking-tight ${toneClass}`}>{value}</span>
+            </div>
+        )
+    }
+
     const SummaryStats = () => {
         if (timelineData.length === 0) return null
 
         if (metric === "Anzahl") {
-            const totalCount = timelineData.reduce((sum, d) => sum + (d.count || 0), 0)
-            const avgCount = (totalCount / timelineData.length).toFixed(1)
-            const maxCount = Math.max(...timelineData.map(d => d.count || 0))
-
+            const total   = timelineData.reduce((s, d) => s + (d.count || 0), 0)
+            const avg     = (total / timelineData.length).toFixed(1)
+            const maxCnt  = Math.max(...timelineData.map(d => d.count || 0))
             return (
-                <div className="mt-4 pt-4 border-t border-slate-100 grid grid-cols-3 gap-4 text-center">
-                    <div>
-                        <p className="text-xs text-slate-500">Datenpunkte</p>
-                        <p className="text-lg font-bold text-slate-800">{timelineData.length}</p>
-                    </div>
-                    <div>
-                        <p className="text-xs text-slate-500">Ø Anzahl</p>
-                        <p className="text-lg font-bold text-blue-600">{avgCount}</p>
-                    </div>
-                    <div>
-                        <p className="text-xs text-slate-500">Max Anzahl</p>
-                        <p className="text-lg font-bold text-blue-600">{maxCount}</p>
-                    </div>
+                <div className="mt-3 pt-3 border-t border-slate-100 grid grid-cols-3 divide-x divide-slate-100">
+                    <Stat label="Datenpunkte" value={timelineData.length} />
+                    <Stat label="Ø Anzahl"    value={avg}    tone="info" />
+                    <Stat label="Max Anzahl"  value={maxCnt} tone="info" />
                 </div>
             )
         }
 
         if (metric === "Trend") {
-            const avgTrend = trendData.length > 1 
-                ? (trendData.slice(1).reduce((sum, d) => sum + d.trend, 0) / (trendData.length - 1)).toFixed(2)
-                : "0.00"
-            const maxTrend = Math.max(...trendData.map(d => d.trend))
-            const minTrend = Math.min(...trendData.map(d => d.trend))
-            const positiveTrends = trendData.filter(d => d.trend > 0).length
-            const negativeTrends = trendData.filter(d => d.trend < 0).length
-
+            const avgTrend = trendData.length > 1
+                ? trendData.slice(1).reduce((s, d) => s + d.trend, 0) / (trendData.length - 1)
+                : 0
+            const maxTrend = trendData.length ? Math.max(...trendData.map(d => d.trend)) : 0
+            const minTrend = trendData.length ? Math.min(...trendData.map(d => d.trend)) : 0
+            const fmt = (v) => `${v >= 0 ? "+" : ""}${v.toFixed(2)}`
             return (
-                <div className="mt-4 pt-4 border-t border-slate-100 grid grid-cols-3 gap-4 text-center">
-                    <div>
-                        <p className="text-xs text-slate-500">Datenpunkte</p>
-                        <p className="text-lg font-bold text-slate-800">{timelineData.length}</p>
-                    </div>
-                    <div>
-                        <p className="text-xs text-slate-500">Ø Trend</p>
-                        <p className={`text-lg font-bold ${parseFloat(avgTrend) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                            {parseFloat(avgTrend) >= 0 ? '+' : ''}{avgTrend}
-                        </p>
-                    </div>
-                    <div>
-                        <p className="text-xs text-slate-500">Max/Min</p>
-                        <p className="text-lg font-bold text-slate-800">
-                            {maxTrend >= 0 ? '+' : ''}{maxTrend.toFixed(2)} / {minTrend.toFixed(2)}
-                        </p>
-                    </div>
+                <div className="mt-3 pt-3 border-t border-slate-100 grid grid-cols-3 divide-x divide-slate-100">
+                    <Stat label="Datenpunkte" value={timelineData.length} />
+                    <Stat label="Ø Trend"     value={fmt(avgTrend)} tone={avgTrend >= 0 ? "good" : "bad"} />
+                    <Stat label="Max / Min"   value={`${fmt(maxTrend)} / ${minTrend.toFixed(2)}`} />
                 </div>
             )
         }
 
+        const avgHist = (timelineData.reduce((s, d) => s + d.score, 0) / timelineData.length).toFixed(2)
+        const avgFore = forecastData.length
+            ? (forecastData.reduce((s, d) => s + d.score, 0) / forecastData.length).toFixed(2)
+            : null
         return (
-            <div className="mt-4 pt-4 border-t border-slate-100 grid grid-cols-3 gap-4 text-center">
-                <div>
-                    <p className="text-xs text-slate-500">Datenpunkte</p>
-                    <p className="text-lg font-bold text-slate-800">{timelineData.length}</p>
-                </div>
-                <div>
-                    <p className="text-xs text-slate-500">Ø Historisch</p>
-                    <p className="text-lg font-bold text-blue-600">
-                        {(timelineData.reduce((sum, d) => sum + d.score, 0) / timelineData.length).toFixed(2)}
-                    </p>
-                </div>
-                {forecastData.length > 0 && (
-                    <div>
-                        <p className="text-xs text-slate-500">Ø Prognose</p>
-                        <p className="text-lg font-bold text-orange-500">
-                            {(forecastData.reduce((sum, d) => sum + d.score, 0) / forecastData.length).toFixed(2)}
-                        </p>
-                    </div>
-                )}
+            <div className={`mt-3 pt-3 border-t border-slate-100 grid ${avgFore ? "grid-cols-3" : "grid-cols-2"} divide-x divide-slate-100`}>
+                <Stat label="Datenpunkte"  value={timelineData.length} />
+                <Stat label="Ø Historisch" value={avgHist} tone="info" />
+                {avgFore && <Stat label="Ø Prognose" value={avgFore} tone="warn" />}
             </div>
         )
     }
 
-    if (loading) {
-        return (
-            <Card className="rounded-3xl shadow-sm">
-                <CardHeader>
-                    <CardTitle className="text-xl font-bold text-slate-800">
-                        Timeline
-                    </CardTitle>
-                </CardHeader>
-                <CardContent className="pb-4 pt-4">
-                    <div className="h-[200px] flex items-center justify-center">
-                        <div className="flex flex-col items-center gap-2">
-                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-                            <p className="text-slate-500">Lade Timeline-Daten...</p>
-                        </div>
-                    </div>
-                </CardContent>
-            </Card>
-        )
-    }
+    // Single state-message for empty/error — rendered INSIDE the chart area so
+    // the surrounding card + Dialog never unmount when the user changes filters.
+    const emptyMessage =
+        !companyId ? "Keine Firma ausgewählt"
+        : error    ? `Fehler: ${error}`
+        : chartData.length === 0 ? "Keine Daten für diesen Zeitraum verfügbar"
+        : null
 
-    if (error || chartData.length === 0) {
-        return (
-            <Card className="rounded-3xl shadow-sm">
-                <CardHeader className="flex flex-row items-center justify-between">
-                    <CardTitle className="text-xl font-bold text-slate-800">
-                        Timeline
-                    </CardTitle>
-                    <FilterDropdowns />
-                </CardHeader>
-                <CardContent className="pb-4 pt-4">
-                    <div className="h-[200px] flex items-center justify-center">
-                        <p className="text-slate-500">
-                            {error ? `Fehler: ${error}` : "Keine Daten für diesen Zeitraum verfügbar"}
-                        </p>
-                    </div>
-                </CardContent>
-            </Card>
-        )
-    }
+    const showOverlay = loading || refreshing
+    const overlayLabel = loading ? "Lade Timeline-Daten…" : "Daten werden aktualisiert…"
 
     return (
         <>
-            {/* Main Card */}
-            <Card 
-                className="rounded-3xl shadow-sm cursor-pointer hover:shadow-md transition-all duration-200 group"
+            {/* Main Card — flex-col + h-full damit Inhalt Card-Höhe nutzt */}
+            <div
+                className="group bg-white border border-slate-200 rounded-lg overflow-hidden shadow-xs hover:shadow-sm transition-shadow cursor-pointer flex flex-col h-full"
                 onClick={() => setModalOpen(true)}
             >
-                <CardHeader className="flex flex-row items-center justify-between">
-                    <CardTitle className="text-xl font-bold text-slate-800 flex items-center gap-2">
-                        Timeline
-                        <Maximize2 className="h-4 w-4 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity" />
-                    </CardTitle>
+                <ChartCardHeader
+                    icon={<TrendUpIcon />}
+                    eyebrow="ZEITREIHE · HISTORIE & PROGNOSE"
+                    title="Timeline"
+                    subtitle={`${SOURCE_LABEL[source]} · ${metric}`}
+                    expandable
+                    actions={<FilterDropdowns compact />}
+                />
 
-                    <div onClick={(e) => e.stopPropagation()}>
-                        <FilterDropdowns />
-                    </div>
-                </CardHeader>
-
-                <CardContent className="pb-4 pt-4">
-                    <div id="timeline-chart-export" className="h-[200px] w-full">
-                        <TimelineChart height={200} />
+                {/* Content nimmt restliche Card-Höhe ein, Stats werden via flex-1 Spacer an Boden gedrückt */}
+                <div className="px-4 pt-4 pb-4 flex flex-col flex-1 min-h-0">
+                    <div id="timeline-chart-export" className="relative h-[220px] w-full flex-shrink-0">
+                        {emptyMessage && !showOverlay ? (
+                            <div className="h-full flex items-center justify-center">
+                                <p className="text-[13px] text-slate-500">{emptyMessage}</p>
+                            </div>
+                        ) : (
+                            <TimelineChart height={220} />
+                        )}
+                        {showOverlay && (
+                            <div className="absolute inset-0 bg-white/70 flex items-center justify-center rounded-md pointer-events-none">
+                                <div className="flex items-center gap-2">
+                                    <div className="animate-spin rounded-full h-5 w-5 border-2 border-slate-200 border-t-slate-600"></div>
+                                    <p className="text-slate-600 text-[12px]">{overlayLabel}</p>
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     <ChartLegend />
                     {timelineHasGaps && (
-                        <p className="text-xs text-slate-500 text-center italic flex items-center justify-center gap-1 mt-2">
-                            <span className="inline-block w-6 h-0 border-t-2 border-dashed border-slate-400"></span>
-                            Gestrichelte Linie = Keine Daten vorhanden (interpoliert)
+                        <p className="text-[11px] text-slate-500 text-center italic flex items-center justify-center gap-1.5 mt-2">
+                            <span className="inline-block w-5 h-0 border-t border-dashed border-slate-400"></span>
+                            Gestrichelte Linie = interpolierte Werte
                         </p>
                     )}
+
+                    {/* Spacer drückt Stats + Footer an Karten-Boden */}
+                    <div className="flex-1" />
+
                     <SummaryStats />
-                    
-                    <p className="text-xs text-slate-400 text-center mt-2">
-                        Klicken zum Vergrößern
+
+                    <p className="text-[11px] text-slate-400 text-center mt-3">
+                        Karte anklicken zum Vergrössern
                     </p>
-                </CardContent>
-            </Card>
+                </div>
+            </div>
 
             {/* Modal */}
             <Dialog open={modalOpen} onOpenChange={setModalOpen}>
-                <DialogContent 
-                    className="overflow-hidden flex flex-col"
-                    style={{ 
-                        width: '90vw', 
-                        maxWidth: '90vw', 
-                        height: '85vh', 
-                        maxHeight: '85vh' 
+                <DialogContent
+                    className="overflow-hidden flex flex-col p-0 gap-0"
+                    style={{
+                        width: '90vw',
+                        maxWidth: '90vw',
+                        height: '85vh',
+                        maxHeight: '85vh'
                     }}
                 >
-                    <DialogHeader className="flex flex-row items-center justify-between pb-2 flex-shrink-0">
-                        <DialogTitle className="text-xl font-bold text-slate-800">
-                            Timeline - Detailansicht
-                        </DialogTitle>
-                        <div onClick={(e) => e.stopPropagation()}>
+                    <span aria-hidden="true" className="block h-[3px] w-full bg-blue-500" />
+                    <div className="px-5 py-4 pr-14 border-b border-slate-200 flex items-start justify-between gap-3 flex-shrink-0">
+                        <div className="flex items-start gap-2.5">
+                            <span className="w-9 h-9 rounded-md grid place-items-center bg-blue-50 text-blue-600 flex-none">
+                                <TrendUpIcon className="w-[18px] h-[18px]" />
+                            </span>
+                            <div>
+                                <p className="m-0 mb-0.5 font-mono text-[10px] tracking-[0.06em] uppercase text-slate-500 leading-none">
+                                    ZEITREIHE · HISTORIE & PROGNOSE
+                                </p>
+                                <DialogTitle className="m-0 text-[18px] leading-6 font-semibold tracking-tight text-slate-900">
+                                    Timeline
+                                </DialogTitle>
+                                <p className="m-0 mt-0.5 text-[11px] text-slate-500">
+                                    {SOURCE_LABEL[source]} · {metric}
+                                </p>
+                            </div>
+                        </div>
+                        <div onClick={(e) => e.stopPropagation()} className="flex items-center gap-1.5 flex-wrap justify-end">
                             <FilterDropdowns />
                         </div>
-                    </DialogHeader>
+                    </div>
 
-                    <div className="flex-1 flex flex-col min-h-0">
+                    <div className="flex-1 flex flex-col min-h-0 px-5 py-4">
                         {/* Large Chart */}
-                        <div className="flex-1 min-h-0">
-                            <TimelineChart height={450} />
+                        <div className="flex-1 min-h-0 relative">
+                            {emptyMessage && !showOverlay ? (
+                                <div className="h-full flex items-center justify-center">
+                                    <p className="text-[13px] text-slate-500">{emptyMessage}</p>
+                                </div>
+                            ) : (
+                                <TimelineChart height={450} />
+                            )}
+                            {showOverlay && (
+                                <div className="absolute inset-0 bg-white/70 flex items-center justify-center rounded-md pointer-events-none">
+                                    <div className="flex items-center gap-2">
+                                        <div className="animate-spin rounded-full h-6 w-6 border-2 border-slate-200 border-t-slate-600"></div>
+                                        <p className="text-slate-700 text-[12px] font-medium">{overlayLabel}</p>
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
                         <ChartLegend compact={true} />
@@ -1170,8 +1072,7 @@ export const TimelineCard = memo(function TimelineCard({ companyId, onFiltersCha
 
                         <div className="mt-3 flex items-center justify-end flex-shrink-0">
                             <p className="text-xs text-slate-400">
-                                {SOURCE_LABEL[source]} · {GRANULARITY_LABEL[granularity]}
-                                {granularity === "year" && selectedYear ? ` · ${selectedYear}` : ""}
+                                {SOURCE_LABEL[source]} · {metric} · Historie + Prognose
                             </p>
                         </div>
                     </div>

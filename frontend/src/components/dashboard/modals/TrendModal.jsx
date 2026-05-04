@@ -1,309 +1,278 @@
 import { useEffect, useMemo, useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ArrowDown, ArrowUp, Filter, Search, TrendingDown, TrendingUp, Minus, X } from "lucide-react";
+import ModalShell, { ModalLoader, ModalError, ModalEmpty } from "./ModalShell";
+import { TrendUp as TrendUpIcon } from "../../../icons";
 
 const API_URL = (import.meta.env.VITE_API_URL || "http://localhost:8000") + "/api";
 
 const LABELS = {
-    avg_arbeitsatmosphaere: "Arbeitsatmosphäre",
-    avg_image: "Image",
-    avg_work_life_balance: "Work-Life-Balance",
-    avg_karriere_weiterbildung: "Karriere/Weiterbildung",
-    avg_gehalt_sozialleistungen: "Gehalt/Sozialleistungen",
-    avg_kollegenzusammenhalt: "Kollegenzusammenhalt",
-    avg_umwelt_sozialbewusstsein: "Umwelt-/Sozialbewusstsein",
-    avg_vorgesetztenverhalten: "Vorgesetztenverhalten",
-    avg_kommunikation: "Kommunikation",
-    avg_interessante_aufgaben: "Interessante Aufgaben",
-    avg_umgang_aelteren_kollegen: "Umgang mit älteren Kollegen",
-    avg_arbeitsbedingungen: "Arbeitsbedingungen",
-    avg_gleichberechtigung: "Gleichberechtigung",
+  avg_arbeitsatmosphaere: "Arbeitsatmosphäre",
+  avg_image: "Image",
+  avg_work_life_balance: "Work-Life-Balance",
+  avg_karriere_weiterbildung: "Karriere/Weiterbildung",
+  avg_gehalt_sozialleistungen: "Gehalt/Sozialleistungen",
+  avg_kollegenzusammenhalt: "Kollegenzusammenhalt",
+  avg_umwelt_sozialbewusstsein: "Umwelt-/Sozialbewusstsein",
+  avg_vorgesetztenverhalten: "Vorgesetztenverhalten",
+  avg_kommunikation: "Kommunikation",
+  avg_interessante_aufgaben: "Interessante Aufgaben",
+  avg_umgang_aelteren_kollegen: "Umgang mit älteren Kollegen",
+  avg_arbeitsbedingungen: "Arbeitsbedingungen",
+  avg_gleichberechtigung: "Gleichberechtigung",
 };
 
-// Mapping für 1Y | 3Y | All
-// 1Y/3Y nutzen eine stabile Monatslogik (volle Monate):
-//   - current = letzte N volle Monate
-//   - previous = N volle Monate davor
-const RANGE_TO_STABLE_MONTHS = {
-    "1Y": 12,
-    "3Y": 36,
+const RANGE_TO_STABLE_MONTHS = { "1Y": 12, "3Y": 36 };
+const RANGE_TO_DAYS_FALLBACK = { "All": 730 };
+
+const fmtDelta = (d, sign) => {
+  if (sign === "new") return "neu";
+  if (d === null || !Number.isFinite(d)) return "0,0";
+  const v = Math.round(d * 10) / 10;
+  const a = Math.abs(v).toFixed(1).replace(".", ",");
+  if (sign === "up")   return `+${a}`;
+  if (sign === "down") return `−${a}`;
+  return v.toFixed(1).replace(".", ",");
 };
 
-const RANGE_TO_DAYS_FALLBACK = {
-    "All": 730, // legacy fallback (unused if stable_all works)
+const signTone = (sign) => {
+  if (sign === "up")   return { text: "text-emerald-700", bg: "bg-emerald-50", icon: TrendingUp };
+  if (sign === "down") return { text: "text-rose-700",    bg: "bg-rose-50",    icon: TrendingDown };
+  if (sign === "new")  return { text: "text-blue-700",    bg: "bg-blue-50",    icon: Minus };
+  return { text: "text-slate-600", bg: "bg-slate-100", icon: Minus };
 };
 
 export default function TrendModal({ open, onOpenChange, companyId }) {
-    const [range, setRange] = useState("1Y"); // Start mit kürzerem Zeitraum
-    const [data, setData] = useState(null);
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState("");
+  const [range, setRange]     = useState("1Y");
+  const [data, setData]       = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError]     = useState("");
 
-    const [searchTerm, setSearchTerm] = useState("");
-    const [filtersOpen, setFiltersOpen] = useState(false);
-    const [signFilter, setSignFilter] = useState("all"); // all | up | down | flat | new
-    const [sortKey, setSortKey] = useState("delta"); // title | delta
-    const [sortDir, setSortDir] = useState("desc"); // asc | desc
+  const [searchTerm, setSearchTerm]   = useState("");
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [signFilter, setSignFilter]   = useState("all");
+  const [sortKey, setSortKey]         = useState("delta");
+  const [sortDir, setSortDir]         = useState("desc");
 
-    useEffect(() => {
-        if (!open || !companyId) return;
+  useEffect(() => {
+    if (!open || !companyId) return;
+    const stableMonths = RANGE_TO_STABLE_MONTHS[range];
+    const daysFallback = RANGE_TO_DAYS_FALLBACK[range];
 
-        const stableMonths = RANGE_TO_STABLE_MONTHS[range];
-        const daysFallback = RANGE_TO_DAYS_FALLBACK[range];
+    const controller = new AbortController();
+    setLoading(true); setError("");
 
-        const controller = new AbortController();
-        setLoading(true);
-        setError("");
+    const url = stableMonths
+      ? `${API_URL}/companies/${companyId}/ratings/trend?mode=stable_months&months=${stableMonths}`
+      : range === "All"
+        ? `${API_URL}/companies/${companyId}/ratings/trend?mode=stable_all&months=12`
+        : `${API_URL}/companies/${companyId}/ratings/trend?days=${daysFallback ?? 30}`;
 
-        const url = stableMonths
-            ? `${API_URL}/companies/${companyId}/ratings/trend?mode=stable_months&months=${stableMonths}`
-            : range === "All"
-                ? `${API_URL}/companies/${companyId}/ratings/trend?mode=stable_all&months=12`
-                : `${API_URL}/companies/${companyId}/ratings/trend?days=${daysFallback ?? 30}`;
+    fetch(url, { signal: controller.signal })
+      .then((r) => { if (!r.ok) throw new Error("API error"); return r.json(); })
+      .then(setData)
+      .catch((e) => { if (e.name !== "AbortError") setError(e.message || "Failed to fetch"); })
+      .finally(() => setLoading(false));
 
-        fetch(url, {
-            signal: controller.signal,
-        })
-            .then((r) => {
-                if (!r.ok) throw new Error("API error");
-                return r.json();
-            })
-            .then((json) => {
-                console.log("TrendModal data:", json);
-                setData(json);
-            })
-            .catch((e) => {
-                if (e.name !== "AbortError") setError(e.message || "Failed to fetch");
-            })
-            .finally(() => setLoading(false));
+    return () => controller.abort();
+  }, [open, companyId, range]);
 
-        return () => controller.abort();
-    }, [open, companyId, range]);
+  const rows = useMemo(() => {
+    if (!data) return [];
+    const metrics = data.metrics ?? data;
+    return Object.entries(metrics)
+      .map(([key, obj]) => ({
+        key,
+        title: LABELS[key] ?? key,
+        delta: obj?.delta == null ? null : Number(obj.delta),
+        sign:  obj?.sign ?? "flat",
+      }))
+      .filter((x) => Boolean(x.title));
+  }, [data]);
 
-    const rows = useMemo(() => {
-        if (!data) return [];
-
-        // ✅ falls Backend später { metrics: {...} } liefert
-        const metrics = data.metrics ?? data;
-
-        return Object.entries(metrics)
-            .map(([key, obj]) => ({
-                key,
-                title: LABELS[key] ?? key,
-                delta: obj?.delta === null || obj?.delta === undefined ? null : Number(obj.delta),
-                sign: obj?.sign ?? "flat",
-            }))
-            .filter((x) => Boolean(x.title));
-    }, [data]);
-
-    const filteredAndSortedRows = useMemo(() => {
-        const q = searchTerm.trim().toLowerCase();
-        let next = rows;
-        if (q) {
-            next = next.filter((r) => r.title.toLowerCase().includes(q));
-        }
-        if (signFilter !== "all") {
-            next = next.filter((r) => (r.sign ?? "flat") === signFilter);
-        }
-
-        const dir = sortDir === "desc" ? -1 : 1;
-        const safeDelta = (r) => {
-            if (r.sign === "new") return Number.POSITIVE_INFINITY;
-            return r.delta === null || !Number.isFinite(r.delta) ? 0 : r.delta;
-        };
-
-        return [...next].sort((a, b) => {
-            if (sortKey === "title") {
-                return dir * a.title.localeCompare(b.title, "de", { sensitivity: "base" });
-            }
-            // delta
-            return dir * (safeDelta(a) - safeDelta(b));
-        });
-    }, [rows, searchTerm, signFilter, sortKey, sortDir]);
-
-    const toggleSort = (key) => {
-        if (sortKey === key) {
-            setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-            return;
-        }
-        setSortKey(key);
-        setSortDir(key === "title" ? "asc" : "desc");
-    };
-
-    const clearFilters = () => {
-        setSearchTerm("");
-        setSignFilter("all");
-        setSortKey("delta");
-        setSortDir("desc");
-    };
-
-    const fmtDelta = (d, sign) => {
-        if (sign === "new") return "neu";
-        if (d === null || !Number.isFinite(d)) return "0";
-        const v = Math.round(d * 10) / 10;
-        if (sign === "up") return `+${Math.abs(v)}`;
-        if (sign === "down") return `-${Math.abs(v)}`;
-        return `${v}`;
-    };
-
-    const trendColor = (sign) => {
-        if (sign === "up") return "text-green-600";
-        if (sign === "down") return "text-red-600";
-        if (sign === "new") return "text-blue-600";
-        return "text-gray-600";
-    };
-
-    const TrendIcon = ({ sign }) => {
-        if (sign === "up") return <TrendingUp className="h-5 w-5" />;
-        if (sign === "down") return <TrendingDown className="h-5 w-5" />;
-        return <Minus className="h-5 w-5" />;
-    };
-
-    return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="w-[calc(100vw-2rem)] sm:w-auto sm:min-w-4xl sm:max-w-5xl max-h-[85vh] overflow-y-auto rounded-2xl px-5 py-8">
-                <DialogHeader className="text-center">
-                    <DialogTitle className="text-3xl font-bold text-slate-800">
-                        Trend
-                    </DialogTitle>
-
-                    <div className="flex justify-center gap-4 mt-4 text-base">
-                        {["1Y", "3Y", "All"].map((r) => (
-                            <button
-                                key={r}
-                                type="button"
-                                className={range === r ? "text-blue-600 font-bold underline" : "text-gray-500 font-semibold"}
-                                onClick={() => setRange(r)}
-                            >
-                                {r}
-                            </button>
-                        ))}
-                    </div>
-                </DialogHeader>
-
-                {loading && <div className="text-center text-lg mt-6">Loading...</div>}
-                {error && <div className="text-center text-red-600 text-lg mt-6">{error}</div>}
-                {!companyId && <div className="text-center text-gray-500 mt-6">Bitte zuerst eine Firma auswählen.</div>}
-
-                {!loading && !error && companyId && (
-                    <div className="mt-6 space-y-3">
-                        <div className="flex flex-col gap-3">
-                            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                                <div className="relative flex-1">
-                                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                                    <Input
-                                        className="pl-9"
-                                        placeholder="Suchen (z.B. Kommunikation)"
-                                        value={searchTerm}
-                                        onChange={(e) => setSearchTerm(e.target.value)}
-                                    />
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <Button
-                                        type="button"
-                                        variant={filtersOpen ? "default" : "outline"}
-                                        onClick={() => setFiltersOpen((v) => !v)}
-                                        className="gap-2"
-                                    >
-                                        <Filter className="h-4 w-4" />
-                                        Filter
-                                    </Button>
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        onClick={clearFilters}
-                                        className="gap-2"
-                                    >
-                                        <X className="h-4 w-4" />
-                                        Reset
-                                    </Button>
-                                </div>
-                            </div>
-
-                            {filtersOpen && (
-                                <div className="rounded-xl border border-slate-200 p-2">
-                                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                                        <div>
-                                            <div className="text-[11px] font-semibold text-slate-500 mb-0.5">Trend</div>
-                                            <div className="flex flex-wrap gap-1.5">
-                                                {[
-                                                    { k: "all", label: "Alle" },
-                                                    { k: "up", label: "Up" },
-                                                    { k: "down", label: "Down" },
-                                                    { k: "flat", label: "Flat" },
-                                                    { k: "new", label: "Neu" },
-                                                ].map((opt) => (
-                                                    <Button
-                                                        key={opt.k}
-                                                        type="button"
-                                                        size="sm"
-                                                        variant={signFilter === opt.k ? "default" : "outline"}
-                                                        onClick={() => setSignFilter(opt.k)}
-                                                        className="h-7 px-2 text-xs"
-                                                    >
-                                                        {opt.label}
-                                                    </Button>
-                                                ))}
-                                            </div>
-                                        </div>
-                                        <div>
-                                            <div className="text-[11px] font-semibold text-slate-500 mb-0.5">Sortierung</div>
-                                            <div className="flex flex-wrap gap-1.5">
-                                                <Button
-                                                    type="button"
-                                                    size="sm"
-                                                    variant={sortKey === "delta" ? "default" : "outline"}
-                                                    onClick={() => toggleSort("delta")}
-                                                    className="h-7 px-2 text-xs gap-1.5"
-                                                >
-                                                    Delta
-                                                    {sortKey === "delta" ? (sortDir === "asc" ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />) : null}
-                                                </Button>
-                                                <Button
-                                                    type="button"
-                                                    size="sm"
-                                                    variant={sortKey === "title" ? "default" : "outline"}
-                                                    onClick={() => toggleSort("title")}
-                                                    className="h-7 px-2 text-xs gap-1.5"
-                                                >
-                                                    Kategorie
-                                                    {sortKey === "title" ? (sortDir === "asc" ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />) : null}
-                                                </Button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-
-                        {filteredAndSortedRows.length === 0 && rows.length === 0 && (
-                            <div className="text-center text-gray-500 mt-6">
-                                Keine Trend-Daten für diesen Zeitraum vorhanden.
-                            </div>
-                        )}
-
-                        {filteredAndSortedRows.length === 0 && rows.length > 0 && (
-                            <div className="text-center text-gray-500 mt-6">
-                                Keine Ergebnisse (Filter anpassen).
-                            </div>
-                        )}
-
-                        {filteredAndSortedRows.map((row) => (
-                            <div key={row.key} className="flex items-center justify-between py-2 border-b border-gray-200">
-                                <div className="text-base font-semibold text-black flex-1">
-                                    {row.title}:
-                                </div>
-                                <div className={`flex items-center gap-2 font-bold text-base w-28 justify-end ${trendColor(row.sign)}`}>
-                                    <TrendIcon sign={row.sign} />
-                                    <span>{fmtDelta(row.delta, row.sign)}</span>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                )}
-            </DialogContent>
-        </Dialog>
+  const filtered = useMemo(() => {
+    const q = searchTerm.trim().toLowerCase();
+    let next = rows;
+    if (q) next = next.filter((r) => r.title.toLowerCase().includes(q));
+    if (signFilter !== "all") next = next.filter((r) => (r.sign ?? "flat") === signFilter);
+    const dir = sortDir === "desc" ? -1 : 1;
+    const safeDelta = (r) => r.sign === "new" ? Number.POSITIVE_INFINITY : (Number.isFinite(r.delta) ? r.delta : 0);
+    return [...next].sort((a, b) =>
+      sortKey === "title"
+        ? dir * a.title.localeCompare(b.title, "de", { sensitivity: "base" })
+        : dir * (safeDelta(a) - safeDelta(b))
     );
+  }, [rows, searchTerm, signFilter, sortKey, sortDir]);
+
+  const toggleSort = (key) => {
+    if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else { setSortKey(key); setSortDir(key === "title" ? "asc" : "desc"); }
+  };
+  const clearFilters = () => { setSearchTerm(""); setSignFilter("all"); setSortKey("delta"); setSortDir("desc"); };
+
+  // Derive overall trend tone for the modal header
+  const overallTone = useMemo(() => {
+    if (!rows.length) return "neutral";
+    const ups = rows.filter((r) => r.sign === "up").length;
+    const downs = rows.filter((r) => r.sign === "down").length;
+    if (ups > downs * 1.2) return "good";
+    if (downs > ups * 1.2) return "bad";
+    return "neutral";
+  }, [rows]);
+
+  const SignChip = ({ sign }) => {
+    const { Icon = Minus } = { Icon: signTone(sign).icon };
+    const t = signTone(sign);
+    return (
+      <span className={["inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[12px] font-semibold", t.bg, t.text].join(" ")}>
+        <Icon className="h-3 w-3" />
+        <span className="tnum">{fmtDelta(rows.find(r=>r.sign===sign)?.delta, sign)}</span>
+      </span>
+    );
+  };
+
+  return (
+    <ModalShell
+      open={open}
+      onOpenChange={onOpenChange}
+      tone={overallTone}
+      icon={<TrendUpIcon />}
+      eyebrow="KENNZAHL · TREND-ENTWICKLUNG"
+      title="Trend pro Kategorie"
+      subtitle={`Vergleich · ${range === "All" ? "Gesamt" : range === "1Y" ? "Letzte 12 Monate" : "Letzte 36 Monate"}`}
+      size="lg"
+      toolbar={
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="relative flex-1 min-w-[200px]">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+              <Input
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Kategorie filtern…"
+                className="h-8 pl-8 text-[13px]"
+              />
+            </div>
+
+            {/* Range picker */}
+            <div className="inline-flex bg-white border border-slate-300 rounded-md p-0.5">
+              {["1Y", "3Y", "All"].map((r) => (
+                <button
+                  key={r}
+                  onClick={() => setRange(r)}
+                  className={[
+                    "h-7 px-3 rounded-[4px] text-[12px] font-medium transition-colors",
+                    range === r ? "bg-slate-900 text-white" : "text-slate-600 hover:text-slate-900",
+                  ].join(" ")}
+                >
+                  {r}
+                </button>
+              ))}
+            </div>
+
+            <button
+              onClick={() => setFiltersOpen((v) => !v)}
+              className={[
+                "h-8 px-2.5 inline-flex items-center gap-1.5 rounded-md text-[12px] font-medium border",
+                filtersOpen ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-700 border-slate-300 hover:bg-slate-50",
+              ].join(" ")}
+            >
+              <Filter className="h-3.5 w-3.5" /> Filter
+            </button>
+            <button
+              onClick={clearFilters}
+              className="h-8 px-2.5 inline-flex items-center gap-1.5 rounded-md text-[12px] font-medium bg-white text-slate-700 border border-slate-300 hover:bg-slate-50"
+            >
+              <X className="h-3.5 w-3.5" /> Reset
+            </button>
+          </div>
+
+          {filtersOpen && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-2.5 rounded-md border border-slate-200 bg-white">
+              <div>
+                <label className="block text-[10px] font-mono uppercase tracking-wider text-slate-500 mb-1.5">Trend</label>
+                <div className="flex flex-wrap gap-1">
+                  {[
+                    { k: "all",  label: "Alle" },
+                    { k: "up",   label: "↑ Steigend" },
+                    { k: "down", label: "↓ Sinkend" },
+                    { k: "flat", label: "→ Stabil" },
+                    { k: "new",  label: "Neu" },
+                  ].map((opt) => (
+                    <button
+                      key={opt.k}
+                      onClick={() => setSignFilter(opt.k)}
+                      className={[
+                        "h-7 px-2.5 rounded-md text-[12px] font-medium border",
+                        signFilter === opt.k ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-700 border-slate-300",
+                      ].join(" ")}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="block text-[10px] font-mono uppercase tracking-wider text-slate-500 mb-1.5">Sortierung</label>
+                <div className="flex flex-wrap gap-1">
+                  <button
+                    onClick={() => toggleSort("delta")}
+                    className={[
+                      "h-7 px-2.5 rounded-md text-[12px] font-medium border inline-flex items-center gap-1",
+                      sortKey === "delta" ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-700 border-slate-300",
+                    ].join(" ")}
+                  >
+                    Δ {sortKey === "delta" && (sortDir === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />)}
+                  </button>
+                  <button
+                    onClick={() => toggleSort("title")}
+                    className={[
+                      "h-7 px-2.5 rounded-md text-[12px] font-medium border inline-flex items-center gap-1",
+                      sortKey === "title" ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-700 border-slate-300",
+                    ].join(" ")}
+                  >
+                    Kategorie {sortKey === "title" && (sortDir === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />)}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      }
+    >
+      {loading && <ModalLoader />}
+      {error && <ModalError>{error}</ModalError>}
+      {!companyId && <ModalEmpty>Bitte zuerst eine Firma auswählen.</ModalEmpty>}
+
+      {!loading && !error && companyId && (
+        <div className="flex flex-col">
+          {filtered.length === 0 && (
+            <ModalEmpty>{rows.length === 0 ? "Keine Trend-Daten für diesen Zeitraum." : "Keine Treffer (Filter anpassen)."}</ModalEmpty>
+          )}
+
+          {filtered.map((row, idx) => {
+            const t = signTone(row.sign);
+            const Icon = t.icon;
+            return (
+              <div
+                key={row.key}
+                className={[
+                  "flex items-center justify-between py-2.5 gap-3",
+                  idx < filtered.length - 1 ? "border-b border-slate-100" : "",
+                ].join(" ")}
+              >
+                <span className="text-[13px] font-medium text-slate-900 truncate flex-1">
+                  {row.title}
+                </span>
+                <span className={["inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-[12px] font-semibold tnum", t.bg, t.text].join(" ")}>
+                  <Icon className="h-3.5 w-3.5" />
+                  {fmtDelta(row.delta, row.sign)}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </ModalShell>
+  );
 }
