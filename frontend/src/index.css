@@ -190,6 +190,17 @@
 .dark .bg-slate-50      { background-color: #0f172a !important; }
 .dark .bg-slate-100     { background-color: #1e293b !important; }
 
+/* Opacity-Varianten (z. B. sticky Table-Header bg-slate-50/80) */
+.dark .bg-slate-50\/80  { background-color: rgba(19, 26, 43, 0.97) !important; }
+.dark .bg-slate-50\/90  { background-color: rgba(19, 26, 43, 0.97) !important; }
+.dark .bg-slate-100\/80 { background-color: rgba(30, 41, 59, 0.90) !important; }
+
+/* bg-*-100 Icon-Hintergründe (Zusammenfassung etc.) */
+.dark .bg-amber-100   { background-color: rgb(245 158 11  / 0.15) !important; }
+.dark .bg-emerald-100 { background-color: rgb(16  185 129 / 0.15) !important; }
+.dark .bg-blue-100    { background-color: rgb(59  130 246 / 0.15) !important; }
+.dark .bg-red-100     { background-color: rgb(239 68  68  / 0.15) !important; }
+
 /* Hover-States */
 .dark .hover\:bg-white:hover  { background-color: #1e293b !important; }
 .dark .hover\:bg-slate-50:hover  { background-color: #1e293b !important; }
@@ -237,13 +248,21 @@
 .dark .border-amber-300   { border-color: rgb(245 158 11 / 0.45) !important; }
 
 /* Tonal Text — etwas heller in Dark für Kontrast */
+.dark .text-emerald-600 { color: #34d399 !important; }
 .dark .text-emerald-700 { color: #34d399 !important; }
+.dark .text-green-600   { color: #4ade80 !important; }
 .dark .text-rose-700    { color: #fb7185 !important; }
+.dark .text-red-500     { color: #fb7185 !important; }
+.dark .text-red-600     { color: #fb7185 !important; }
+.dark .text-amber-600   { color: #fbbf24 !important; }
 .dark .text-amber-700   { color: #fbbf24 !important; }
+.dark .text-orange-400  { color: #fb923c !important; }
+.dark .text-blue-600    { color: #60a5fa !important; }
 .dark .text-blue-700    { color: #60a5fa !important; }
 .dark .text-emerald-800 { color: #6ee7b7 !important; }
 .dark .text-rose-800    { color: #fda4af !important; }
 .dark .text-rose-900    { color: #fecdd3 !important; }
+.dark .hover\:text-blue-800:hover { color: #93c5fd !important; }
 
 /* --- Focus-Rings + Shadows (subtiler in Dark) --- */
 .dark .shadow-xs { box-shadow: 0 1px 0 0 rgb(255 255 255 / 0.04) !important; }
@@ -263,9 +282,33 @@
 .dark .bg-slate-900.text-white,
 .dark .bg-slate-900 .text-white { color: #0b1220 !important; }
 
-/* --- Recharts-Grid in Dark --- */
-.dark .recharts-cartesian-grid line { stroke: #1e293b !important; }
-.dark .recharts-cartesian-axis-line { stroke: #334155 !important; }
+/* bg-slate-200 als Hintergrund (z. B. Trennlinie) */
+.dark .bg-slate-200   { background-color: #334155 !important; }
+
+/* --- Design-System-Klassen: var(--slate-900) als Hintergrund ---
+   In Dark ist --slate-900 = #f8fafc (hell), daher explizit invertieren */
+.dark .ds-btn-primary                      { background: #e2e8f0; color: #0b1220; }
+.dark .ds-btn-primary:hover:not(:disabled) { background: #f1f5f9; }
+.dark .ds-brand-mark                       { background: #e2e8f0; color: #0b1220; }
+
+/* --- WorkPulse Logo --- */
+.dark .wp-bubble-bg { fill: #1a8c6a; }
+
+/* --- Recharts in Dark --- */
+/* Kartesische Charts (Bar, Line, Area) */
+.dark .recharts-cartesian-grid line         { stroke: #1e293b !important; }
+.dark .recharts-cartesian-axis-line         { stroke: #334155 !important; }
+.dark .recharts-cartesian-axis-tick text    { fill:   #94a3b8 !important; }
+
+/* Radar Chart */
+.dark .recharts-polar-grid-angle line,
+.dark .recharts-polar-grid-concentric path,
+.dark .recharts-polar-grid-concentric polygon { stroke: #1e293b !important; }
+.dark .recharts-polar-angle-axis-tick text    { fill:   #94a3b8 !important; }
+.dark .recharts-polar-radius-axis-tick text   { fill:   #64748b !important; }
+
+/* Legende */
+.dark .recharts-legend-item-text { color: #cbd5e1 !important; }
 
 /* ============================================================
    Base reset
@@ -290,8 +333,6 @@ a {
   text-decoration: inherit;
 }
 a:hover { color: var(--color-primary-hover); }
-
-h1 { font-size: 3.2em; line-height: 1.1; }
 
 /* ============================================================
    APP SHELL — slim left rail + topbar

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react"
 import { useLocation, useNavigate } from "react-router-dom"
 import { FileSpreadsheet, ArrowRight, Building2, Upload as UploadIcon, Loader2, X } from "lucide-react"
 import { CompanySearchSelect } from "@/components/CompanySearchSelect"
+import { WorkPulseLogo } from "@/components/WorkPulseLogo"
 import { Button } from "@/components/ui/button"
 import { API_URL } from "../config"
 
@@ -436,12 +437,9 @@ export default function Welcome() {
                 {/* Welcome Header */}
                 <div className="text-center mb-10">
                     {/* Brand mark */}
-                    <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-white/10 border border-white/20 mb-6">
-                        <span style={{ font: '700 20px/1 var(--font-sans)', color: '#fff', letterSpacing: '-0.02em' }}>A</span>
+                    <div className="mb-6">
+                        <WorkPulseLogo variant="welcome" />
                     </div>
-                    <h1 style={{ font: '700 40px/1.1 var(--font-sans)', letterSpacing: '-0.025em', color: '#fff', margin: '0 0 12px' }}>
-                        AGB-Analysis
-                    </h1>
                     <p style={{ font: '400 16px/1.6 var(--font-sans)', color: 'rgba(255,255,255,0.65)', maxWidth: 520, margin: '0 auto' }}>
                         KI-gestützte Analyse von Arbeitgeberbewertungen &mdash; Firmen verstehen, vergleichen und verbessern.
                     </p>

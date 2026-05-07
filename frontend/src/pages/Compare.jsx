@@ -710,9 +710,9 @@ const ComparePage = () => {
                         <p className="m-0 mb-0.5 font-mono text-[10px] tracking-[0.06em] uppercase text-slate-500 leading-none">
                             ANALYSE · FIRMENVERGLEICH
                         </p>
-                        <h1 className="m-0 text-[14px] leading-5 font-semibold tracking-tight text-slate-900">
+                        <p className="m-0 text-[14px] leading-5 font-semibold tracking-tight text-slate-900">
                             Vergleich · {activeSlots.length}/{MAX_COMPANIES} Firmen
-                        </h1>
+                        </p>
                     </div>
                 </div>
                 {activeSlots.length >= 2 && (
