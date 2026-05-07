@@ -174,37 +174,31 @@ export default function ReviewDetailModal({
         <span aria-hidden="true" className={`block h-[3px] w-full ${overallTone.bar}`} />
 
         {/* ── Header ── */}
-        <div className="px-5 py-4 pr-14 border-b border-slate-200 flex items-start justify-between gap-3 flex-shrink-0">
-          <div className="flex items-start gap-3 min-w-0 flex-1">
-            <span className={`w-9 h-9 rounded-md grid place-items-center flex-none mt-0.5 ${overallTone.bg} ${overallTone.text} [&_svg]:w-[18px] [&_svg]:h-[18px]`}>
+        <DialogTitle className="sr-only">{fullReview.titel || "Review Details"}</DialogTitle>
+        <div className="px-5 py-3 pr-14 border-b border-slate-200 flex items-center justify-between gap-3 flex-shrink-0">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <span className={`w-7 h-7 rounded-md grid place-items-center flex-none ${overallTone.bg} ${overallTone.text} [&_svg]:w-[14px] [&_svg]:h-[14px]`}>
               <MessageSquare />
             </span>
-            <div className="min-w-0 flex-1">
-              <p className="m-0 mb-0.5 font-mono text-[10px] tracking-[0.06em] uppercase text-slate-500 leading-none">
+            <div className="flex items-center gap-x-3 gap-y-1 flex-wrap min-w-0">
+              <p className="m-0 font-mono text-[10px] tracking-[0.06em] uppercase text-slate-500 leading-none flex-none">
                 EINZEL-REVIEW · DETAIL
               </p>
-              <DialogTitle className="m-0 text-[18px] leading-6 font-semibold tracking-tight text-slate-900 line-clamp-2">
-                {fullReview.titel || "Review Details"}
-              </DialogTitle>
-              <div className="m-0 mt-1.5 text-[11px] text-slate-500 inline-flex items-center gap-x-3 gap-y-1 flex-wrap">
-                <span className="inline-flex items-center gap-1 [&_svg]:w-3 [&_svg]:h-3">
-                  <Calendar />
-                  {formatDate(fullReview.datum)}
+              <span className="text-slate-300 text-[10px]">·</span>
+              <span className="inline-flex items-center gap-1 text-[11px] text-slate-500 [&_svg]:w-3 [&_svg]:h-3">
+                <Calendar />
+                {formatDate(fullReview.datum)}
+              </span>
+              <span className="text-slate-300 text-[10px]">·</span>
+              <span className="inline-flex items-center gap-1 text-[11px] text-slate-500 [&_svg]:w-3 [&_svg]:h-3">
+                <User />
+                {fullReview.sourceType || "Unbekannt"}
+              </span>
+              {fullReview.status && (
+                <span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-700 font-medium text-[10.5px] uppercase tracking-wider">
+                  {formatStatus(fullReview.status)}
                 </span>
-                <span className="text-slate-300">·</span>
-                <span className="inline-flex items-center gap-1 [&_svg]:w-3 [&_svg]:h-3">
-                  <User />
-                  {fullReview.sourceType || "Unbekannt"}
-                </span>
-                {fullReview.status && (
-                  <>
-                    <span className="text-slate-300">·</span>
-                    <span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-700 font-medium text-[10.5px] uppercase tracking-wider">
-                      {formatStatus(fullReview.status)}
-                    </span>
-                  </>
-                )}
-              </div>
+              )}
             </div>
           </div>
 
@@ -269,36 +263,18 @@ export default function ReviewDetailModal({
               </div>
             )}
 
-            {/* Review-Texte: Gut / Schlecht / Verbesserungen */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              {fullReview.gut_am_arbeitgeber && (
-                <Section icon={<ThumbsUp />} eyebrow="POSITIV" title="Gut am Arbeitgeber" tone="good">
-                  <p className="m-0 text-[13px] text-slate-700 leading-relaxed whitespace-pre-wrap">
-                    {formatText(fullReview.gut_am_arbeitgeber)}
-                  </p>
-                </Section>
-              )}
-
-              {fullReview.schlecht_am_arbeitgeber && (
-                <Section icon={<ThumbsDown />} eyebrow="NEGATIV" title="Schlecht am Arbeitgeber" tone="bad">
-                  <p className="m-0 text-[13px] text-slate-700 leading-relaxed whitespace-pre-wrap">
-                    {formatText(fullReview.schlecht_am_arbeitgeber)}
-                  </p>
-                </Section>
-              )}
-            </div>
-
-            {fullReview.verbesserungsvorschlaege && (
-              <Section icon={<Lightbulb />} eyebrow="VORSCHLÄGE" title="Verbesserungsvorschläge" tone="info">
-                <p className="m-0 text-[13px] text-slate-700 leading-relaxed whitespace-pre-wrap">
-                  {formatText(fullReview.verbesserungsvorschlaege)}
-                </p>
-              </Section>
-            )}
-
-            {/* Job-/Stellenbeschreibung */}
-            {(fullReview.stellenbeschreibung || fullReview.jobbeschreibung) && (
+            {/* Review-Texte: alle Textfelder im gemeinsamen Raster */}
+            {(fullReview.titel || fullReview.gut_am_arbeitgeber || fullReview.schlecht_am_arbeitgeber || fullReview.verbesserungsvorschlaege || fullReview.stellenbeschreibung || fullReview.jobbeschreibung || fullReview.sourceType === "Mitarbeiter") && (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {/* Zeile 1: Titel | Stellenbeschreibung (Bewerber) oder Jobbeschreibung (Mitarbeiter) */}
+                {fullReview.titel && (
+                  <Section icon={<FileText />} eyebrow="TITEL" title="Review-Titel">
+                    <p className="m-0 text-[14px] font-medium text-slate-800 leading-snug">
+                      {fullReview.titel}
+                    </p>
+                  </Section>
+                )}
+
                 {fullReview.stellenbeschreibung && (
                   <Section icon={<FileText />} eyebrow="POSITION" title="Stellenbeschreibung">
                     <p className="m-0 text-[13px] text-slate-700 leading-relaxed whitespace-pre-wrap">
@@ -306,10 +282,41 @@ export default function ReviewDetailModal({
                     </p>
                   </Section>
                 )}
+
                 {fullReview.jobbeschreibung && (
                   <Section icon={<Briefcase />} eyebrow="JOB" title="Jobbeschreibung">
                     <p className="m-0 text-[13px] text-slate-700 leading-relaxed whitespace-pre-wrap">
                       {formatText(fullReview.jobbeschreibung)}
+                    </p>
+                  </Section>
+                )}
+
+                {/* Zeile 2: Gut | Schlecht */}
+                <Section icon={<ThumbsUp />} eyebrow="POSITIV" title="Gut am Arbeitgeber" tone="good">
+                  {fullReview.gut_am_arbeitgeber ? (
+                    <p className="m-0 text-[13px] text-slate-700 leading-relaxed whitespace-pre-wrap">
+                      {formatText(fullReview.gut_am_arbeitgeber)}
+                    </p>
+                  ) : (
+                    <p className="m-0 text-[13px] text-slate-400 italic">Keine Angabe</p>
+                  )}
+                </Section>
+
+                <Section icon={<ThumbsDown />} eyebrow="NEGATIV" title="Schlecht am Arbeitgeber" tone="bad">
+                  {fullReview.schlecht_am_arbeitgeber ? (
+                    <p className="m-0 text-[13px] text-slate-700 leading-relaxed whitespace-pre-wrap">
+                      {formatText(fullReview.schlecht_am_arbeitgeber)}
+                    </p>
+                  ) : (
+                    <p className="m-0 text-[13px] text-slate-400 italic">Keine Angabe</p>
+                  )}
+                </Section>
+
+                {/* Verbesserungsvorschläge */}
+                {fullReview.verbesserungsvorschlaege && (
+                  <Section icon={<Lightbulb />} eyebrow="VORSCHLÄGE" title="Verbesserungsvorschläge" tone="info">
+                    <p className="m-0 text-[13px] text-slate-700 leading-relaxed whitespace-pre-wrap">
+                      {formatText(fullReview.verbesserungsvorschlaege)}
                     </p>
                   </Section>
                 )}
