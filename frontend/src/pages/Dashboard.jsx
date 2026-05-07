@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback, useRef } from "react"
 import { useLocation, useNavigate } from "react-router-dom"
 import { Loader2 } from "lucide-react"
 
+import { WorkPulseLogo }     from "@/components/WorkPulseLogo"
 import { TimelineCard }      from "@/components/dashboard/TimelineCard"
 import { TopicRatingCard }   from "@/components/dashboard/TopicRatingCard"
 import { TopicOverviewCard } from "@/components/dashboard/TopicOverviewCard"
@@ -328,8 +329,7 @@ export default function Dashboard() {
         <aside className="ds-rail">
           {/* Brand */}
           <div className="ds-brand">
-            <div className="ds-brand-mark">A</div>
-            <span className="ds-brand-name">AGB-Analysis</span>
+            <WorkPulseLogo variant="badge" />
           </div>
 
           {/* Analyse group */}
