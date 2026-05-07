@@ -748,7 +748,7 @@ const ComparePage = () => {
                                 <div
                                     key={index}
                                     className={[
-                                        "relative rounded-md border p-3 transition-all overflow-hidden",
+                                        "relative rounded-md border p-3 transition-all",
                                         slot.id
                                             ? "border-slate-200 bg-white"
                                             : "border-dashed border-slate-300 bg-slate-50",
@@ -756,7 +756,7 @@ const ComparePage = () => {
                                 >
                                     {/* Tonaler Akzentbalken links wenn besetzt */}
                                     {slot.id && (
-                                        <span aria-hidden="true" className="absolute left-0 top-0 bottom-0 w-[3px]" style={{ background: color.hex }} />
+                                        <span aria-hidden="true" className="absolute left-0 top-0 bottom-0 w-[3px] rounded-l-md" style={{ background: color.hex }} />
                                     )}
                                     {/* Header row: Color picker + label + close */}
                                     <div className="flex items-center gap-2 mb-2.5">
