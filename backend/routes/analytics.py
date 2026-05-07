@@ -1060,19 +1060,36 @@ def analyze_topic(
     
     # Select typical statements (up to 13 most relevant - 3 for "Typische Aussagen" + 10 for "Beispiel-Review")
     # Score each statement by relevance instead of random selection
+    def _richness_score(detail):
+        """Score a review by how complete its text content is across all fields."""
+        fr = detail.get("fullReview") or {}
+        fields = [
+            fr.get("gut_am_arbeitgeber", "") or "",
+            fr.get("schlecht_am_arbeitgeber", "") or "",
+            fr.get("verbesserungsvorschlaege", "") or "",
+            fr.get("stellenbeschreibung", "") or "",
+            fr.get("jobbeschreibung", "") or "",
+        ]
+        filled = sum(1 for f in fields if len(f.strip()) > 20)
+        total_chars = sum(len(f) for f in fields)
+        gut = fr.get("gut_am_arbeitgeber", "") or ""
+        schlecht = fr.get("schlecht_am_arbeitgeber", "") or ""
+        both_bonus = 15 if (len(gut.strip()) > 20 and len(schlecht.strip()) > 20) else 0
+        return filled * 10 + both_bonus + min(total_chars / 100, 20)
+
     if review_details:
         # Score each review_detail by how "typical"/representative it is
         def score_statement(detail):
             text = detail.get("preview", "")
             text_lower = text.lower()
             score = 0.0
-            
+
             # 1. Keyword density: more keyword matches = more relevant
             keyword_hits = 0
             for kw in keywords:
                 keyword_hits += len(re.findall(kw, text_lower, re.IGNORECASE))
             score += keyword_hits * 10
-            
+
             # 2. Ideal sentence length (40-200 chars is most readable/informative)
             length = len(text)
             if 40 <= length <= 200:
@@ -1082,7 +1099,7 @@ def analyze_topic(
             elif length > 300:
                 score += 1  # too long, less "typical"
             # very short (<25) gets 0 bonus
-            
+
             # 3. Penalize generic/uninformative text
             generic_patterns = [
                 r'^(ja|nein|ok|gut|schlecht|nichts|keine ahnung|kein kommentar)',
@@ -1092,7 +1109,7 @@ def analyze_topic(
             for pattern in generic_patterns:
                 if re.search(pattern, text_lower.strip()):
                     score -= 15
-            
+
             # 4. Bonus for substantive content (contains verbs/descriptive words)
             substantive_indicators = [
                 r'\b(ist|sind|war|wurde|haben|kann|sollte|muss|finde|denke|fühle)\b',
@@ -1101,9 +1118,10 @@ def analyze_topic(
             for pattern in substantive_indicators:
                 if re.search(pattern, text_lower):
                     score += 2
-            
-            # 5. Penalize duplicate-like content (will be handled by dedup below)
-            
+
+            # 5. Review richness: prioritize reviews with more filled text fields
+            score += _richness_score(detail) * 0.4  # weighted: relevant but secondary to keyword match
+
             return score
         
         # Score and sort by relevance
@@ -1153,10 +1171,10 @@ def analyze_topic(
                         selected_reviews.append(detail)
         
         # First 3 = relevanz-sortierte "Typische Aussagen" (bleiben stabil)
-        # Ab Index 3 = "Beispiel-Review" → diese werden randomisiert
+        # Ab Index 3 = "Beispiel-Review" → nach Kommentar-Reichhaltigkeit sortiert
         top_statements = selected_reviews[:3]
         example_pool = selected_reviews[3:]
-        random.shuffle(example_pool)
+        example_pool.sort(key=_richness_score, reverse=True)
         selected_reviews = top_statements + example_pool
         
         typical_statements = [detail["preview"] for detail in selected_reviews]

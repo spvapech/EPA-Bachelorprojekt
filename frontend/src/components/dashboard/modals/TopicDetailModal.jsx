@@ -287,6 +287,26 @@ export default function TopicDetailModal({ open, onOpenChange, topic, onBackToTa
   const { data: processedTimelineData, hasGaps: timelineHasGaps } = processTimelineDataWithGaps(filteredTimelineData)
 
   /* ── Reviews / Examples ── */
+  // Sort example reviews (index 3+) by comment richness so the most complete ones appear first
+  const sortedReviewDetails = React.useMemo(() => {
+    const details = topic.reviewDetails || []
+    if (details.length <= 3) return details
+    const richness = (d) => {
+      const fr = d?.fullReview || {}
+      const fields = [
+        fr.gut_am_arbeitgeber, fr.schlecht_am_arbeitgeber,
+        fr.verbesserungsvorschlaege, fr.stellenbeschreibung, fr.jobbeschreibung,
+      ]
+      const filled = fields.filter((f) => f && f.trim().length > 20).length
+      const totalLen = fields.reduce((s, f) => s + (f?.length || 0), 0)
+      const bothBonus = (fr.gut_am_arbeitgeber?.trim().length > 20 && fr.schlecht_am_arbeitgeber?.trim().length > 20) ? 15 : 0
+      return filled * 10 + bothBonus + Math.min(totalLen / 100, 20)
+    }
+    const top3 = details.slice(0, 3)
+    const rest = details.slice(3).slice().sort((a, b) => richness(b) - richness(a))
+    return [...top3, ...rest]
+  }, [topic.reviewDetails])
+
   const totalExamples = topic.typicalStatements?.length || 0
   const reviewStartIndex = 3
   const reviewEndIndex   = Math.min(12, totalExamples - 1)
@@ -297,8 +317,9 @@ export default function TopicDetailModal({ open, onOpenChange, topic, onBackToTa
   const goToNext = () => setCurrentExampleIndex((p) => p < reviewEndIndex   ? p + 1 : reviewStartIndex)
 
   const handleStatementClick = (index) => {
-    if (topic.reviewDetails?.[index]) {
-      setSelectedReviewDetail(topic.reviewDetails[index])
+    const detail = sortedReviewDetails?.[index]
+    if (detail?.fullReview) {
+      setSelectedReviewDetail(detail)
       setSelectedReviewIndex(index)
       setReviewDetailModalOpen(true)
     }
@@ -631,17 +652,27 @@ export default function TopicDetailModal({ open, onOpenChange, topic, onBackToTa
                   </div>
                 )}
               >
-                <div
-                  onClick={handleExampleClick}
-                  className="cursor-pointer p-4 bg-slate-50 hover:bg-blue-50 border border-slate-200 hover:border-blue-300 rounded-md transition-colors group"
-                >
-                  <p className="text-[13px] text-slate-700 italic leading-relaxed">
-                    „{topic.typicalStatements?.[currentExampleIndex] || topic.example}"
-                  </p>
-                  <p className="text-[11px] text-blue-600 mt-2 font-medium opacity-0 group-hover:opacity-100 transition-opacity">
-                    → Vollständige Review öffnen
-                  </p>
-                </div>
+                {(() => {
+                  const hasFullReview = !!sortedReviewDetails?.[currentExampleIndex]?.fullReview
+                  return (
+                    <div
+                      onClick={hasFullReview ? handleExampleClick : undefined}
+                      className={[
+                        "p-4 bg-slate-50 border border-slate-200 rounded-md transition-colors group",
+                        hasFullReview ? "cursor-pointer hover:bg-blue-50 hover:border-blue-300" : "cursor-default",
+                      ].join(" ")}
+                    >
+                      <p className="text-[13px] text-slate-700 italic leading-relaxed">
+                        „{topic.typicalStatements?.[currentExampleIndex] || topic.example}"
+                      </p>
+                      {hasFullReview && (
+                        <p className="text-[11px] text-blue-600 mt-2 font-medium opacity-0 group-hover:opacity-100 transition-opacity">
+                          → Vollständige Review öffnen
+                        </p>
+                      )}
+                    </div>
+                  )
+                })()}
               </Section>
             </div>
             </Collapsible>
@@ -653,11 +684,11 @@ export default function TopicDetailModal({ open, onOpenChange, topic, onBackToTa
           open={reviewDetailModalOpen}
           onOpenChange={setReviewDetailModalOpen}
           reviewDetail={selectedReviewDetail}
-          allReviewDetails={topic.reviewDetails || []}
+          allReviewDetails={sortedReviewDetails}
           currentIndex={selectedReviewIndex}
           onNavigate={(idx) => {
-            if (topic.reviewDetails?.[idx]) {
-              setSelectedReviewDetail(topic.reviewDetails[idx])
+            if (sortedReviewDetails?.[idx]) {
+              setSelectedReviewDetail(sortedReviewDetails[idx])
               setSelectedReviewIndex(idx)
             }
           }}

@@ -72,6 +72,10 @@
   --hair:        1px solid var(--color-border);
   --hair-strong: 1px solid var(--color-border-strong);
 
+  /* WorkPulse logo colours */
+  --wp-bubble: #0f2a5c;
+  --wp-pulse:  #ffffff;
+
   /* Transitions */
   --duration-fast: 120ms;
   --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
@@ -127,6 +131,10 @@
   --color-border-focus:  #818cf8;   /* indigo-400 — etwas heller in Dark */
   --color-grid:          #1e293b;
   --color-axis:          #475569;
+
+  /* WorkPulse logo colours — dark mode */
+  --wp-bubble: #ffffff;
+  --wp-pulse:  #0f2a5c;
 
   /* Slate-Skala für Dark — invertiert die Helligkeit */
   --slate-0:   #131a2b;   /* Card bg */
@@ -292,7 +300,6 @@
 .dark .ds-brand-mark                       { background: #e2e8f0; color: #0b1220; }
 
 /* --- WorkPulse Logo --- */
-.dark .wp-bubble-bg { fill: #1a8c6a; }
 
 /* --- Recharts in Dark --- */
 /* Kartesische Charts (Bar, Line, Area) */

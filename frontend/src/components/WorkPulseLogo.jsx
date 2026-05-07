@@ -17,22 +17,20 @@ export function WorkPulseIcon({ size = 32 }) {
       aria-hidden="true"
     >
       {/* Bubble body */}
-      <rect x="0" y="0" width="44" height="32" rx="8" fill="#085041" className="wp-bubble-bg" />
-      <rect x="0" y="0" width="44" height="32" rx="8" fill="none" stroke="#5DCAA5" strokeWidth="2.5" />
+      <rect x="0" y="0" width="44" height="32" rx="8" style={{ fill: "var(--wp-bubble)" }} />
       {/* Tail */}
-      <path d="M10 30 L5 43 L17 30 Z" fill="#085041" className="wp-bubble-bg" />
-      <path d="M10 30 L5 43 L17 30" fill="none" stroke="#5DCAA5" strokeWidth="2.5" strokeLinejoin="round" />
+      <path d="M10 30 L5 43 L17 30 Z" style={{ fill: "var(--wp-bubble)" }} />
       {/* Pulse line */}
       <polyline
         points="5,16 11,16 15,7 19,24 23,12 27,16 39,16"
         fill="none"
-        stroke="#5DCAA5"
+        style={{ stroke: "var(--wp-pulse)" }}
         strokeWidth="2.5"
         strokeLinecap="round"
         strokeLinejoin="round"
       />
       {/* End dot */}
-      <circle cx="39" cy="16" r="2.5" fill="#5DCAA5" />
+      <circle cx="39" cy="16" r="2.5" style={{ fill: "var(--wp-pulse)" }} />
     </svg>
   )
 }
@@ -78,14 +76,17 @@ export function WorkPulseLogo({ variant = "sidebar" }) {
 
   if (variant === "welcome") {
     return (
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16 }}>
-        <WorkPulseIcon size={56} />
+      <div style={{
+        display: "flex", flexDirection: "column", alignItems: "center", gap: 20,
+        "--wp-bubble": "#ffffff", "--wp-pulse": "#0f2a5c",
+      }}>
+        <WorkPulseIcon size={80} />
         <div style={{ textAlign: "center" }}>
           <div style={{
-            font: "700 40px/1.1 var(--font-sans)",
-            letterSpacing: "-0.025em",
+            font: "700 52px/1.1 var(--font-sans)",
+            letterSpacing: "-0.03em",
             color: "#fff",
-            margin: "0 0 6px",
+            margin: "0 0 8px",
           }}>
             WorkPulse
           </div>
