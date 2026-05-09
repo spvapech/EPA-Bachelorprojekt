@@ -26,6 +26,7 @@ from fastapi import UploadFile
 import pandas as pd
 from typing import Dict, Any, List, Optional
 from database.supabase_client import get_supabase_client
+from services.csv_service import read_csv_to_dataframe
 import io
 import re
 import html

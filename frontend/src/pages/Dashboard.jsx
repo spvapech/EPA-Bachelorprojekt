@@ -1,7 +1,7 @@
 import * as React from "react"
 import { useState, useEffect, useCallback, useRef } from "react"
 import { useLocation, useNavigate } from "react-router-dom"
-import { Loader2 } from "lucide-react"
+import { Loader2, Upload, Clock } from "lucide-react"
 
 import { WorkPulseLogo }     from "@/components/WorkPulseLogo"
 import { TimelineCard }      from "@/components/dashboard/TimelineCard"
@@ -9,10 +9,11 @@ import { TopicRatingCard }   from "@/components/dashboard/TopicRatingCard"
 import { TopicOverviewCard } from "@/components/dashboard/TopicOverviewCard"
 import KPIGrid               from "@/components/dashboard/KPIGrid"
 import { CompanySearchSelect } from "@/components/CompanySearchSelect"
-import SorceModal       from "../components/dashboard/modals/SorceModal"
-import TrendModal       from "../components/dashboard/modals/TrendModal"
+import SorceModal        from "../components/dashboard/modals/SorceModal"
+import TrendModal        from "../components/dashboard/modals/TrendModal"
 import MostCriticalModal from "../components/dashboard/modals/MostCriticalModal"
 import NegativTopicModal from "../components/dashboard/modals/NegativTopicModal"
+import ImportModal, { getImportHistory } from "../components/dashboard/modals/ImportModal"
 
 import {
   Dashboard as DashboardIcon, Compare, Download, Building, Home, Search, Loader, Sun, Moon,
@@ -33,6 +34,10 @@ export default function Dashboard() {
   const [openTrend, setOpenTrend]     = useState(false)
   const [openNegative, setOpenNegative] = useState(false)
   const [openMostCritical, setOpenMostCritical] = useState(false)
+  const [openImport, setOpenImport]   = useState(false)
+
+  /* ---- Import history ---- */
+  const [importHistory, setImportHistory] = useState([])
 
   /* ---- Company state ---- */
   const [companyQuery, setCompanyQuery] = useState(companyNameFromWelcome || "")
@@ -301,9 +306,17 @@ export default function Dashboard() {
     if (!effectiveCompanyId) {
       setData(null); setTrendData(null); setMostCriticalData(null); setNegativeTopicItem(null)
       setDashboardLoadingStates((p) => ({ ...p, kpiCards: false }))
+      setImportHistory([])
       return
     }
     setDashboardLoadingStates((p) => ({ ...p, kpiCards: true }))
+    setImportHistory(getImportHistory(effectiveCompanyId))
+    Promise.allSettled([getAvg(), getTrend(), getMostCritical(), getNegativeTopic()])
+      .then(() => setDashboardLoadingStates((p) => ({ ...p, kpiCards: false })))
+  }, [effectiveCompanyId])
+
+  const handleImportSuccess = useCallback(() => {
+    setImportHistory(getImportHistory(effectiveCompanyId))
     Promise.allSettled([getAvg(), getTrend(), getMostCritical(), getNegativeTopic()])
       .then(() => setDashboardLoadingStates((p) => ({ ...p, kpiCards: false })))
   }, [effectiveCompanyId])
@@ -359,6 +372,15 @@ export default function Dashboard() {
               {companies.length > 0 && (
                 <span className="ds-nav-count">{companies.length}</span>
               )}
+            </button>
+            <button
+              className="ds-nav-link"
+              onClick={() => setOpenImport(true)}
+              disabled={!effectiveCompanyId}
+              title={effectiveCompanyId ? "Daten importieren" : "Erst eine Firma auswählen"}
+            >
+              <Upload style={{ width: 16, height: 16 }} />
+              Importieren
             </button>
           </div>
 
@@ -448,6 +470,15 @@ export default function Dashboard() {
                 Export
               </button>
               <button
+                className="ds-btn ds-btn-secondary"
+                onClick={() => setOpenImport(true)}
+                disabled={!effectiveCompanyId}
+                title="Excel-Daten für diese Firma importieren"
+              >
+                <Upload style={{ width: 12, height: 12 }} />
+                Daten importieren
+              </button>
+              <button
                 className="ds-btn ds-btn-primary"
                 onClick={() => navigate("/compare", {
                   state: { companies: selectedCompanyId && selectedCompanyName ? [{ id: selectedCompanyId, name: selectedCompanyName }] : [] }
@@ -467,9 +498,29 @@ export default function Dashboard() {
                 <h1 style={{ margin: 0, font: "600 24px/30px var(--font-sans)", letterSpacing: "-0.015em", color: "var(--color-fg)" }}>
                   {selectedCompanyName}
                 </h1>
-                <p style={{ margin: "4px 0 0", font: "400 13px/1.5 var(--font-sans)", color: "var(--color-fg-muted)" }}>
-                  Übersicht aller Bewertungen, Topics und Trends.
-                </p>
+                <div style={{ display: "flex", alignItems: "center", gap: 16, marginTop: 4, flexWrap: "wrap" }}>
+                  <p style={{ margin: 0, font: "400 13px/1.5 var(--font-sans)", color: "var(--color-fg-muted)" }}>
+                    Übersicht aller Bewertungen, Topics und Trends.
+                  </p>
+                  {importHistory.length > 0 && (
+                    <span
+                      style={{
+                        display: "inline-flex", alignItems: "center", gap: 4,
+                        font: "400 11px/1 var(--font-sans)", color: "var(--color-fg-subtle)",
+                        padding: "3px 8px", borderRadius: "var(--radius-full)",
+                        border: "1px solid var(--color-border)", background: "var(--slate-50)",
+                      }}
+                      title={`Import-Verlauf: ${importHistory.length} Einträge`}
+                    >
+                      <Clock style={{ width: 10, height: 10 }} />
+                      Letzter Import:{" "}
+                      {new Date(importHistory[0].timestamp).toLocaleString("de-DE", {
+                        day: "2-digit", month: "2-digit", year: "numeric",
+                        hour: "2-digit", minute: "2-digit",
+                      })}
+                    </span>
+                  )}
+                </div>
               </div>
             )}
 
@@ -560,6 +611,14 @@ export default function Dashboard() {
         onOpenChange={setOpenNegative}
         companyId={effectiveCompanyId}
         topic={negativeTopicItem}
+      />
+
+      <ImportModal
+        open={openImport}
+        onOpenChange={setOpenImport}
+        companyId={effectiveCompanyId}
+        companyName={selectedCompanyName}
+        onImportSuccess={handleImportSuccess}
       />
     </>
   )
