@@ -9,13 +9,14 @@ DB columns (sternebewertung_<topic>), and imports into Supabase.
 Features:
 - Decodes HTML entities (&lt; &gt; &amp; &quot; etc.) from text fields
 - Normalizes column names to DB-friendly format
-- Maps rating columns to specific topics
+- Maps rating columns to specific topics by name (position-independent)
 - Handles both candidate and employee data
 
 Assumptions (based on your schemas):
 - Candidates Excel is identified ONLY by column "Stellenbeschreibung" (-> stellenbeschreibung).
 - Employee Excel does NOT have that column.
-- Both Excel types have repeated "Sternebewertung" columns where the next column is the topic/comment.
+- Rating columns are either explicitly named (sternebewertung_<topic>) or generic
+  (sternebewertung / sternebewertung_<N>) paired with the next topic column (legacy fallback).
 - Candidates DB does NOT store topic comments (only the ratings); Employee DB stores BOTH ratings + topic comments.
 """
 
@@ -31,7 +32,7 @@ import html
 
 
 # ----------------------------
-# Whitelists (DB column names)
+# Whitelists and required columns
 # ----------------------------
 
 CANDIDATES_ALLOWED = {
@@ -91,6 +92,10 @@ EMPLOYEE_ALLOWED = {
     "company_id",
 }
 
+# Minimum columns that must be present for each sheet type.
+CANDIDATES_REQUIRED: set[str] = {"titel", "stellenbeschreibung"}
+EMPLOYEE_REQUIRED: set[str] = {"titel"}
+
 
 # ----------------------------
 # Helpers
@@ -138,38 +143,47 @@ def is_sternebewertung_col(col: str) -> bool:
     return col == "sternebewertung" or re.fullmatch(r"sternebewertung_\d+", col) is not None
 
 
-def extract_sternebewertungen_by_position(df: pd.DataFrame) -> pd.DataFrame:
+def extract_sternebewertungen_by_name(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Rule:
-    Each 'sternebewertung' column belongs to the topic/comment in the NEXT column.
-    Create a numeric column: sternebewertung_<slug(next_col_name)>
-    and keep the topic/comment column as-is (it already contains comments).
+    Resolve Sternebewertung columns by header name, not column position.
 
-    Example:
-      [sternebewertung] [arbeitsatmosphaere]  -> creates sternebewertung_arbeitsatmosphaere = numeric(sternebewertung)
-      topic column 'arbeitsatmosphaere' stays with text/comments.
+    Two accepted naming styles:
+    1. Explicit  – column already carries the topic in its name after normalization,
+                   e.g. 'sternebewertung_arbeitsatmosphaere'.  These are converted to
+                   numeric in-place; no positional lookup is needed.
+    2. Generic   – column is named 'sternebewertung' or 'sternebewertung_<N>' (pandas
+                   duplicate-suffix).  Legacy positional fallback: the immediately
+                   following column is treated as the topic name.  Kept for backward
+                   compatibility with Excel exports that use repeated generic headers.
+
+    In both cases the intermediate generic sternebewertung columns are dropped at the end.
     """
     df = df.copy()
     cols = list(df.columns)
 
+    # Step 1 – explicit naming: sternebewertung_<word> columns are already correct.
+    for col in cols:
+        if col.startswith("sternebewertung_") and not re.fullmatch(r"sternebewertung_\d+", col):
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+
+    # Step 2 – generic naming: positional fallback for 'sternebewertung' / 'sternebewertung_\d+'.
     for i, col in enumerate(cols):
         if is_sternebewertung_col(col):
             if i + 1 >= len(cols):
                 continue
-
             topic_col = cols[i + 1]
             new_col = f"sternebewertung_{slugify(topic_col)}"
+            if new_col not in df.columns:
+                df[new_col] = pd.to_numeric(df[col], errors="coerce")
 
-            # avoid overwriting if already exists
-            if new_col in df.columns:
-                continue
-
-            df[new_col] = pd.to_numeric(df[col], errors="coerce")
-
-    # Drop original repeated "sternebewertung" columns (they are intermediate)
     drop_cols = [c for c in df.columns if is_sternebewertung_col(c)]
     df = df.drop(columns=drop_cols, errors="ignore")
     return df
+
+
+def validate_required_columns(df: pd.DataFrame, required: set[str]) -> list[str]:
+    """Return sorted list of required column names absent from *df*."""
+    return sorted(col for col in required if col not in df.columns)
 
 
 def to_iso_dt(val) -> Optional[str]:
@@ -234,18 +248,32 @@ class ExcelProcessor:
             df = pd.read_excel(io.BytesIO(contents))
             result["total_rows"] = int(len(df))
 
-            # Normalize & map ratings
+            # Normalize & map ratings by header name (position-independent)
             df = normalize_columns(df)
-            df = extract_sternebewertungen_by_position(df)
+            df = extract_sternebewertungen_by_name(df)
 
-            # Detect type
+            # Detect type and validate required columns
             if self._is_candidates_data(df):
                 result["detected_type"] = "candidates"
+                missing = validate_required_columns(df, CANDIDATES_REQUIRED)
+                if missing:
+                    result["status"] = "error"
+                    result["errors"].append(
+                        f"Required columns missing for candidates sheet: {', '.join(missing)}"
+                    )
+                    return result
                 imported, errors = await self._import_candidates(df, company_id)
                 result["imported"]["candidates"] = imported
                 result["errors"].extend(errors)
             else:
                 result["detected_type"] = "employees"
+                missing = validate_required_columns(df, EMPLOYEE_REQUIRED)
+                if missing:
+                    result["status"] = "error"
+                    result["errors"].append(
+                        f"Required columns missing for employees sheet: {', '.join(missing)}"
+                    )
+                    return result
                 imported, errors = await self._import_employees(df, company_id)
                 result["imported"]["employees"] = imported
                 result["errors"].extend(errors)
