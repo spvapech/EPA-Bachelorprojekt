@@ -406,6 +406,7 @@ export const TopicRatingCard = memo(function TopicRatingCard({ companyId, onFilt
         granularity,
         selectedYear,
         visibleTopics,
+        allTopics: topics || [],
         stats
       });
     }
@@ -681,47 +682,49 @@ export const TopicRatingCard = memo(function TopicRatingCard({ companyId, onFilt
         />
 
         <div className="px-4 pt-4 pb-4 flex flex-col flex-1 min-h-0">
-          <div id="topic-rating-chart-export" className="relative h-[220px] w-full border-0 outline-none flex-shrink-0">
-            {emptyMessage && !showOverlay ? (
-              <div className="h-full flex items-center justify-center">
-                <p className="text-[13px] text-slate-500">{emptyMessage}</p>
-              </div>
-            ) : (
-              <TopicChart height={220} />
-            )}
-
-            {showOverlay && (
-              <div className="absolute inset-0 bg-white/70 flex items-center justify-center rounded-md pointer-events-none">
-                <div className="flex items-center gap-2">
-                  <div className="animate-spin rounded-full h-5 w-5 border-2 border-slate-200 border-t-slate-600"></div>
-                  <p className="text-slate-600 text-[12px]">{overlayLabel}</p>
+          <div id="topic-rating-chart-export" className="w-full border-0 outline-none flex-shrink-0">
+            <div className="relative h-[220px] w-full">
+              {emptyMessage && !showOverlay ? (
+                <div className="h-full flex items-center justify-center">
+                  <p className="text-[13px] text-slate-500">{emptyMessage}</p>
                 </div>
+              ) : (
+                <TopicChart height={220} />
+              )}
+
+              {showOverlay && (
+                <div className="absolute inset-0 bg-white/70 flex items-center justify-center rounded-md pointer-events-none">
+                  <div className="flex items-center gap-2">
+                    <div className="animate-spin rounded-full h-5 w-5 border-2 border-slate-200 border-t-slate-600"></div>
+                    <p className="text-slate-600 text-[12px]">{overlayLabel}</p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Legende innerhalb des Export-Containers für PDF-Erfassung */}
+            {visibleTopics.length > 0 && !emptyMessage && (
+              <div className="mt-4 flex items-center justify-center gap-x-4 gap-y-1 flex-wrap text-[11px]">
+                {visibleTopics.slice(0, 6).map((topic) => {
+                  const colorIdx = (topics || []).indexOf(topic)
+                  return (
+                    <span key={topic} className="inline-flex items-center gap-1.5">
+                      <span
+                        className="inline-block w-3 h-1 rounded-full flex-none"
+                        style={{ background: topicColor(Math.max(colorIdx, 0)) }}
+                      />
+                      <span className="text-slate-600 truncate max-w-[120px]">
+                        {prettifyTopicKey(topic)}
+                      </span>
+                    </span>
+                  )
+                })}
+                {visibleTopics.length > 6 && (
+                  <span className="text-slate-400">+ {visibleTopics.length - 6}</span>
+                )}
               </div>
             )}
           </div>
-
-          {/* Externe Legende — gleiche Struktur wie Timeline-ChartLegend (mt-4) */}
-          {visibleTopics.length > 0 && !emptyMessage && (
-            <div className="mt-4 flex items-center justify-center gap-x-4 gap-y-1 flex-wrap text-[11px]">
-              {visibleTopics.slice(0, 6).map((topic) => {
-                const colorIdx = (topics || []).indexOf(topic)
-                return (
-                  <span key={topic} className="inline-flex items-center gap-1.5">
-                    <span
-                      className="inline-block w-3 h-1 rounded-full flex-none"
-                      style={{ background: topicColor(Math.max(colorIdx, 0)) }}
-                    />
-                    <span className="text-slate-600 truncate max-w-[120px]">
-                      {prettifyTopicKey(topic)}
-                    </span>
-                  </span>
-                )
-              })}
-              {visibleTopics.length > 6 && (
-                <span className="text-slate-400">+ {visibleTopics.length - 6}</span>
-              )}
-            </div>
-          )}
 
           {gapNotes.length > 0 && (
             <p className="text-[11px] text-slate-500 text-center mt-2 italic flex items-center justify-center gap-1.5">

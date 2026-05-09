@@ -483,7 +483,9 @@ export const TimelineCard = memo(function TimelineCard({ companyId, onFiltersCha
                 source,
                 granularity,
                 selectedYear,
-                stats
+                stats,
+                hasForecast: forecastData.length > 0,
+                hasInterpolation: processedHistorical.length > 0 && processedHistorical.some(d => d._isMissing),
             });
         }
     }, [metric, source, granularity, selectedYear, timelineData, forecastData, trendData]); // onFiltersChange NICHT in Dependencies!
@@ -872,25 +874,26 @@ export const TimelineCard = memo(function TimelineCard({ companyId, onFiltersCha
 
                 {/* Content nimmt restliche Card-Höhe ein, Stats werden via flex-1 Spacer an Boden gedrückt */}
                 <div className="px-4 pt-4 pb-4 flex flex-col flex-1 min-h-0">
-                    <div id="timeline-chart-export" className="relative h-[220px] w-full flex-shrink-0">
-                        {emptyMessage && !showOverlay ? (
-                            <div className="h-full flex items-center justify-center">
-                                <p className="text-[13px] text-slate-500">{emptyMessage}</p>
-                            </div>
-                        ) : (
-                            <TimelineChart height={220} />
-                        )}
-                        {showOverlay && (
-                            <div className="absolute inset-0 bg-white/70 flex items-center justify-center rounded-md pointer-events-none">
-                                <div className="flex items-center gap-2">
-                                    <div className="animate-spin rounded-full h-5 w-5 border-2 border-slate-200 border-t-slate-600"></div>
-                                    <p className="text-slate-600 text-[12px]">{overlayLabel}</p>
+                    <div id="timeline-chart-export" className="w-full flex-shrink-0">
+                        <div className="relative h-[220px] w-full">
+                            {emptyMessage && !showOverlay ? (
+                                <div className="h-full flex items-center justify-center">
+                                    <p className="text-[13px] text-slate-500">{emptyMessage}</p>
                                 </div>
-                            </div>
-                        )}
+                            ) : (
+                                <TimelineChart height={220} />
+                            )}
+                            {showOverlay && (
+                                <div className="absolute inset-0 bg-white/70 flex items-center justify-center rounded-md pointer-events-none">
+                                    <div className="flex items-center gap-2">
+                                        <div className="animate-spin rounded-full h-5 w-5 border-2 border-slate-200 border-t-slate-600"></div>
+                                        <p className="text-slate-600 text-[12px]">{overlayLabel}</p>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                        <ChartLegend />
                     </div>
-
-                    <ChartLegend />
                     {timelineHasGaps && (
                         <p className="text-[11px] text-slate-500 text-center italic flex items-center justify-center gap-1.5 mt-2">
                             <span className="inline-block w-5 h-0 border-t border-dashed border-slate-400"></span>

@@ -48,6 +48,9 @@ const COLORS = {
     indigo500:  [99, 102, 241],
     indigo600:  [79, 70, 229],
 
+    // WorkPulse Brand
+    wpBubble:   [15, 42, 92],
+
     // Legacy aliases (rückwärtskompatibel mit altem Code)
     get primary()      { return this.indigo500; },
     get primaryDark()  { return this.indigo600; },
@@ -248,7 +251,7 @@ const sanitizeOklchColors = (element, sourceDoc) => {
 };
 
 // ─── Helper: html2canvas-basierte Chart-Extraktion (erfasst Chart + Legende) ─
-const extractChartViaHtml2Canvas = async (containerElement, targetWidth = 1400) => {
+const extractChartViaHtml2Canvas = async (containerElement, targetWidth = 2400) => {
     if (!containerElement) return null;
 
     const width = containerElement.offsetWidth || containerElement.scrollWidth || 600;
@@ -257,7 +260,7 @@ const extractChartViaHtml2Canvas = async (containerElement, targetWidth = 1400) 
     console.log(`html2canvas: Container-Größe ${width}x${height}`);
 
     const canvas = await html2canvas(containerElement, {
-        scale: Math.max(2, targetWidth / width), // Mindestens 2x Auflösung
+        scale: Math.max(3, targetWidth / width), // Mindestens 3x Auflösung
         backgroundColor: '#ffffff',
         logging: false,
         useCORS: true,
@@ -336,7 +339,7 @@ const extractChartViaHtml2Canvas = async (containerElement, targetWidth = 1400) 
 };
 
 // ─── Helper: Chart-Bild extrahieren (Hybrid: html2canvas → SVG-Fallback) ───
-const extractChartImage = async (containerElement, targetWidth = 1400) => {
+const extractChartImage = async (containerElement, targetWidth = 2400) => {
     if (!containerElement) return null;
 
     // Methode 1: html2canvas für gesamten Container (erfasst Chart + Legende)
@@ -381,9 +384,9 @@ const addFooter = (doc, pageNum, totalPages, companyName) => {
     doc.setFontSize(7.5);
     doc.setFont('helvetica', 'normal');
 
-    // Links: Firmenname
+    // Links: WorkPulse + Firmenname
     doc.setTextColor(...COLORS.textLight);
-    doc.text(`${companyName} \u2013 Analytics Report`, PAGE.marginLeft, y);
+    doc.text(`WorkPulse \u00b7 ${companyName}`, PAGE.marginLeft, y);
 
     // Mitte: Datum
     const dateStr = new Date().toLocaleDateString('de-DE', {
@@ -484,7 +487,7 @@ const drawKPICard = (doc, x, y, width, height, {
     doc.setTextColor(...t.text);
     doc.text(fitText(String(label), innerW), innerX, y + 7);
 
-    // ── Big Value: nutzt volle Karten-Breite ──
+    // ── Big Value: nutzt volle Karten-Breite, mit Zeilenumbruch bei langen Texten ──
     const rawValue = String(value);
     let valueFontSize = 22;
     doc.setFont('helvetica', 'bold');
@@ -493,11 +496,26 @@ const drawKPICard = (doc, x, y, width, height, {
         valueFontSize -= 1;
         doc.setFontSize(valueFontSize);
     }
-    const displayValue = fitText(rawValue, innerW);
 
-    const valueBaselineY = y + height * 0.42 + valueFontSize * 0.18;
     doc.setTextColor(...t.value);
-    doc.text(displayValue, innerX, valueBaselineY);
+    const lineHeight = valueFontSize * 0.45;
+
+    if (doc.getTextWidth(rawValue) > innerW) {
+        const lines = doc.splitTextToSize(rawValue, innerW);
+        const maxLines = Math.min(lines.length, 3);
+        const totalTextH = maxLines * lineHeight;
+        const valueStartY = y + height * 0.35 - totalTextH / 2 + valueFontSize * 0.18;
+        for (let i = 0; i < maxLines; i++) {
+            const lineText = i === maxLines - 1 && maxLines < lines.length
+                ? fitText(lines.slice(i).join(' '), innerW)
+                : lines[i];
+            doc.text(lineText, innerX, valueStartY + i * lineHeight);
+        }
+        var valueBaselineY = valueStartY + (maxLines - 1) * lineHeight;
+    } else {
+        var valueBaselineY = y + height * 0.42 + valueFontSize * 0.18;
+        doc.text(rawValue, innerX, valueBaselineY);
+    }
 
     // ── Badge-Pill UNTER dem Wert (eigene Zeile) ──
     if (badge) {
@@ -635,6 +653,191 @@ const addChartImage = (doc, imgResult, yPos, maxAvailableHeight = null) => {
 };
 
 
+// ─── Helper: WorkPulse-Logo (Sprechblase mit Puls-Linie) ────────────────────
+// Zeichnet das Logo skaliert ab (x, y) mit gegebener Breite.
+// SVG-Viewbox ist 44×48; die sichtbare Form ist ~44×43.
+const drawWorkPulseLogo = (doc, x, y, width, bubbleColor = COLORS.slate900, pulseColor = COLORS.slate0) => {
+    const s = width / 44;
+
+    // Bubble body
+    doc.setFillColor(...bubbleColor);
+    doc.roundedRect(x, y, 44 * s, 32 * s, 8 * s, 8 * s, 'F');
+
+    // Tail (triangle via lines)
+    doc.triangle(
+        x + 10 * s, y + 30 * s,
+        x + 5 * s,  y + 43 * s,
+        x + 17 * s, y + 30 * s,
+        'F',
+    );
+
+    // Pulse polyline: 5,16 → 11,16 → 15,7 → 19,24 → 23,12 → 27,16 → 39,16
+    doc.setDrawColor(...pulseColor);
+    doc.setLineWidth(2.5 * s);
+    doc.setLineCap('round');
+    doc.setLineJoin('round');
+    const pts = [[5,16],[11,16],[15,7],[19,24],[23,12],[27,16],[39,16]];
+    for (let i = 0; i < pts.length - 1; i++) {
+        doc.line(
+            x + pts[i][0] * s,   y + pts[i][1] * s,
+            x + pts[i+1][0] * s, y + pts[i+1][1] * s,
+        );
+    }
+
+    // End dot
+    doc.setFillColor(...pulseColor);
+    doc.circle(x + 39 * s, y + 16 * s, 2.5 * s, 'F');
+
+    // Reset line styles
+    doc.setLineCap('butt');
+    doc.setLineJoin('miter');
+};
+
+// ─── Helper: Seitenheader auf allen Inhaltsseiten (ab Seite 2) ─────────────
+// Layout (y=0…14mm):
+//   [2mm indigo bar][white strip: brand mark · title · date][0.2pt hairline]
+const addPageHeader = (doc, documentTitle) => {
+    // Slim brand accent bar — mirrors the title-page bar
+    doc.setFillColor(...COLORS.wpBubble);
+    doc.rect(0, 0, PAGE.width, 2, 'F');
+
+    // White strip so the header is visually distinct from the page background
+    doc.setFillColor(...COLORS.white);
+    doc.rect(0, 2, PAGE.width, 12, 'F');
+
+    // WorkPulse logo (speech-bubble with pulse line)
+    drawWorkPulseLogo(doc, PAGE.marginLeft, 3.5, 8, COLORS.wpBubble, COLORS.slate0);
+
+    // Document title (truncated to keep it off the date)
+    const title = String(documentTitle).length > 55
+        ? String(documentTitle).slice(0, 55) + '…'
+        : String(documentTitle);
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...COLORS.slate700);
+    doc.text(title, PAGE.marginLeft + 12, 9.5);
+
+    // Export date — right-aligned
+    const dateStr = new Date().toLocaleDateString('de-DE', {
+        day: '2-digit', month: '2-digit', year: 'numeric',
+    });
+    doc.setFontSize(7.5);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(...COLORS.slate400);
+    doc.text(dateStr, PAGE.contentRight, 9.5, { align: 'right' });
+
+    // Hairline separator
+    doc.setDrawColor(...COLORS.slate200);
+    doc.setLineWidth(0.2);
+    doc.line(PAGE.marginLeft, 14, PAGE.contentRight, 14);
+};
+
+// ─── Helper: Bildunterschrift unterhalb eines Charts ────────────────────────
+const addChartCaption = (doc, yPos, text) => {
+    doc.setFontSize(7.5);
+    doc.setFont('helvetica', 'italic');
+    doc.setTextColor(...COLORS.slate400);
+    doc.text(text, PAGE.width / 2, yPos + 3.5, { align: 'center' });
+    return yPos + 8;
+};
+
+
+// ─── Topic-Farbpalette (identisch mit TopicRatingCard.jsx) ─────────────────
+const TOPIC_PALETTE = [
+    '#3b82f6', '#f97316', '#10b981', '#a855f7', '#ef4444',
+    '#14b8a6', '#eab308', '#6366f1', '#f43f5e', '#0ea5e9', '#84cc16', '#d946ef',
+];
+
+const hexToRgb = (hex) => {
+    const n = parseInt(hex.replace('#', ''), 16);
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+};
+
+// ─── Helper: Topic-Legende unterhalb des Charts zeichnen ───────────────────
+const drawTopicLegend = (doc, yPos, visibleTopics, allTopics, prettify) => {
+    const itemH = 4.5;
+    const dotR = 1.2;
+    const gap = 3;
+    const maxW = PAGE.contentWidth;
+    let curX = PAGE.marginLeft;
+    let curY = yPos + 2;
+
+    doc.setFontSize(7.5);
+    doc.setFont('helvetica', 'normal');
+
+    for (const topic of visibleTopics) {
+        const colorIdx = allTopics.indexOf(topic);
+        const color = hexToRgb(TOPIC_PALETTE[Math.max(colorIdx, 0) % TOPIC_PALETTE.length]);
+        const label = prettify ? prettify(topic) : topic;
+        const labelW = doc.getTextWidth(label);
+        const itemW = dotR * 2 + 2 + labelW;
+
+        if (curX + itemW > PAGE.contentRight && curX > PAGE.marginLeft) {
+            curX = PAGE.marginLeft;
+            curY += itemH + 1;
+        }
+
+        doc.setFillColor(...color);
+        doc.roundedRect(curX, curY - 0.5, 4, 1.5, 0.75, 0.75, 'F');
+
+        doc.setTextColor(...COLORS.slate600);
+        doc.text(label, curX + 6, curY + 0.8);
+
+        curX += 6 + labelW + gap;
+    }
+
+    return curY + itemH + 2;
+};
+
+// ─── Helper: Timeline-Legende (Historisch / Interpoliert / Prognose) ───────
+const drawTimelineLegend = (doc, yPos, { metric, hasForecast, hasInterpolation }) => {
+    let curX = PAGE.width / 2;
+    const items = [];
+
+    items.push({ label: 'Historisch', color: [59, 130, 246], style: 'solid' });
+
+    if (hasInterpolation) {
+        items.push({ label: 'Interpoliert', color: [148, 163, 184], style: 'dashed' });
+    }
+
+    if (hasForecast && (metric === 'Ø Score' || metric === 'Trend')) {
+        items.push({ label: 'Prognose', color: [249, 115, 22], style: 'dashed' });
+    }
+
+    doc.setFontSize(7.5);
+    doc.setFont('helvetica', 'normal');
+    const totalW = items.reduce((sum, it) => sum + 8 + doc.getTextWidth(it.label) + 6, -6);
+    curX = PAGE.width / 2 - totalW / 2;
+    const y = yPos + 3;
+
+    for (const item of items) {
+        doc.setDrawColor(...item.color);
+        doc.setLineWidth(0.8);
+        if (item.style === 'dashed') {
+            doc.setLineDashPattern([2, 1.5], 0);
+        } else {
+            doc.setLineDashPattern([], 0);
+        }
+        doc.line(curX, y, curX + 6, y);
+        doc.setLineDashPattern([], 0);
+
+        doc.setTextColor(...COLORS.slate600);
+        doc.text(item.label, curX + 8, y + 1);
+        curX += 8 + doc.getTextWidth(item.label) + 6;
+    }
+
+    return yPos + 8;
+};
+
+// ─── Helper: Topic-Key lesbar formatieren (gleich wie TopicRatingCard) ──────
+const prettifyTopicKey = (key) => {
+    if (!key) return '';
+    return key
+        .replace(/_/g, ' ')
+        .replace(/\b\w/g, c => c.toUpperCase());
+};
+
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // ─── HAUPT-EXPORT-FUNKTION ──────────────────────────────────────────────────
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -685,25 +888,20 @@ export const exportKPIsAsPDF = async (kpiData) => {
     doc.setFillColor(...COLORS.slate900);
     doc.rect(0, 0, PAGE.width, heroH, 'F');
 
-    // Tonaler Akzentbalken oben (indigo)
-    doc.setFillColor(...COLORS.indigo500);
+    // Tonaler Akzentbalken oben (brand)
+    doc.setFillColor(...COLORS.wpBubble);
     doc.rect(0, 0, PAGE.width, 3, 'F');
 
-    // Brand-Mark (weißes Quadrat mit "A" — wie im Dashboard-Rail)
-    const brandY = 22;
-    const brandX = PAGE.width / 2;
-    doc.setFillColor(...COLORS.slate0);
-    doc.roundedRect(brandX - 9, brandY, 18, 18, 3, 3, 'F');
-    doc.setFontSize(15);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(...COLORS.slate900);
-    doc.text('A', brandX, brandY + 13, { align: 'center' });
+    // WorkPulse Logo (Sprechblase mit Puls-Linie, weiß auf dunkel)
+    const brandY = 20;
+    const logoW = 22;
+    drawWorkPulseLogo(doc, PAGE.width / 2 - logoW / 2, brandY, logoW, COLORS.slate0, COLORS.wpBubble);
 
     // Eyebrow (mono, hell)
     doc.setFontSize(8);
     doc.setFont('courier', 'bold');
     doc.setTextColor(150, 163, 184); // slate-400 hellaufgehellt für Dark-Bg
-    doc.text('AGB-ANALYSIS · ANALYTICS REPORT', PAGE.width / 2, brandY + 28, { align: 'center' });
+    doc.text('WORKPULSE · ANALYTICS REPORT', PAGE.width / 2, brandY + 30, { align: 'center' });
 
     // Haupttitel — Firmenname (groß, weiß)
     doc.setFontSize(28);
@@ -723,7 +921,7 @@ export const exportKPIsAsPDF = async (kpiData) => {
     doc.text('Übersicht aller Bewertungen, Topics und Trends', PAGE.width / 2, brandY + 56, { align: 'center' });
 
     // Dünne Trennlinie unter dem Titel
-    doc.setDrawColor(...COLORS.indigo500);
+    doc.setDrawColor(...COLORS.wpBubble);
     doc.setLineWidth(0.5);
     doc.line(PAGE.width / 2 - 18, brandY + 62, PAGE.width / 2 + 18, brandY + 62);
 
@@ -755,7 +953,7 @@ export const exportKPIsAsPDF = async (kpiData) => {
     doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(...COLORS.slate500);
-    doc.text('Karte anklicken öffnet Detailansicht', PAGE.contentRight, exY + 7, { align: 'right' });
+    doc.text('Alle Werte: Skala 1–5', PAGE.contentRight, exY + 7, { align: 'right' });
 
     doc.setDrawColor(...COLORS.border);
     doc.setLineWidth(0.2);
@@ -859,7 +1057,7 @@ export const exportKPIsAsPDF = async (kpiData) => {
         // Seitenzahl
         doc.setFont('courier', 'bold');
         doc.setFontSize(10);
-        doc.setTextColor(...COLORS.indigo600);
+        doc.setTextColor(...COLORS.wpBubble);
         doc.text(String(page).padStart(2, '0'), PAGE.contentRight, tocItemY, { align: 'right' });
 
         tocItemY += 9;
@@ -945,7 +1143,7 @@ export const exportKPIsAsPDF = async (kpiData) => {
                 statsEntries.push(['Datenpunkte', String(timelineFilters.stats.dataPoints)]);
             }
             if (timelineFilters.stats?.avgHistorical) {
-                statsEntries.push(['\u00d8 Historisch', String(timelineFilters.stats.avgHistorical), COLORS.primary]);
+                statsEntries.push(['\u00d8 Historisch', String(timelineFilters.stats.avgHistorical), COLORS.wpBubble]);
             }
             if (timelineFilters.stats?.avgCount) {
                 statsEntries.push(['\u00d8 Anzahl', String(timelineFilters.stats.avgCount)]);
@@ -957,9 +1155,20 @@ export const exportKPIsAsPDF = async (kpiData) => {
             y = drawFilterBox(doc, y, timelineFilters, statsEntries);
         }
 
-        // Chart einfügen – gesamten verbleibenden Platz nutzen
-        const maxChartH = PAGE.height - PAGE.marginBottom - 10 - y;
+        // Chart einfügen – verbleibenden Platz nutzen (Legende + Caption reservieren)
+        const maxChartH = PAGE.height - PAGE.marginBottom - 28 - y;
         y = addChartImage(doc, timelineImg, y, maxChartH);
+
+        // Legende: Historisch / Interpoliert / Prognose
+        y = drawTimelineLegend(doc, y, {
+            metric: timelineFilters?.metric || 'Ø Score',
+            hasForecast: !!timelineFilters?.hasForecast,
+            hasInterpolation: !!timelineFilters?.hasInterpolation,
+        });
+
+        const tlSource = timelineFilters?.source === 'employee' ? 'Mitarbeiter'
+            : timelineFilters?.source === 'candidates' ? 'Bewerber' : 'Alle Quellen';
+        addChartCaption(doc, y, `Abb. 1 · Bewertungsverlauf mit Prognose · Quelle: ${tlSource}`);
     }
 
 
@@ -988,9 +1197,22 @@ export const exportKPIsAsPDF = async (kpiData) => {
             y2 = drawFilterBox(doc, y2, topicRatingFilters, statsEntries);
         }
 
-        // Chart einfügen – gesamten Platz nutzen
-        const maxH2 = PAGE.height - PAGE.marginBottom - 10 - y2;
-        addChartImage(doc, topicRatingImg, y2, maxH2);
+        // Chart einfügen – verbleibenden Platz nutzen (Legende + Caption reservieren)
+        const maxH2 = PAGE.height - PAGE.marginBottom - 28 - y2;
+        y2 = addChartImage(doc, topicRatingImg, y2, maxH2);
+
+        // Topic-Legende mit Farben
+        if (topicRatingFilters?.visibleTopics?.length > 0) {
+            y2 = drawTopicLegend(
+                doc, y2,
+                topicRatingFilters.visibleTopics,
+                topicRatingFilters.allTopics || topicRatingFilters.visibleTopics,
+                prettifyTopicKey,
+            );
+        }
+        const trSource = topicRatingFilters?.source === 'employee' ? 'Mitarbeiter'
+            : topicRatingFilters?.source === 'candidates' ? 'Bewerber' : 'Alle Quellen';
+        addChartCaption(doc, y2, `Abb. 2 · Durchschnittliche Bewertung pro Topic-Cluster · Quelle: ${trSource}`);
     }
 
 
@@ -1033,7 +1255,7 @@ export const exportKPIsAsPDF = async (kpiData) => {
             doc.setFont('helvetica', 'bold');
             doc.text('\u00d8 Rating:', PAGE.marginLeft + 100, yT + 5);
             doc.setFont('helvetica', 'normal');
-            doc.setTextColor(...COLORS.primary);
+            doc.setTextColor(...COLORS.wpBubble);
             doc.text(String(statsInfo.avgRating || '\u2013'), PAGE.marginLeft + 120, yT + 5);
             doc.setTextColor(...COLORS.textMuted);
 
@@ -1063,19 +1285,19 @@ export const exportKPIsAsPDF = async (kpiData) => {
         ];
         const rowH = 7.5;
 
-        // Tabellen-Header zeichnen — Linear-style: helle Slate-Background, kleine mono uppercase
+        // Tabellen-Header zeichnen — kräftigerer Hintergrund für klare visuelle Trennung
         const drawTableHeader = (atY) => {
-            doc.setFillColor(...COLORS.slate50);
+            doc.setFillColor(...COLORS.slate100);
             doc.rect(PAGE.marginLeft, atY - 4.5, PAGE.contentWidth, rowH + 1, 'F');
 
             // Untere Trennlinie
-            doc.setDrawColor(...COLORS.border);
-            doc.setLineWidth(0.3);
+            doc.setDrawColor(...COLORS.slate300);
+            doc.setLineWidth(0.4);
             doc.line(PAGE.marginLeft, atY + rowH - 3.5, PAGE.contentRight, atY + rowH - 3.5);
 
             doc.setFontSize(7);
             doc.setFont('courier', 'bold');
-            doc.setTextColor(...COLORS.slate500);
+            doc.setTextColor(...COLORS.slate700);
             cols.forEach(c => doc.text(String(c.label).toUpperCase(), c.x, atY));
 
             return atY + rowH + 2;
@@ -1096,8 +1318,8 @@ export const exportKPIsAsPDF = async (kpiData) => {
                 yT = drawTableHeader(yT);
             }
 
-            // Zeilen-Hintergrund \u2014 nur dezente Trennlinie, kein Zebra
-            doc.setFillColor(...COLORS.white);
+            // Zeilen-Hintergrund \u2014 alternierende Farben f\u00fcr bessere Lesbarkeit
+            doc.setFillColor(...(idx % 2 === 0 ? COLORS.white : COLORS.slate50));
             doc.rect(PAGE.marginLeft, yT - 4.5, PAGE.contentWidth, rowH, 'F');
             doc.setDrawColor(...COLORS.slate100);
             doc.setLineWidth(0.15);
@@ -1183,12 +1405,14 @@ export const exportKPIsAsPDF = async (kpiData) => {
 
 
     // ═════════════════════════════════════════════════════════════════════════
-    // FUSSZEILEN auf allen Seiten (außer Titelseite)
+    // KOPF- UND FUSSZEILEN auf allen Inhaltsseiten (außer Titelseite)
     // ═════════════════════════════════════════════════════════════════════════
     const totalPages = doc.internal.pages.length - 1;
+    const headerTitle = `WorkPulse · ${companyName} – Analytics Report`;
 
     for (let i = 2; i <= totalPages; i++) {
         doc.setPage(i);
+        addPageHeader(doc, headerTitle);
         addFooter(doc, i, totalPages, companyName);
     }
 
@@ -1272,26 +1496,24 @@ export const exportCompareAsPDF = async (compareData) => {
     doc.rect(0, headerH - 25, PAGE.width, 25, 'F');
 
     // Akzentlinie oben
-    doc.setFillColor(...COLORS.primary);
+    doc.setFillColor(...COLORS.wpBubble);
     doc.rect(0, 0, PAGE.width, 2.5, 'F');
 
-    // Logo-Icon (Vergleichs-Pfeile)
-    const logoX = PAGE.width / 2;
-    const logoY = 38;
-    doc.setFillColor(...COLORS.primary);
-    doc.roundedRect(logoX - 16, logoY, 5, 18, 1, 1, 'F');
-    doc.setFillColor(...COLORS.accent);
-    doc.roundedRect(logoX - 8, logoY + 4, 5, 14, 1, 1, 'F');
-    doc.setFillColor(...COLORS.primary);
-    doc.roundedRect(logoX + 0, logoY + 8, 5, 10, 1, 1, 'F');
-    doc.setFillColor(...COLORS.accent);
-    doc.roundedRect(logoX + 8, logoY + 2, 5, 16, 1, 1, 'F');
+    // WorkPulse Logo (Sprechblase mit Puls-Linie)
+    const cLogoW = 22;
+    drawWorkPulseLogo(doc, PAGE.width / 2 - cLogoW / 2, 28, cLogoW, COLORS.white, COLORS.wpBubble);
+
+    // Eyebrow
+    doc.setFontSize(8);
+    doc.setFont('courier', 'bold');
+    doc.setTextColor(150, 163, 184);
+    doc.text('WORKPULSE · FIRMENVERGLEICH', PAGE.width / 2, 58, { align: 'center' });
 
     // Titel
     doc.setFontSize(26);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(...COLORS.white);
-    doc.text('Firmenvergleich', PAGE.width / 2, 78, { align: 'center' });
+    doc.text('Firmenvergleich', PAGE.width / 2, 72, { align: 'center' });
 
     // Untertitel mit Firmennamen
     doc.setFontSize(12);
@@ -1300,12 +1522,12 @@ export const exportCompareAsPDF = async (compareData) => {
     const subtitle = companyNames.length <= 3
         ? companyNames.join('  ·  ')
         : companyNames.slice(0, 3).join('  ·  ');
-    doc.text(subtitle, PAGE.width / 2, 90, { align: 'center' });
+    doc.text(subtitle, PAGE.width / 2, 84, { align: 'center' });
 
     // Trennlinie
     doc.setDrawColor(255, 255, 255, 0.2);
     doc.setLineWidth(0.3);
-    doc.line(PAGE.width / 2 - 40, 96, PAGE.width / 2 + 40, 96);
+    doc.line(PAGE.width / 2 - 40, 90, PAGE.width / 2 + 40, 90);
 
     // Datum
     doc.setFontSize(10);
@@ -1313,7 +1535,7 @@ export const exportCompareAsPDF = async (compareData) => {
     const dateStr = new Date().toLocaleDateString('de-DE', {
         day: '2-digit', month: 'long', year: 'numeric'
     });
-    doc.text(dateStr, PAGE.width / 2, 103, { align: 'center' });
+    doc.text(dateStr, PAGE.width / 2, 97, { align: 'center' });
 
     // Executive Summary Box
     const execY = headerH + 15;
@@ -1322,7 +1544,7 @@ export const exportCompareAsPDF = async (compareData) => {
     doc.setLineWidth(0.4);
     doc.roundedRect(PAGE.marginLeft, execY, PAGE.contentWidth, 40, 3, 3, 'FD');
 
-    doc.setFillColor(...COLORS.primary);
+    doc.setFillColor(...COLORS.wpBubble);
     doc.roundedRect(PAGE.marginLeft, execY, PAGE.contentWidth, 3, 3, 3, 'F');
     doc.setFillColor(...COLORS.white);
     doc.rect(PAGE.marginLeft, execY + 2, PAGE.contentWidth, 2, 'F');
@@ -1378,7 +1600,7 @@ export const exportCompareAsPDF = async (compareData) => {
         const dots = '.'.repeat(Math.max(1, Math.floor((pageX - dotX - 10) / 1.5)));
         doc.text(dots, dotX, tocY);
         doc.setFont('helvetica', 'bold');
-        doc.setTextColor(...COLORS.primary);
+        doc.setTextColor(...COLORS.wpBubble);
         doc.text(String(pg), pageX, tocY, { align: 'right' });
         tocY += 6;
     });
@@ -1673,9 +1895,11 @@ export const exportCompareAsPDF = async (compareData) => {
             doc.text('Radar-Ansicht', PAGE.marginLeft + 8, y3);
             y3 += 4;
 
-            const maxRadarH = barImg ? 110 : (PAGE.height - PAGE.marginBottom - 10 - y3);
+            const maxRadarH = barImg
+                ? 110
+                : (PAGE.height - PAGE.marginBottom - 18 - y3);
             y3 = addChartImage(doc, radarImg, y3, maxRadarH);
-            y3 += 4;
+            y3 = addChartCaption(doc, y3, 'Abb. 3 · Kategorievergleich (Radar) · alle Quellen');
         }
 
         if (barImg) {
@@ -1685,8 +1909,9 @@ export const exportCompareAsPDF = async (compareData) => {
             doc.text('Balken-Ansicht', PAGE.marginLeft + 8, y3);
             y3 += 4;
 
-            const maxBarH = PAGE.height - PAGE.marginBottom - 10 - y3;
+            const maxBarH = PAGE.height - PAGE.marginBottom - 18 - y3;
             y3 = addChartImage(doc, barImg, y3, maxBarH);
+            addChartCaption(doc, y3, 'Abb. 3 · Kategorievergleich (Balken) · alle Quellen');
         }
     }
 
@@ -1704,8 +1929,9 @@ export const exportCompareAsPDF = async (compareData) => {
         let y4 = addSectionTitle(doc, 'Bewertungsverlauf', PAGE.marginTop + 5,
             'Historische Entwicklung der Bewertungen im Vergleich');
 
-        const maxTimelineH = PAGE.height - PAGE.marginBottom - 10 - y4;
-        addChartImage(doc, timelineImg, y4, maxTimelineH);
+        const maxTimelineH = PAGE.height - PAGE.marginBottom - 18 - y4;
+        y4 = addChartImage(doc, timelineImg, y4, maxTimelineH);
+        addChartCaption(doc, y4, 'Abb. 4 · Bewertungsverlauf im Vergleich · alle Quellen');
     }
 
 
@@ -1820,12 +2046,14 @@ export const exportCompareAsPDF = async (compareData) => {
 
 
     // ═════════════════════════════════════════════════════════════════════════
-    // FUSSZEILEN auf allen Seiten (außer Titelseite)
+    // KOPF- UND FUSSZEILEN auf allen Inhaltsseiten (außer Titelseite)
     // ═════════════════════════════════════════════════════════════════════════
     const totalPages = doc.internal.pages.length - 1;
+    const compareHeaderTitle = `WorkPulse · Firmenvergleich – ${titleLabel.length > 35 ? titleLabel.slice(0, 35) + '…' : titleLabel}`;
 
     for (let i = 2; i <= totalPages; i++) {
         doc.setPage(i);
+        addPageHeader(doc, compareHeaderTitle);
         addFooter(doc, i, totalPages, titleLabel);
     }
 
