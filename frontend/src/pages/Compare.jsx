@@ -984,11 +984,8 @@ const ComparePage = () => {
                                     {activeSlots.map((slot, i) => {
                                         const mc = companyData[slot.id]?.mostCritical
                                         return (
-                                            <div
-                                                key={slot.id}
-                                                className="flex items-center justify-between gap-2"
-                                            >
-                                                <div className="flex items-center gap-2 min-w-0">
+                                            <div key={slot.id} className="space-y-0.5">
+                                                <div className="flex items-center gap-1.5">
                                                     <div
                                                         className="w-2.5 h-2.5 rounded-full shrink-0"
                                                         style={{
@@ -996,12 +993,15 @@ const ComparePage = () => {
                                                                 COLOR_PALETTE[slot.colorIndex]?.hex,
                                                         }}
                                                     />
-                                                    <span className="text-sm font-medium text-slate-700 truncate max-w-[80px]">
+                                                    <span className="text-xs font-medium text-slate-500 truncate" title={slot.name}>
                                                         {slot.name}
                                                     </span>
                                                 </div>
-                                                <div className="text-right min-w-0">
-                                                    <div className="text-sm font-bold text-red-600 truncate">
+                                                <div className="pl-4">
+                                                    <div
+                                                        className="text-sm font-bold text-red-600 leading-snug [overflow-wrap:anywhere]"
+                                                        title={mc?.topicName}
+                                                    >
                                                         {mc ? mc.topicName : "–"}
                                                     </div>
                                                     {mc && (
@@ -1028,11 +1028,8 @@ const ComparePage = () => {
                                         const nt = companyData[slot.id]?.negativeTopic
                                         const ntName = getNegativeTopicName(nt)
                                         return (
-                                            <div
-                                                key={slot.id}
-                                                className="flex items-center justify-between gap-3"
-                                            >
-                                                <div className="flex items-center gap-2 min-w-0 shrink-0">
+                                            <div key={slot.id} className="space-y-0.5">
+                                                <div className="flex items-center gap-1.5">
                                                     <div
                                                         className="w-2.5 h-2.5 rounded-full shrink-0"
                                                         style={{
@@ -1040,13 +1037,16 @@ const ComparePage = () => {
                                                                 COLOR_PALETTE[slot.colorIndex]?.hex,
                                                         }}
                                                     />
-                                                    <span className="text-sm font-medium text-slate-700 truncate max-w-[110px]" title={slot.name}>
+                                                    <span className="text-xs font-medium text-slate-500 truncate" title={slot.name}>
                                                         {slot.name}
                                                     </span>
                                                 </div>
-                                                <span className="text-base font-extrabold text-orange-400 truncate flex-1 text-right" title={ntName}>
+                                                <div
+                                                    className="pl-4 text-sm font-extrabold text-orange-400 leading-snug [overflow-wrap:anywhere]"
+                                                    title={ntName}
+                                                >
                                                     {ntName}
-                                                </span>
+                                                </div>
                                             </div>
                                         )
                                     })}
