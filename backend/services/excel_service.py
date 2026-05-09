@@ -216,39 +216,83 @@ class ExcelProcessor:
         self.supabase = get_supabase_client()
 
     async def process_excel_file(self, file: UploadFile, company_id: int) -> Dict[str, Any]:
+        """Process an uploaded Excel (.xlsx / .xls) file."""
+        filename = getattr(file, "filename", None)
+        try:
+            contents = await file.read()
+            if not contents:
+                return self._error_result(filename, "Leere Datei oder Upload-Inhalt leer.")
+            df = pd.read_excel(io.BytesIO(contents))
+            return await self._process_dataframe(df, filename, company_id, warnings=[])
+        except Exception as exc:
+            return self._error_result(filename, str(exc))
+
+    async def process_csv_file(self, file: UploadFile, company_id: int) -> Dict[str, Any]:
         """
-        Process an uploaded Excel file and import into candidates OR employee table.
+        Process an uploaded CSV file.
+
+        Automatically detects delimiter (comma / semicolon / tab) and encoding
+        (UTF-8 preferred; Latin-1 fallback surfaced as a user-facing warning).
+        Column matching uses the same name-based logic as the Excel importer.
+        """
+        filename = getattr(file, "filename", None)
+        try:
+            contents = await file.read()
+            if not contents:
+                return self._error_result(filename, "Leere Datei oder Upload-Inhalt leer.")
+            df, warnings = read_csv_to_dataframe(contents)
+            return await self._process_dataframe(df, filename, company_id, warnings=warnings)
+        except Exception as exc:
+            return self._error_result(filename, str(exc))
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _error_result(filename: Optional[str], message: str) -> Dict[str, Any]:
+        return {
+            "status": "error",
+            "filename": filename,
+            "total_rows": 0,
+            "detected_type": None,
+            "imported": {"candidates": 0, "employees": 0},
+            "errors": [message],
+            "warnings": [],
+        }
+
+    async def _process_dataframe(
+        self,
+        df: pd.DataFrame,
+        filename: Optional[str],
+        company_id: int,
+        warnings: List[str],
+    ) -> Dict[str, Any]:
+        """
+        Shared processing pipeline for both Excel and CSV uploads.
 
         Returns:
             {
               "status": "success" | "error",
-              "filename": "...",
+              "filename": str,
               "total_rows": int,
               "detected_type": "candidates" | "employees" | None,
               "imported": {"candidates": int, "employees": int},
-              "errors": [ ... ],
+              "errors": [...],
+              "warnings": [...],   # non-fatal issues (e.g. encoding fallback)
             }
         """
         result: Dict[str, Any] = {
             "status": "success",
-            "filename": getattr(file, "filename", None),
-            "total_rows": 0,
+            "filename": filename,
+            "total_rows": int(len(df)),
             "detected_type": None,
             "imported": {"candidates": 0, "employees": 0},
             "errors": [],
+            "warnings": list(warnings),
         }
 
         try:
-            contents = await file.read()
-            if not contents:
-                result["status"] = "error"
-                result["errors"].append("Leere Datei oder Upload-Inhalt leer.")
-                return result
-
-            # Read excel
-            df = pd.read_excel(io.BytesIO(contents))
-            result["total_rows"] = int(len(df))
-
             # Normalize & map ratings by header name (position-independent)
             df = normalize_columns(df)
             df = extract_sternebewertungen_by_name(df)
@@ -279,16 +323,14 @@ class ExcelProcessor:
                 result["imported"]["employees"] = imported
                 result["errors"].extend(errors)
 
-            # If nothing imported and errors exist, mark as error
             if (result["imported"]["candidates"] + result["imported"]["employees"]) == 0 and result["errors"]:
                 result["status"] = "error"
 
-            return result
-
-        except Exception as e:
+        except Exception as exc:
             result["status"] = "error"
-            result["errors"].append(str(e))
-            return result
+            result["errors"].append(str(exc))
+
+        return result
 
     def _is_candidates_data(self, df: pd.DataFrame) -> bool:
         # Candidates Excel is ONLY recognized by "stellenbeschreibung"
