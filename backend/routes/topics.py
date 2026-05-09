@@ -493,7 +493,7 @@ async def get_negative_topics_by_company(company_id: int, limit: Optional[int] =
     global _topic_analyzer, _topic_rating_analyzer
 
     if _topic_analyzer is None:
-        raise HTTPException(status_code=400, detail="No model trained. Please train a model first using /api/topics/train")
+        return {"negative_topics": [], "company_id": company_id, "total": 0}
 
     try:
         result = _topic_rating_analyzer.get_topic_rating_correlation_for_company(
