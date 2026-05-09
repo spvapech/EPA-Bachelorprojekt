@@ -177,16 +177,15 @@ def get_company_ratings_trend(
 
         if mode == "stable_all":
             # Auto-select a window size that fits the available history.
-            first = (
+            bounds = (
                 supabase.table("employee")
                 .select("datum")
                 .eq("company_id", company_id)
                 .not_.is_("datum", None)
                 .order("datum", desc=False)
-                .limit(1)
                 .execute()
             )
-            if not first.data:
+            if not bounds.data:
                 return {
                     "mode": mode,
                     "months": None,
@@ -198,7 +197,8 @@ def get_company_ratings_trend(
                 }
 
             try:
-                first_dt = datetime.fromisoformat(str(first.data[0]["datum"]).replace("Z", "+00:00"))
+                first_dt = datetime.fromisoformat(str(bounds.data[0]["datum"]).replace("Z", "+00:00"))
+                last_dt  = datetime.fromisoformat(str(bounds.data[-1]["datum"]).replace("Z", "+00:00"))
             except Exception:
                 return {
                     "mode": mode,
@@ -209,6 +209,11 @@ def get_company_ratings_trend(
                     "overall": {"deltaPoints": None, "deltaPercent": None},
                     "metrics": {},
                 }
+
+            # Use the month after the last review as anchor so historical data aligns correctly.
+            last_month_end = add_months(last_dt.replace(day=1, hour=0, minute=0, second=0, microsecond=0), 1)
+            if last_month_end < end_exclusive:
+                end_exclusive = last_month_end
 
             first_month_start = first_dt.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
             total_months = (end_exclusive.year - first_month_start.year) * 12 + (end_exclusive.month - first_month_start.month)

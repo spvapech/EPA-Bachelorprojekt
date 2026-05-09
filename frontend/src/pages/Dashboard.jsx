@@ -78,7 +78,7 @@ export default function Dashboard() {
   /* ---- Company helpers ---- */
   async function getCompanies() {
     try {
-      const res = await fetch(`${API_URL}/companies/`)
+      const res = await fetch(`${API_URL}/companies`)
       if (!res.ok) return
       const d = await res.json()
       setCompanies(Array.isArray(d) ? d : [])
@@ -122,17 +122,25 @@ export default function Dashboard() {
   async function getTrend() {
     const companyId = effectiveCompanyId
     if (!companyId) { setTrendData(null); return }
-    try {
-      const res = await fetch(`${API_URL}/companies/${companyId}/ratings/trend?mode=stable_months&months=12`)
-      if (!res.ok) throw new Error()
-      const json = await res.json()
-      const deltaRaw = json.overall?.deltaPoints ?? json.overall?.avgDelta
-      const delta = typeof deltaRaw === "number" ? deltaRaw : parseFloat(deltaRaw)
-      if (!Number.isFinite(delta)) { setTrendData(null); return }
-      const rounded = Math.round(delta * 10) / 10
-      const sign = rounded > 0.05 ? "up" : rounded < -0.05 ? "down" : "flat"
-      setTrendData({ avgDelta: rounded.toFixed(1), sign })
-    } catch { setTrendData(null) }
+    const urls = [
+      `${API_URL}/companies/${companyId}/ratings/trend?mode=stable_all&months=12`,
+      `${API_URL}/companies/${companyId}/ratings/trend?mode=rate&days=30`,
+    ]
+    for (const url of urls) {
+      try {
+        const res = await fetch(url)
+        if (!res.ok) continue
+        const json = await res.json()
+        const deltaRaw = json.overall?.deltaPoints ?? json.overall?.avgDelta
+        const delta = typeof deltaRaw === "number" ? deltaRaw : parseFloat(deltaRaw)
+        if (!Number.isFinite(delta)) continue
+        const rounded = Math.round(delta * 10) / 10
+        const sign = rounded > 0.05 ? "up" : rounded < -0.05 ? "down" : "flat"
+        setTrendData({ avgDelta: rounded.toFixed(1), sign })
+        return
+      } catch {}
+    }
+    setTrendData(null)
   }
 
   async function getMostCritical() {
