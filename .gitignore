@@ -143,3 +143,6 @@ out/
 .cursor/plans
 
 backend/uv.lock/
+
+# Claude Code
+.claude/
